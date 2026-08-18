@@ -1,0 +1,372 @@
+.app-header {
+  align-items: center;
+  background-color: #ffffff;
+  border-bottom: 1px solid #d9e0ea;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.04);
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  min-height: 76px;
+  padding: 0 28px;
+  position: sticky;
+  top: 0;
+  z-index: 20;
+}
+
+.app-header__left,
+.app-header__right {
+  align-items: center;
+  display: flex;
+}
+
+.app-header__left {
+  gap: 16px;
+  min-width: 0;
+}
+
+.app-header__right {
+  gap: 10px;
+}
+
+.app-header__toggle.MuiIconButton-root,
+.app-header__theme-button.MuiIconButton-root {
+  border: 1px solid #d9e0ea;
+  background-color: #ffffff;
+  border-radius: 8px;
+  color: #475569;
+  height: 40px;
+  min-height: 40px;
+  padding: 0;
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    color 160ms ease;
+  width: 40px;
+}
+
+.app-header__toggle.MuiIconButton-root:hover,
+.app-header__theme-button.MuiIconButton-root:hover {
+  background-color: #eff6ff;
+  border-color: #bfdbfe;
+  box-shadow: 0 8px 18px rgba(37, 99, 235, 0.12);
+  color: #2563eb;
+}
+
+.app-header__title-wrap {
+  border-left: 1px solid #e2e8f0;
+  min-width: 0;
+  padding-left: 16px;
+}
+
+.app-header__title {
+  color: #111827;
+  font-size: 19px;
+  font-weight: 850;
+  letter-spacing: 0;
+  line-height: 1.25;
+}
+
+.app-header__subtitle {
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.45;
+  margin-top: 2px;
+}
+
+.app-sidebar {
+  align-self: stretch;
+  background-color: #111827;
+  border-right: 1px solid #d9e0ea;
+  color: #f9fafb;
+  flex-shrink: 0;
+  min-height: 100vh;
+  overflow: hidden;
+  top: 0;
+  transition: width 180ms ease;
+  width: 272px;
+}
+
+.app-sidebar--collapsed {
+  width: 72px;
+}
+
+.app-sidebar__brand {
+  padding: 20px 20px;
+}
+
+.app-sidebar--collapsed .app-sidebar__brand {
+  padding: 20px 12px;
+}
+
+.app-sidebar__brand-row {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: flex-start;
+}
+
+.app-sidebar--collapsed .app-sidebar__brand-row {
+  justify-content: center;
+}
+
+.app-sidebar__brand-icon {
+  background-color: #2563eb;
+  border-radius: 6px;
+  display: grid;
+  height: 40px;
+  place-items: center;
+  width: 40px;
+}
+
+.app-sidebar__brand-title {
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.app-sidebar__brand-subtitle {
+  color: #9ca3af;
+  font-size: 12px;
+}
+
+.app-sidebar__divider.MuiDivider-root {
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+.app-sidebar__nav.MuiList-root {
+  padding: 16px 12px;
+}
+
+.app-sidebar--collapsed .app-sidebar__nav.MuiList-root {
+  padding-left: 8px;
+  padding-right: 8px;
+}
+
+.app-sidebar__nav-item.MuiListItemButton-root {
+  border-radius: 6px;
+  color: #cbd5e1;
+  justify-content: flex-start;
+  margin-bottom: 4px;
+  min-height: 44px;
+  padding-left: 16px;
+  padding-right: 16px;
+}
+
+.app-sidebar--collapsed .app-sidebar__nav-item.MuiListItemButton-root {
+  justify-content: center;
+  padding-left: 8px;
+  padding-right: 8px;
+}
+
+.app-sidebar__nav-item.MuiListItemButton-root.active {
+  background-color: #2563eb;
+  color: #ffffff;
+}
+
+.app-sidebar__nav-item.MuiListItemButton-root:hover {
+  background-color: rgba(255, 255, 255, 0.08);
+}
+
+.app-sidebar__nav-item.MuiListItemButton-root.active:hover {
+  background-color: #2563eb;
+}
+
+.app-sidebar__nav-icon.MuiListItemIcon-root {
+  color: inherit;
+  justify-content: center;
+  min-width: 38px;
+}
+
+.app-sidebar__nav-badge .MuiBadge-badge {
+  background-color: #ef4444;
+  box-shadow: 0 0 0 2px #0f172a;
+  font-size: 10px;
+  font-weight: 800;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+}
+
+.app-sidebar__nav-count {
+  align-items: center;
+  background: #ef4444;
+  border-radius: 999px;
+  color: #ffffff;
+  display: inline-flex;
+  font-size: 11px;
+  font-weight: 800;
+  justify-content: center;
+  line-height: 1;
+  margin-left: 8px;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+}
+
+.app-sidebar--collapsed .app-sidebar__nav-icon.MuiListItemIcon-root {
+  min-width: 0;
+}
+
+.user-menu__login-button.MuiButton-root {
+  font-weight: 700;
+  min-height: 40px;
+}
+
+.user-menu__button.MuiIconButton-root {
+  border: 1px solid #d9e0ea;
+  background-color: #ffffff;
+  border-radius: 8px;
+  gap: 10px;
+  min-height: 46px;
+  padding-left: 10px;
+  padding-right: 10px;
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.user-menu__button.MuiIconButton-root:hover {
+  background-color: #f8fafc;
+  border-color: #bfdbfe;
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08);
+}
+
+.user-menu__avatar.MuiAvatar-root {
+  background-color: #2563eb;
+  font-size: 14px;
+  height: 32px;
+  font-weight: 800;
+  width: 32px;
+}
+
+.user-menu__text {
+  padding-right: 4px;
+  text-align: left;
+}
+
+.user-menu__name {
+  color: #111827;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.25;
+}
+
+.user-menu__role {
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.25;
+}
+
+.app-footer {
+  align-items: center;
+  background-color: #ffffff;
+  border-top: 1px solid #d9e0ea;
+  display: flex;
+  justify-content: space-between;
+  min-height: 44px;
+  padding: 0 24px;
+}
+
+.app-footer__text {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.app-breadcrumb {
+  margin-bottom: 16px;
+}
+
+.app-breadcrumb__link {
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.app-breadcrumb__current {
+  color: #111827;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+body[data-color-mode="dark"] .app-header,
+body[data-color-mode="dark"] .app-footer {
+  background-color: #111827;
+  border-color: #334155;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.22);
+}
+
+body[data-color-mode="dark"] .app-header__toggle.MuiIconButton-root,
+body[data-color-mode="dark"] .app-header__theme-button.MuiIconButton-root,
+body[data-color-mode="dark"] .user-menu__button.MuiIconButton-root {
+  background-color: #0f172a;
+  border-color: #334155;
+  color: #94a3b8;
+}
+
+body[data-color-mode="dark"] .app-header__toggle.MuiIconButton-root:hover,
+body[data-color-mode="dark"] .app-header__theme-button.MuiIconButton-root:hover,
+body[data-color-mode="dark"] .user-menu__button.MuiIconButton-root:hover {
+  background-color: #1e293b;
+  border-color: #475569;
+  box-shadow: 0 8px 18px rgba(37, 99, 235, 0.16);
+  color: #dbeafe;
+}
+
+body[data-color-mode="dark"] .app-header__title-wrap {
+  border-left-color: #334155;
+}
+
+body[data-color-mode="dark"] .app-header__title,
+body[data-color-mode="dark"] .user-menu__name,
+body[data-color-mode="dark"] .app-breadcrumb__current {
+  color: #e5e7eb;
+}
+
+body[data-color-mode="dark"] .app-header__subtitle,
+body[data-color-mode="dark"] .user-menu__role,
+body[data-color-mode="dark"] .app-footer__text,
+body[data-color-mode="dark"] .app-breadcrumb__link {
+  color: #94a3b8;
+}
+
+@media (max-width: 899px) {
+  .app-sidebar {
+    position: sticky;
+  }
+
+  .app-header {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
+  .app-header__title {
+    font-size: 16px;
+  }
+
+  .app-header__subtitle {
+    display: none;
+  }
+}
+
+@media (max-width: 599px) {
+  .app-header {
+    padding-left: 10px;
+    padding-right: 10px;
+  }
+
+  .app-header__left {
+    gap: 8px;
+  }
+
+  .app-header__title-wrap {
+    border-left: 0;
+    padding-left: 0;
+  }
+
+  .app-header__title {
+    font-size: 14px;
+  }
+}

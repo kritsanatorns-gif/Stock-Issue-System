@@ -1,0 +1,68 @@
+{
+  "Version": 1,
+  "WorkspaceRootPath": "D:\\Stock Issue System\\stock-issue-system\\backend\\",
+  "Documents": [
+    {
+      "AbsoluteMoniker": "D:0:0:{4342D4EC-47BD-9E5E-6115-2B3105615E88}|src\\StockIssueSystem.Api\\StockIssueSystem.Api.csproj|d:\\stock issue system\\stock-issue-system\\backend\\src\\stockissuesystem.api\\models\\dtos\\approverequisitiondto.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{4342D4EC-47BD-9E5E-6115-2B3105615E88}|src\\StockIssueSystem.Api\\StockIssueSystem.Api.csproj|solutionrelative:src\\stockissuesystem.api\\models\\dtos\\approverequisitiondto.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{4342D4EC-47BD-9E5E-6115-2B3105615E88}|src\\StockIssueSystem.Api\\StockIssueSystem.Api.csproj|d:\\stock issue system\\stock-issue-system\\backend\\src\\stockissuesystem.api\\appsettings.json||{90A6B3A7-C1A3-4009-A288-E2FF89E96FA0}",
+      "RelativeMoniker": "D:0:0:{4342D4EC-47BD-9E5E-6115-2B3105615E88}|src\\StockIssueSystem.Api\\StockIssueSystem.Api.csproj|solutionrelative:src\\stockissuesystem.api\\appsettings.json||{90A6B3A7-C1A3-4009-A288-E2FF89E96FA0}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|D:\\Stock Issue System\\stock-issue-system\\backend\\src\\StockIssueSystem.Infrastructure\\StockIssueSystem.Infrastructure.csproj||{FA3CD31E-987B-443A-9B81-186104E8DAC1}|",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:src\\StockIssueSystem.Infrastructure\\StockIssueSystem.Infrastructure.csproj||{FA3CD31E-987B-443A-9B81-186104E8DAC1}|"
+    }
+  ],
+  "DocumentGroupContainers": [
+    {
+      "Orientation": 0,
+      "VerticalTabListWidth": 256,
+      "DocumentGroups": [
+        {
+          "DockedWidth": 200,
+          "SelectedChildIndex": 0,
+          "Children": [
+            {
+              "$type": "Document",
+              "DocumentIndex": 0,
+              "Title": "ApproveRequisitionDto.cs",
+              "DocumentMoniker": "D:\\Stock Issue System\\stock-issue-system\\backend\\src\\StockIssueSystem.Api\\Models\\DTOs\\ApproveRequisitionDto.cs",
+              "RelativeDocumentMoniker": "src\\StockIssueSystem.Api\\Models\\DTOs\\ApproveRequisitionDto.cs",
+              "ToolTip": "D:\\Stock Issue System\\stock-issue-system\\backend\\src\\StockIssueSystem.Api\\Models\\DTOs\\ApproveRequisitionDto.cs",
+              "RelativeToolTip": "src\\StockIssueSystem.Api\\Models\\DTOs\\ApproveRequisitionDto.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAA4AAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-08-10T01:30:46.838Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 1,
+              "Title": "appsettings.json",
+              "DocumentMoniker": "D:\\Stock Issue System\\stock-issue-system\\backend\\src\\StockIssueSystem.Api\\appsettings.json",
+              "RelativeDocumentMoniker": "src\\StockIssueSystem.Api\\appsettings.json",
+              "ToolTip": "D:\\Stock Issue System\\stock-issue-system\\backend\\src\\StockIssueSystem.Api\\appsettings.json",
+              "RelativeToolTip": "src\\StockIssueSystem.Api\\appsettings.json",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAABcAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001642|",
+              "WhenOpened": "2026-07-09T04:30:30.148Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 2,
+              "Title": "StockIssueSystem.Infrastructure.csproj",
+              "DocumentMoniker": "D:\\Stock Issue System\\stock-issue-system\\backend\\src\\StockIssueSystem.Infrastructure\\StockIssueSystem.Infrastructure.csproj",
+              "RelativeDocumentMoniker": "src\\StockIssueSystem.Infrastructure\\StockIssueSystem.Infrastructure.csproj",
+              "ToolTip": "D:\\Stock Issue System\\stock-issue-system\\backend\\src\\StockIssueSystem.Infrastructure\\StockIssueSystem.Infrastructure.csproj",
+              "RelativeToolTip": "src\\StockIssueSystem.Infrastructure\\StockIssueSystem.Infrastructure.csproj",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000758|",
+              "WhenOpened": "2026-07-09T04:10:44.887Z"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

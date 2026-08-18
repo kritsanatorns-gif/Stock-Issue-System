@@ -1,0 +1,98 @@
+import { Button, Grid, MenuItem, TextField } from '@mui/material'
+import { FileSpreadsheet, Search } from 'lucide-react'
+
+const reportTypes = [
+  { label: 'ทั้งหมด', value: 'all' },
+  { label: 'เบิกสินค้า', value: 'stockIssue' },
+  { label: 'รับเข้า', value: 'stockReceive' },
+  { label: 'ปรับสต๊อก', value: 'stockAdjust' },
+  { label: 'งานค้าง', value: 'backlog' },
+]
+
+function DateFilterField({ label, onChange, value }) {
+  return (
+    <TextField
+      fullWidth
+      label={label}
+      size="small"
+      type="date"
+      value={value}
+      onChange={(event) => onChange(event.target.value)}
+      slotProps={{
+        inputLabel: {
+          shrink: true,
+        },
+      }}
+    />
+  )
+}
+
+function ReportFilters({
+  endDate,
+  onEndDateChange,
+  onExport,
+  onReportTypeChange,
+  onRunReport,
+  onStartDateChange,
+  reportType,
+  startDate,
+}) {
+  return (
+    <Grid container alignItems="center" spacing={2}>
+      <Grid size={3}>
+        <TextField
+          fullWidth
+          label="ประเภทรายการ"
+          select
+          size="small"
+          value={reportType}
+          onChange={(event) => onReportTypeChange(event.target.value)}
+        >
+          {reportTypes.map((type) => (
+            <MenuItem key={type.value} value={type.value}>
+              {type.label}
+            </MenuItem>
+          ))}
+        </TextField>
+      </Grid>
+      <Grid size={2.25}>
+        <DateFilterField
+          label="วันที่เริ่มต้น"
+          value={startDate}
+          onChange={onStartDateChange}
+        />
+      </Grid>
+      <Grid size={2.25}>
+        <DateFilterField
+          label="วันที่สิ้นสุด"
+          value={endDate}
+          onChange={onEndDateChange}
+        />
+      </Grid>
+      <Grid size={2.25}>
+        <Button
+          fullWidth
+          startIcon={<Search size={18} />}
+          sx={{ fontWeight: 700, minHeight: 40 }}
+          variant="contained"
+          onClick={onRunReport}
+        >
+          ดูรายงาน
+        </Button>
+      </Grid>
+      <Grid size={2.25}>
+        <Button
+          fullWidth
+          startIcon={<FileSpreadsheet size={18} />}
+          sx={{ fontWeight: 700, minHeight: 40 }}
+          variant="outlined"
+          onClick={onExport}
+        >
+          ส่งออก Excel
+        </Button>
+      </Grid>
+    </Grid>
+  )
+}
+
+export default ReportFilters

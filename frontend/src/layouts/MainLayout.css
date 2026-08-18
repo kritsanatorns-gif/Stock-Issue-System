@@ -1,0 +1,33 @@
+.main-layout {
+  background-color: #f5f7fb;
+  display: flex;
+  min-height: 100vh;
+}
+
+.main-layout__body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+body[data-color-mode="dark"] .main-layout {
+  background-color: #0f172a;
+}
+
+.main-layout__main {
+  flex: 1;
+  padding: 20px 24px;
+}
+
+@media (max-width: 899px) {
+  .main-layout__main {
+    padding: 16px;
+  }
+}
+
+@media (max-width: 599px) {
+  .main-layout__main {
+    padding: 12px 10px;
+  }
+}

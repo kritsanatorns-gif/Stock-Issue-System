@@ -1,0 +1,65 @@
+.login-page {
+  max-width: 390px;
+  width: 100%;
+}
+
+.login-panel {
+  width: 100%;
+}
+
+.login-panel__title.MuiTypography-root {
+  color: #0f172a;
+  font-size: 24px;
+  font-weight: 900;
+  line-height: 1.15;
+}
+
+.login-panel__subtitle.MuiTypography-root {
+  color: #64748b;
+  font-size: 14px;
+  margin-top: 6px;
+}
+
+.login-panel__hidden-input {
+  display: none;
+}
+
+.login-panel__field .MuiOutlinedInput-root {
+  background-color: rgba(255, 255, 255, 0.92);
+  border-radius: 6px;
+  min-height: 56px;
+}
+
+.login-panel__field .MuiInputBase-input {
+  color: #0f172a;
+  font-size: 16px;
+}
+
+.login-panel__field .MuiInputBase-input::placeholder {
+  color: #64748b;
+  opacity: 0.78;
+}
+
+.login-panel__field .MuiOutlinedInput-notchedOutline {
+  border-color: rgba(95, 127, 153, 0.34);
+}
+
+.login-panel__field--error .MuiOutlinedInput-notchedOutline {
+  border-color: #dc2626;
+}
+
+.login-panel__submit.MuiButton-root {
+  background-color: #1d4ed8;
+  border-radius: 6px;
+  box-shadow:
+    0 3px 1px -2px rgba(0, 0, 0, 0.2),
+    0 2px 2px 0 rgba(0, 0, 0, 0.14),
+    0 1px 5px 0 rgba(0, 0, 0, 0.12);
+  font-size: 15px;
+  font-weight: 700;
+  min-height: 54px;
+}
+
+.login-panel__submit.MuiButton-root:hover {
+  background-color: #1e40af;
+}

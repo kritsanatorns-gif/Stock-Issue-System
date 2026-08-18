@@ -1,0 +1,43 @@
+@StockIssueSystem.Api_HostAddress = http://localhost:5208
+
+GET {{StockIssueSystem.Api_HostAddress}}/api/health
+Accept: application/json
+
+###
+
+POST {{StockIssueSystem.Api_HostAddress}}/api/auth/login
+Content-Type: application/json
+
+{
+  "employeeCode": "9001",
+  "password": "password"
+}
+
+###
+
+GET {{StockIssueSystem.Api_HostAddress}}/api/employee
+Accept: application/json
+
+###
+
+POST {{StockIssueSystem.Api_HostAddress}}/api/employee
+Content-Type: application/json
+
+{
+  "employeeId": 9001,
+  "employeeName": "Warehouse Operator",
+  "permission": "Issue Operator",
+  "username": "9001",
+  "password": "password",
+  "status": 1
+}
+
+###
+
+GET {{StockIssueSystem.Api_HostAddress}}/api/employee/permissions
+Accept: application/json
+
+###
+
+GET {{StockIssueSystem.Api_HostAddress}}/api/employee/statuses
+Accept: application/json

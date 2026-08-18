@@ -1,0 +1,115 @@
+:root {
+  font-family: Inter, ui-sans-serif, system-ui, 'Segoe UI', Roboto, sans-serif;
+  color: #111827;
+  background: #f5f7fb;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  margin: 0;
+  min-width: 0;
+}
+
+#root {
+  min-height: 100vh;
+  box-sizing: border-box;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+.stock-swal-container {
+  z-index: 20000 !important;
+}
+
+.stock-swal-container .swal2-popup {
+  width: 520px;
+  padding: 42px 34px 24px;
+  border-radius: 4px;
+  color: #4b5563;
+}
+
+.stock-swal-container .swal2-icon {
+  margin: 0 auto 22px;
+  width: 88px;
+  height: 88px;
+}
+
+.stock-swal-container .swal2-icon.swal2-success {
+  border-color: #d8efcf;
+  color: #96d884;
+}
+
+.stock-swal-container .swal2-success-line-tip,
+.stock-swal-container .swal2-success-line-long {
+  background-color: #96d884 !important;
+}
+
+.stock-swal-container .swal2-success-ring {
+  border-color: #d8efcf !important;
+}
+
+.stock-swal-container .swal2-icon.swal2-error {
+  border-color: #ffd1d1;
+  color: #dc2626;
+}
+
+.stock-swal-container .swal2-x-mark-line-left,
+.stock-swal-container .swal2-x-mark-line-right {
+  background-color: #dc2626 !important;
+}
+
+.stock-swal-container .swal2-title {
+  padding: 0;
+  color: #4b5563;
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.stock-swal-container .swal2-html-container {
+  margin: 14px 0 0;
+  color: #4b5563;
+  font-size: 16px;
+  line-height: 1.6;
+}
+
+.stock-swal-container .swal2-actions {
+  margin: 28px 0 0;
+}
+
+.stock-swal-container .swal2-confirm {
+  min-width: 72px;
+  min-height: 40px;
+  border-radius: 4px !important;
+  background: #6d5bd0 !important;
+  color: #ffffff !important;
+  font-size: 15px !important;
+  font-weight: 700 !important;
+  box-shadow: none !important;
+}
+
+.stock-swal-container .swal2-confirm:focus {
+  box-shadow: 0 0 0 3px rgba(109, 91, 208, 0.22) !important;
+}
+
+@media (max-width: 900px) {
+  .stock-swal-container .swal2-popup {
+    width: calc(100vw - 32px);
+    padding: 34px 22px 22px;
+  }
+
+  .stock-swal-container .swal2-title {
+    font-size: 24px;
+  }
+
+  .MuiDialog-paper {
+    margin: 12px !important;
+    max-height: calc(100vh - 24px) !important;
+    width: calc(100vw - 24px) !important;
+  }
+}

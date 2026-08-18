@@ -1,0 +1,330 @@
+.inventory-workspace {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.inventory-workspace__header {
+  align-items: flex-start;
+  display: flex;
+  justify-content: space-between;
+}
+
+.inventory-workspace__title {
+  color: #111827;
+  font-size: 24px;
+  font-weight: 800;
+  margin: 0;
+}
+
+.inventory-workspace__subtitle {
+  color: #64748b;
+  font-size: 14px;
+  margin-top: 4px;
+}
+
+.inventory-workspace__toolbar-card,
+.inventory-workspace__panel-card {
+  border: 1px solid #d9e0ea;
+  border-radius: 8px;
+}
+
+.inventory-workspace__product-area {
+  background: #ffffff;
+  border: 1px solid #d9e0ea;
+  border-radius: 8px;
+  min-height: 430px;
+  padding: 16px;
+}
+
+.inventory-workspace__product-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.inventory-workspace__product-card {
+  cursor: pointer;
+  min-width: 0;
+}
+
+.inventory-workspace__product-image {
+  align-items: center;
+  border-radius: 8px;
+  display: flex;
+  height: 150px;
+  justify-content: center;
+  overflow: hidden;
+  position: relative;
+}
+
+.inventory-workspace__product-photo {
+  height: 100%;
+  object-fit: cover;
+  width: 100%;
+}
+
+.inventory-workspace__product-image--selected {
+  background: #eff6ff;
+}
+
+.inventory-workspace__product-image--normal {
+  background: #f8fafc;
+}
+
+.inventory-workspace__favorite-button.MuiIconButton-root {
+  background: #ffffff;
+  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.1);
+  position: absolute !important;
+  right: 8px !important;
+  top: 8px !important;
+  z-index: 2;
+}
+
+.inventory-workspace__favorite-button.MuiIconButton-root:hover {
+  background: #fff7ed;
+}
+
+.inventory-workspace__selected-header {
+  display: flex;
+  justify-content: space-between;
+}
+
+.inventory-workspace__receive-summary-list {
+  max-height: 360px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.inventory-workspace__receive-summary-item {
+  background: #ffffff;
+  border: 1px solid #d9e0ea;
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.inventory-workspace__receive-summary-image {
+  align-items: center;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  display: flex;
+  flex: 0 0 58px;
+  height: 46px;
+  justify-content: center;
+  overflow: hidden;
+  width: 58px;
+}
+
+.inventory-workspace__receive-summary-photo {
+  height: 100%;
+  object-fit: cover;
+  width: 100%;
+}
+
+.inventory-workspace__receive-empty {
+  align-items: center;
+  background: #f8fafc;
+  border: 1px dashed #cbd5e1;
+  border-radius: 8px;
+  color: #64748b;
+  display: flex;
+  font-size: 13px;
+  justify-content: center;
+  min-height: 120px;
+  text-align: center;
+}
+
+.inventory-workspace__scan-actions {
+  align-items: center;
+  border-top: 1px solid #e2e8f0;
+  display: flex;
+  justify-content: space-between;
+  margin-top: 14px;
+  padding-top: 12px;
+}
+
+.inventory-workspace__scan-help {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.inventory-workspace__upload-box {
+  align-items: center;
+  background: #f8fafc;
+  border: 1px dashed #cbd5e1;
+  border-radius: 8px;
+  color: #64748b;
+  display: flex;
+  gap: 8px;
+  min-height: 72px;
+  padding: 0 12px;
+}
+
+.inventory-workspace__total-box {
+  background: #f8fafc;
+  border: 1px solid #d9e0ea;
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.inventory-workspace__total-row {
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+}
+
+.inventory-workspace__total-label {
+  color: #475569;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.inventory-workspace__total-value {
+  color: #0f172a;
+  font-size: 18px;
+  font-weight: 900;
+}
+
+.inventory-workspace__total-note {
+  color: #64748b;
+  font-size: 12px;
+  margin-top: 4px;
+}
+
+.inventory-workspace__scan-product-detail {
+  background: #f8fafc;
+  border: 1px solid #d9e0ea;
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.inventory-workspace__detail-label {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+.inventory-workspace__detail-value {
+  color: #0f172a;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.inventory-workspace__dialog-upload-box {
+  align-items: center;
+  background: #f8fafc;
+  border: 1px dashed #cbd5e1;
+  border-radius: 8px;
+  color: #64748b;
+  display: flex;
+  gap: 8px;
+  min-height: 82px;
+  padding: 0 16px;
+}
+
+.inventory-workspace__dialog-photo {
+  border-radius: 6px;
+  height: 58px;
+  object-fit: cover;
+  width: 82px;
+}
+
+@media (max-width: 1400px) {
+  .inventory-workspace__product-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 1200px) {
+  .inventory-workspace__product-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 900px) {
+  .inventory-workspace {
+    gap: 14px;
+  }
+
+  .inventory-workspace__header {
+    gap: 12px;
+    flex-direction: column;
+  }
+
+  .inventory-workspace__header .MuiButton-root {
+    align-self: flex-end;
+  }
+
+  .inventory-workspace__title {
+    font-size: 20px;
+  }
+
+  .inventory-workspace__subtitle {
+    font-size: 13px;
+  }
+
+  .inventory-workspace__product-area {
+    min-height: 0;
+    padding: 12px;
+  }
+
+  .inventory-workspace__product-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .inventory-workspace__product-image {
+    height: 128px;
+  }
+
+  .inventory-workspace__scan-actions,
+  .inventory-workspace__selected-header,
+  .inventory-workspace__total-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}
+
+@media (max-width: 640px) {
+  .inventory-workspace__product-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+body[data-color-mode="dark"] .inventory-workspace__title,
+body[data-color-mode="dark"] .inventory-workspace__detail-value,
+body[data-color-mode="dark"] .inventory-workspace__total-value {
+  color: #e5e7eb;
+}
+
+body[data-color-mode="dark"] .inventory-workspace__subtitle,
+body[data-color-mode="dark"] .inventory-workspace__scan-help,
+body[data-color-mode="dark"] .inventory-workspace__detail-label,
+body[data-color-mode="dark"] .inventory-workspace__total-note {
+  color: #94a3b8;
+}
+
+body[data-color-mode="dark"] .inventory-workspace__toolbar-card,
+body[data-color-mode="dark"] .inventory-workspace__panel-card,
+body[data-color-mode="dark"] .inventory-workspace__product-area,
+body[data-color-mode="dark"] .inventory-workspace__receive-summary-item,
+body[data-color-mode="dark"] .inventory-workspace__scan-product-detail,
+body[data-color-mode="dark"] .inventory-workspace__total-box {
+  background: #111827;
+  border-color: #334155;
+}
+
+body[data-color-mode="dark"] .inventory-workspace__product-image--normal,
+body[data-color-mode="dark"] .inventory-workspace__receive-summary-image,
+body[data-color-mode="dark"] .inventory-workspace__receive-empty,
+body[data-color-mode="dark"] .inventory-workspace__upload-box,
+body[data-color-mode="dark"] .inventory-workspace__dialog-upload-box {
+  background: #0f172a;
+  border-color: #334155;
+  color: #94a3b8;
+}
+
+body[data-color-mode="dark"] .inventory-workspace__favorite-button.MuiIconButton-root {
+  background: #1e293b;
+}
