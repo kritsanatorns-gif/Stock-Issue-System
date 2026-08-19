@@ -1,0 +1,14 @@
+node_modules/
+dist/
+
+.tmp/
+.verify-build/
+.vite/
+
+bin/
+obj/
+.vs/
+
+.env
+.env.*
+!.env.example
