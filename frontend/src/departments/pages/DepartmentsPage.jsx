@@ -18,10 +18,7 @@ import {
 import { Pencil, Plus, RefreshCw, Save } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import Swal from 'sweetalert2'
-import {
-  createDepartment,
-  getDepartments,
-  updateDepartment,
+import { createDepartment, getDepartments, updateDepartment,
 } from '../../api/api'
 import AppTable from '../../components/common/AppTable'
 import { normalizeBarcodeInput, normalizePlainName } from '../../utils/inputGuards'
@@ -81,6 +78,7 @@ function DepartmentsPage() {
     setIsDialogOpen(true)
   }
 
+
   const handleReset = () => {
     setForm(emptyForm)
     setIsDialogOpen(false)
@@ -111,11 +109,7 @@ function DepartmentsPage() {
 
     setIsSaving(true)
 
-    const payload = {
-      departmentCode: form.departmentCode.trim(),
-      departmentName: form.departmentName.trim(),
-      departmentStatus: Number(form.departmentStatus),
-    }
+    const payload = {  departmentCode: form.departmentCode.trim(),  departmentName: form.departmentName.trim(),departmentStatus: Number(form.departmentStatus),}
 
     try {
       const savedDepartment = form.departmentId
@@ -146,7 +140,7 @@ function DepartmentsPage() {
         text: 'บันทึกข้อมูลแผนกไม่สำเร็จ',
         icon: 'error',
         customClass: {
-          container: 'stock-swal-container',
+        container: 'stock-swal-container',
         },
         confirmButtonText: 'ตกลง',
       })
@@ -170,7 +164,7 @@ function DepartmentsPage() {
           variant="outlined"
           onClick={() => handleEdit(row)}
         >
-          แก้ไข
+          แก้ไขครับ
         </Button>
       ),
     },
