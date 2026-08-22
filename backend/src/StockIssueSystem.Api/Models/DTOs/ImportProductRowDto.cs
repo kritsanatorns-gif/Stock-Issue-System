@@ -11,6 +11,7 @@ public sealed class ImportProductRowDto
     public string ProductRemark { get; set; } = string.Empty;
     public string ReceiveUnit { get; set; } = string.Empty;
     public decimal ReceiveQty { get; set; }
+    public string SupplierName { get; set; } = string.Empty;
     public int StockQty { get; set; }
     public decimal UnitCost { get; set; }
 }

@@ -69,6 +69,11 @@ public sealed class StockReceiveController(AppDbContext dbContext) : ControllerB
             return BadRequest(masterError);
         }
 
+        var supplierIds = request.Items.Select(item => item.SupplierId!.Value).Distinct().ToList();
+        var suppliersById = await dbContext.Suppliers
+            .Where(item => supplierIds.Contains(item.SupplierId) && item.SupplierStatus == 1)
+            .ToDictionaryAsync(item => item.SupplierId);
+
         await UpsertProducts(request);
 
         var stockHeader = new StockHeader
@@ -88,9 +93,10 @@ public sealed class StockReceiveController(AppDbContext dbContext) : ControllerB
                 Unit = item.Unit.Trim(),
             }).ToList(),
             DocType = ReceiveDocType,
+            PoInvoiceNo = request.PoInvoiceNo?.Trim() ?? string.Empty,
             EmployeeId = request.EmployeeId.ToString(),
             Remark = request.Department.Trim(),
-            SupplierId = request.SupplierId,
+            SupplierId = supplierIds.Count == 1 ? supplierIds[0] : null,
             Status = StockHeaderStatuses.Completed,
             TransactionDate = request.CreatedAt ?? DateTime.Now,
         };
@@ -98,7 +104,7 @@ public sealed class StockReceiveController(AppDbContext dbContext) : ControllerB
         dbContext.StockHeaders.Add(stockHeader);
         await UpdateStockBalances(request);
         await dbContext.SaveChangesAsync();
-        AddCostLots(stockHeader, request);
+        AddCostLots(stockHeader, request, suppliersById);
         await dbContext.SaveChangesAsync();
         await transaction.CommitAsync();
 
@@ -107,6 +113,7 @@ public sealed class StockReceiveController(AppDbContext dbContext) : ControllerB
         return Ok(new
         {
             DocumentNo = stockHeader.HeaderId.ToString(),
+            PoInvoiceNo = stockHeader.PoInvoiceNo,
             CreatedAt = stockHeader.TransactionDate,
             EmployeeId = request.EmployeeId,
             EmployeeName = request.EmployeeName,
@@ -173,7 +180,10 @@ public sealed class StockReceiveController(AppDbContext dbContext) : ControllerB
         return Ok(ToDto(report, products, balances, employees, costs, statusNames));
     }
 
-    private void AddCostLots(StockHeader stockHeader, CreateStockIssueDto request)
+    private void AddCostLots(
+        StockHeader stockHeader,
+        CreateStockIssueDto request,
+        IReadOnlyDictionary<int, Supplier> suppliersById)
     {
         var detailQueueByProductId = stockHeader.Details
             .OrderBy(detail => detail.DetailId)
@@ -196,6 +206,7 @@ public sealed class StockReceiveController(AppDbContext dbContext) : ControllerB
             var receiveQty = item.Quantity;
             var purchaseCost = TryParseCost(item.CostLot);
             var unitCost = receiveQty <= 0 ? 0 : Math.Round(purchaseCost / receiveQty, 2);
+            var supplier = suppliersById[item.SupplierId!.Value];
 
             dbContext.StockCostLots.Add(new StockCostLot
             {
@@ -205,6 +216,8 @@ public sealed class StockReceiveController(AppDbContext dbContext) : ControllerB
                 ReceiveDetailId = detail.DetailId,
                 ReceiveHeaderId = stockHeader.HeaderId,
                 RemainingQty = originalQty,
+                SupplierId = supplier.SupplierId,
+                SupplierName = supplier.SupplierName,
                 Status = 1,
                 UnitCost = unitCost,
             });
@@ -488,14 +501,18 @@ public sealed class StockReceiveController(AppDbContext dbContext) : ControllerB
             return "Employee is not active or does not exist.";
         }
 
-        if (request.SupplierId is null or <= 0)
+        if (request.Items.Any(item => item.SupplierId is null or <= 0))
         {
-            return "Supplier is required for stock receive.";
+            return "Supplier is required for every stock receive item.";
         }
 
-        if (!await dbContext.Suppliers.AnyAsync(supplier => supplier.SupplierId == request.SupplierId && supplier.SupplierStatus == 1))
+        var supplierIds = request.Items.Select(item => item.SupplierId!.Value).Distinct().ToList();
+        var activeSupplierCount = await dbContext.Suppliers
+            .CountAsync(supplier => supplierIds.Contains(supplier.SupplierId) && supplier.SupplierStatus == 1);
+
+        if (activeSupplierCount != supplierIds.Count)
         {
-            return "Selected supplier is not active or does not exist.";
+            return "One or more selected suppliers are not active or do not exist.";
         }
 
         var productIds = request.Items.Select(item => item.Code.Trim()).Distinct().ToList();
@@ -614,6 +631,7 @@ public sealed class StockReceiveController(AppDbContext dbContext) : ControllerB
             CreatedAt = report.TransactionDate,
             Department = report.Remark,
             DocumentNo = report.HeaderId.ToString(),
+            PoInvoiceNo = report.PoInvoiceNo,
             EmployeeId = parsedEmployeeId,
             EmployeeDepartment = employee?.Department ?? "HR",
             EmployeeName = employee?.Name ?? report.EmployeeId,

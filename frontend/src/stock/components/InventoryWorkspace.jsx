@@ -30,7 +30,6 @@ import {
   Pencil,
   Plus,
   Search,
-  Settings2,
   Star,
   Trash2,
   Upload,
@@ -49,6 +48,7 @@ import {
   getProducts,
   getSuppliers,
   saveProductFavorite,
+  updateSupplier,
   updateSupplierStatus,
   uploadProductImage,
 } from '../../api/api'
@@ -77,6 +77,7 @@ const defaultProductForm = {
   receiveHint: '',
   receiveUnit: 'แพ็ค',
   requestQty: '1',
+  supplierId: '',
 }
 
 const departmentSearchOptionValue = '__department_search__'
@@ -270,12 +271,14 @@ function InventoryWorkspace({ mode }) {
   const [categoryOptions, setCategoryOptions] = useState([])
   const [suppliers, setSuppliers] = useState([])
   const [allSuppliers, setAllSuppliers] = useState([])
-  const [selectedSupplierId, setSelectedSupplierId] = useState('')
+  const [poInvoiceNo, setPoInvoiceNo] = useState('')
   const [isSupplierDialogOpen, setIsSupplierDialogOpen] = useState(false)
   const [isSupplierManagementOpen, setIsSupplierManagementOpen] = useState(false)
   const [supplierName, setSupplierName] = useState('')
   const [isSavingSupplier, setIsSavingSupplier] = useState(false)
   const [updatingSupplierId, setUpdatingSupplierId] = useState(null)
+  const [editingSupplier, setEditingSupplier] = useState(null)
+  const [editingSupplierName, setEditingSupplierName] = useState('')
   const [favoriteProductCodes, setFavoriteProductCodes] = useState([])
   const [loadError, setLoadError] = useState('')
   const [isProductDialogOpen, setIsProductDialogOpen] = useState(false)
@@ -297,11 +300,9 @@ function InventoryWorkspace({ mode }) {
   const [searchText, setSearchText] = useState('')
   const [category, setCategory] = useState('')
   const [stockStatus, setStockStatus] = useState('')
+  const [supplierFilter, setSupplierFilter] = useState('')
   const [favoriteOnly, setFavoriteOnly] = useState(false)
   const selectedItems = useInventoryDraftStore((state) => state.selectedItemsByMode[mode] ?? [])
-  const isReceiveSupplierLocked = mode === 'receive'
-    && selectedItems.length > 0
-    && Boolean(selectedSupplierId)
   const updateSelectedItems = useInventoryDraftStore((state) => state.setSelectedItems)
   const setSelectedItems = useCallback(
     (updater) => updateSelectedItems(mode, updater),
@@ -347,14 +348,16 @@ function InventoryWorkspace({ mode }) {
     setLoadError('')
 
     try {
-      const products = await getProducts()
+      const products = await getProducts(
+        mode === 'receive' && supplierFilter ? { supplierId: supplierFilter } : {},
+      )
 
       setInventoryItems((products ?? []).map(normalizeProductRow))
     } catch {
       setLoadError('โหลดข้อมูลสินค้าไม่สำเร็จ กรุณาตรวจสอบว่า Backend API เปิดอยู่')
       setInventoryItems([])
     }
-  }, [])
+  }, [mode, supplierFilter])
 
   const loadDepartments = useCallback(async () => {
     if (mode !== 'issue') {
@@ -386,7 +389,7 @@ function InventoryWorkspace({ mode }) {
     } catch {
       setCategoryOptions([])
     }
-  }, [])
+  }, [mode, supplierFilter])
 
   const loadSuppliers = useCallback(async () => {
     if (mode !== 'receive') {
@@ -561,7 +564,7 @@ function InventoryWorkspace({ mode }) {
       return
     }
 
-    if (!selectedSupplierId) {
+    if (!receiveDraftItem.supplierId) {
       toast.error('กรุณาเลือกผู้ขายก่อนเพิ่มรายการรับเข้า')
       return
     }
@@ -774,7 +777,7 @@ function InventoryWorkspace({ mode }) {
   const canSubmit =
     selectedItems.length > 0
     && (mode !== 'issue' || issueDepartment.trim())
-    && (mode !== 'receive' || Boolean(selectedSupplierId))
+    && (mode !== 'receive' || selectedItems.every((item) => Boolean(item.supplierId)))
     && (mode === 'issue'
       || selectedItems.every(
         (item) =>
@@ -898,10 +901,11 @@ function InventoryWorkspace({ mode }) {
     name: !productForm.name.trim(),
     receiveUnit: !productForm.receiveUnit.trim(),
     requestQty: toPositiveNumber(productForm.requestQty) <= 0,
+    supplierId: !productForm.supplierId,
   }
   const canSaveNewProduct =
     !Object.values(productFormErrors).some(Boolean)
-    && Boolean(selectedSupplierId)
+    && Boolean(productForm.supplierId)
   const canOpenNewProductConfirm =
     canSaveNewProduct || (Boolean(existingDuplicateProduct) && !Object.entries(productFormErrors).some(([field, hasError]) => field !== duplicateProductField && hasError))
 
@@ -1052,6 +1056,7 @@ function InventoryWorkspace({ mode }) {
       {
         ...newItem,
         requestQty: toPositiveNumber(newItem.requestQty) || 1,
+        supplierId: Number(productForm.supplierId),
         unit: newItem.receiveUnit,
         unitCost: newItem.costLot,
       },
@@ -1069,9 +1074,10 @@ function InventoryWorkspace({ mode }) {
     createdAt: createdAt.toISOString(),
     department: mode === 'issue' ? issueDepartment.trim() : '',
     documentNo,
+    poInvoiceNo: mode === 'receive' ? poInvoiceNo.trim() : '',
     employeeId,
     employeeName,
-    supplierId: mode === 'receive' && selectedSupplierId ? Number(selectedSupplierId) : null,
+    supplierId: null,
     items: selectedItems.map((item, index) => ({
       barcode: item.barcode ?? '',
       category: String(item.category ?? '').trim() || 'General',
@@ -1091,6 +1097,7 @@ function InventoryWorkspace({ mode }) {
       quantity: mode === 'receive' ? getReceiveStockQty(item) : toPositiveNumber(item.requestQty),
       receiveQuantity: mode === 'receive' ? toPositiveNumber(item.requestQty) : null,
       receiveUnit: mode === 'receive' ? (item.unit ?? '') : '',
+      supplierId: mode === 'receive' && item.supplierId ? Number(item.supplierId) : null,
       stockQty: toPositiveNumber(item.stockQty),
       unit: mode === 'receive' ? (item.issueUnit ?? '') : (item.unit ?? ''),
     })),
@@ -1123,7 +1130,7 @@ function InventoryWorkspace({ mode }) {
       try {
         await createStockReceive(transactionPayload)
         setSelectedItems([])
-        setSelectedSupplierId('')
+        setPoInvoiceNo('')
         await loadInventoryItems()
         toast.dismiss()
         await Swal.fire({
@@ -1203,7 +1210,6 @@ function InventoryWorkspace({ mode }) {
     try {
       const createdSupplier = await createSupplier({ supplierName: normalizedName })
       await loadSuppliers()
-      setSelectedSupplierId(String(createdSupplier.supplierId))
       setSupplierName('')
       setIsSupplierDialogOpen(false)
       toast.success('เพิ่มผู้ขายสำเร็จ')
@@ -1236,14 +1242,36 @@ function InventoryWorkspace({ mode }) {
     try {
       await updateSupplierStatus(supplier.supplierId, nextStatus)
       await loadSuppliers()
-      if (nextStatus === 0 && String(supplier.supplierId) === selectedSupplierId) {
-        setSelectedSupplierId('')
-      }
       toast.success(nextStatus === 0 ? 'ยกเลิกผู้ขายแล้ว' : 'เปิดใช้งานผู้ขายแล้ว')
     } catch (error) {
       toast.error(error?.response?.data ?? 'บันทึกสถานะผู้ขายไม่สำเร็จ')
     } finally {
       setUpdatingSupplierId(null)
+    }
+  }
+
+  const handleOpenSupplierEdit = (supplier) => {
+    setEditingSupplier(supplier)
+    setEditingSupplierName(supplier.supplierName ?? '')
+  }
+
+  const handleUpdateSupplier = async () => {
+    const normalizedName = normalizePlainName(editingSupplierName)
+    if (!editingSupplier || !normalizedName) {
+      toast.error('กรุณาระบุชื่อผู้ขาย')
+      return
+    }
+
+    setIsSavingSupplier(true)
+    try {
+      await updateSupplier(editingSupplier.supplierId, normalizedName)
+      await loadSuppliers()
+      setEditingSupplier(null)
+      toast.success('แก้ไขผู้ขายสำเร็จ')
+    } catch (error) {
+      toast.error(error?.response?.data ?? 'แก้ไขผู้ขายไม่สำเร็จ')
+    } finally {
+      setIsSavingSupplier(false)
     }
   }
 
@@ -1297,65 +1325,38 @@ function InventoryWorkspace({ mode }) {
                 ) : (
                   <>
                   <Grid container spacing={1.5}>
-                    <Grid size={{ xs: 12, md: 4 }}>
-                      <TextField fullWidth label={config.documentLabel} size="small" />
-                    </Grid>
-                    <Grid size={{ xs: 12, md: 4 }}>
+                    <Grid size={{ xs: 12, md: 10 }}>
                       <TextField
-                        disabled={isReceiveSupplierLocked}
-                        select
+                        autoFocus
                         fullWidth
-                        label="ผู้ขาย *"
+                        placeholder={config.scanPlaceholder}
                         size="small"
-                        value={selectedSupplierId}
-                        onChange={(event) => setSelectedSupplierId(event.target.value)}
-                        helperText={
-                          isReceiveSupplierLocked
-                            ? 'ผู้ขายถูกกำหนดแล้วสำหรับใบรับเข้ารอบนี้'
-                            : 'เลือกผู้ขายเพื่อบันทึกราคาและแยกต้นทุนของแต่ละเจ้า'
-                        }
-                      >
-                        <MenuItem value="">เลือกผู้ขาย</MenuItem>
-                        {suppliers.map((supplier) => (
-                          <MenuItem key={supplier.supplierId} value={String(supplier.supplierId)}>
-                            {supplier.supplierName}
-                          </MenuItem>
-                        ))}
-                      </TextField>
+                        value={scanText}
+                        onChange={(event) => setScanText(normalizeBarcodeInput(event.target.value))}
+                        onKeyDown={handleScanKeyDown}
+                        slotProps={{
+                          input: {
+                            startAdornment: (
+                              <InputAdornment position="start">
+                                <Barcode color="#64748b" size={18} />
+                              </InputAdornment>
+                            ),
+                          },
+                        }}
+                      />
                     </Grid>
-                    <Grid size={{ xs: 12, md: 4 }}>
-                    <TextField
-                      autoFocus
-                      fullWidth
-                      placeholder={config.scanPlaceholder}
-                      size="small"
-                      value={scanText}
-                      onChange={(event) => setScanText(normalizeBarcodeInput(event.target.value))}
-                      onKeyDown={handleScanKeyDown}
-                      slotProps={{
-                        input: {
-                          startAdornment: (
-                            <InputAdornment position="start">
-                              <Barcode color="#64748b" size={18} />
-                            </InputAdornment>
-                          ),
-                        },
-                      }}
-                    />
+                    <Grid size={{ xs: 12, md: 2 }}>
+                      <Button
+                        fullWidth
+                        startIcon={<Plus size={18} />}
+                        sx={{ minHeight: 40, fontWeight: 700 }}
+                        variant="contained"
+                        onClick={handleOpenNewProduct}
+                      >
+                        เพิ่ม
+                      </Button>
                     </Grid>
                   </Grid>
-                  <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 0.5, mt: 1 }}>
-                    <Button
-                      size="small"
-                      startIcon={<Settings2 size={16} />}
-                      onClick={() => setIsSupplierManagementOpen(true)}
-                    >
-                      จัดการผู้ขาย
-                    </Button>
-                    <Button size="small" startIcon={<Plus size={16} />} onClick={() => setIsSupplierDialogOpen(true)}>
-                      เพิ่มผู้ขาย
-                    </Button>
-                  </Box>
                   </>
                 )}
                 <Stack
@@ -1381,7 +1382,7 @@ function InventoryWorkspace({ mode }) {
 
             <Card className="inventory-workspace__toolbar-card" elevation={0}>
               <CardContent sx={{ p: 2 }}>
-                <Grid container spacing={1.5}>
+                <Grid container spacing={1.25} alignItems="center">
                   <Grid size={{ xs: 12, md: 4 }}>
                     <TextField
                       fullWidth
@@ -1400,7 +1401,7 @@ function InventoryWorkspace({ mode }) {
                       }}
                     />
                   </Grid>
-                  <Grid size={{ xs: 6, md: 2.5 }}>
+                  <Grid size={{ xs: 6, md: 2 }}>
                     <TextField
                       fullWidth
                       select
@@ -1417,7 +1418,7 @@ function InventoryWorkspace({ mode }) {
                       ))}
                     </TextField>
                   </Grid>
-                  <Grid size={{ xs: 6, md: 2.5 }}>
+                  <Grid size={{ xs: 6, md: 2 }}>
                     <TextField
                       fullWidth
                       select
@@ -1434,8 +1435,28 @@ function InventoryWorkspace({ mode }) {
                       ))}
                     </TextField>
                   </Grid>
-                  <Grid size={{ xs: mode === 'receive' ? 6 : 12, md: mode === 'receive' ? 1.5 : 3 }}>
+                  {mode === 'receive' ? (
+                    <Grid size={{ xs: 6, md: 2 }}>
+                      <TextField
+                        fullWidth
+                        select
+                        label="ผู้ขาย"
+                        size="small"
+                        value={supplierFilter}
+                        onChange={(event) => setSupplierFilter(event.target.value)}
+                      >
+                        <MenuItem value="">ทั้งหมด</MenuItem>
+                        {suppliers.map((supplier) => (
+                          <MenuItem key={supplier.supplierId} value={String(supplier.supplierId)}>
+                            {supplier.supplierName}
+                          </MenuItem>
+                        ))}
+                      </TextField>
+                    </Grid>
+                  ) : null}
+                  <Grid size={{ xs: 6, md: 1.5 }}>
                     <FormControlLabel
+                      sx={{ m: 0, minHeight: 40, whiteSpace: 'nowrap' }}
                       control={
                         <Checkbox
                           checked={favoriteOnly}
@@ -1447,19 +1468,6 @@ function InventoryWorkspace({ mode }) {
                       label="โปรด"
                     />
                   </Grid>
-                  {mode === 'receive' ? (
-                    <Grid size={{ xs: 6, md: 1.5 }}>
-                      <Button
-                        fullWidth
-                        startIcon={<Plus size={18} />}
-                        sx={{ minHeight: 40, fontWeight: 700 }}
-                        variant="contained"
-                        onClick={handleOpenNewProduct}
-                      >
-                        เพิ่ม
-                      </Button>
-                    </Grid>
-                  ) : null}
                 </Grid>
               </CardContent>
             </Card>
@@ -1584,6 +1592,19 @@ function InventoryWorkspace({ mode }) {
                   </Stack>
 
                   {mode === 'receive' ? (
+                    <TextField
+                      fullWidth
+                      label={config.documentLabel}
+                      size="small"
+                      value={poInvoiceNo}
+                      onChange={(event) => setPoInvoiceNo(event.target.value)}
+                      inputProps={{ maxLength: 100 }}
+                      helperText="เลขที่เอกสารรับเข้า ใช้กับรายการรับเข้าชุดนี้"
+                    />
+                  ) : null}
+
+
+                  {mode === 'receive' ? (
                     <Stack className="inventory-workspace__receive-summary-list" spacing={1}>
                       {selectedItems.length === 0 ? (
                         <Box className="inventory-workspace__receive-empty">
@@ -1654,6 +1675,12 @@ function InventoryWorkspace({ mode }) {
                                         : Number(item.conversionQty ?? 1)
                                       ).toLocaleString('th-TH')
                                     } {item.issueUnit}
+                                  </Typography>
+                                </Grid>
+                                <Grid size={{ xs: 12, sm: 6 }}>
+                                  <Typography sx={{ color: '#64748b', fontSize: 11 }}>ผู้ขาย</Typography>
+                                  <Typography sx={{ color: '#0f172a', fontSize: 13, fontWeight: 800 }}>
+                                    {suppliers.find((supplier) => String(supplier.supplierId) === String(item.supplierId))?.supplierName || '-'}
                                   </Typography>
                                 </Grid>
                               </Grid>
@@ -1954,17 +1981,12 @@ function InventoryWorkspace({ mode }) {
               </Grid>
               <Grid size={{ xs: 12, sm: 4 }}>
                 <TextField
-                  disabled={isReceiveSupplierLocked}
                   fullWidth
-                  helperText={
-                    isReceiveSupplierLocked
-                      ? 'ผู้ขายของใบรับเข้ารอบนี้'
-                      : 'เลือกผู้ขายของล็อตราคานี้'
-                  }
+                  helperText="ผู้ขายของรายการรับเข้านี้"
                   label="ผู้ขายที่ซื้อจาก *"
                   select
-                  value={selectedSupplierId}
-                  onChange={(event) => setSelectedSupplierId(event.target.value)}
+                  value={receiveDraftItem.supplierId ?? ''}
+                  onChange={(event) => handleReceiveDraftChange('supplierId', event.target.value)}
                 >
                   <MenuItem value="">เลือกผู้ขาย</MenuItem>
                   {suppliers.map((supplier) => (
@@ -1973,16 +1995,6 @@ function InventoryWorkspace({ mode }) {
                     </MenuItem>
                   ))}
                 </TextField>
-                {!isReceiveSupplierLocked ? (
-                  <Button
-                    size="small"
-                    startIcon={<Plus size={15} />}
-                    sx={{ mt: 0.5 }}
-                    onClick={() => setIsSupplierDialogOpen(true)}
-                  >
-                    เพิ่มผู้ขาย
-                  </Button>
-                ) : null}
               </Grid>
               <Grid size={{ xs: 12, sm: 4 }}>
                 <TextField
@@ -2004,7 +2016,7 @@ function InventoryWorkspace({ mode }) {
         <Button
           disabled={
             !receiveDraftItem
-            || !selectedSupplierId
+            || !receiveDraftItem.supplierId
             || toPositiveNumber(receiveDraftItem.requestQty) <= 0
             || toPositiveNumber(receiveDraftItem.conversionQty) <= 0
             || receiveDraftItem.unitCost === ''
@@ -2319,16 +2331,16 @@ function InventoryWorkspace({ mode }) {
                 select
                 fullWidth
                 required
-                error={isProductFormSubmitted && !selectedSupplierId}
+                error={isProductFormSubmitted && !productForm.supplierId}
                 helperText={
-                  isProductFormSubmitted && !selectedSupplierId
+                  isProductFormSubmitted && !productForm.supplierId
                     ? 'กรุณาเลือกผู้ขายก่อนเพิ่มรายการรับเข้า'
                     : 'ผู้ขายของล็อตราคานี้'
                 }
                 label="ผู้ขาย"
                 size="small"
-                value={selectedSupplierId}
-                onChange={(event) => setSelectedSupplierId(event.target.value)}
+                value={productForm.supplierId}
+                onChange={(event) => handleProductFormChange('supplierId', event.target.value)}
               >
                 <MenuItem value="">เลือกผู้ขาย</MenuItem>
                 {suppliers.map((supplier) => (
@@ -2337,14 +2349,6 @@ function InventoryWorkspace({ mode }) {
                   </MenuItem>
                 ))}
               </TextField>
-              <Button
-                size="small"
-                startIcon={<Plus size={15} />}
-                sx={{ mt: 0.5 }}
-                onClick={() => setIsSupplierDialogOpen(true)}
-              >
-                เพิ่มผู้ขาย
-              </Button>
             </Grid>
             <Grid size={{ xs: 12, sm: 3 }}>
               <TextField
@@ -2573,15 +2577,28 @@ function InventoryWorkspace({ mode }) {
               render: (supplier) => {
                 const active = Number(supplier.supplierStatus ?? 1) === 1
                 return (
-                  <Button
-                    color={active ? 'error' : 'success'}
-                    disabled={updatingSupplierId === supplier.supplierId}
-                    onClick={() => handleSupplierStatusChange(supplier)}
-                    size="small"
-                    variant="outlined"
-                  >
-                    {active ? 'ยกเลิกผู้ขาย' : 'เปิดใช้งาน'}
-                  </Button>
+                  <Stack direction="row" spacing={0.75} justifyContent="center">
+                    <Button
+                      color="primary"
+                      disabled={updatingSupplierId === supplier.supplierId}
+                      onClick={() => handleOpenSupplierEdit(supplier)}
+                      size="small"
+                      startIcon={<Pencil size={14} />}
+                      variant="outlined"
+                    >
+                      แก้ไข
+                    </Button>
+                    <Button
+                      color={active ? 'error' : 'success'}
+                      disabled={updatingSupplierId === supplier.supplierId}
+                      onClick={() => handleSupplierStatusChange(supplier)}
+                      size="small"
+                      variant="outlined"
+                    >
+                      {active ? 'ยกเลิกผู้ขาย' : 'เปิดใช้งาน'}
+                    </Button>
+                  </Stack>
+
                 )
               },
             },
@@ -2599,6 +2616,26 @@ function InventoryWorkspace({ mode }) {
       </DialogContent>
       <DialogActions sx={{ px: 3, pb: 2 }}>
         <Button onClick={() => setIsSupplierManagementOpen(false)}>ปิด</Button>
+      </DialogActions>
+    </Dialog>
+    <Dialog open={Boolean(editingSupplier)} fullWidth maxWidth="xs" onClose={() => !isSavingSupplier && setEditingSupplier(null)}>
+      <DialogTitle>แก้ไขผู้ขาย</DialogTitle>
+      <DialogContent>
+        <TextField
+          autoFocus
+          fullWidth
+          label="ชื่อผู้ขาย"
+          margin="dense"
+          value={editingSupplierName}
+          onChange={(event) => setEditingSupplierName(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') handleUpdateSupplier()
+          }}
+        />
+      </DialogContent>
+      <DialogActions sx={{ px: 3, pb: 2 }}>
+        <Button disabled={isSavingSupplier} onClick={() => setEditingSupplier(null)}>ยกเลิก</Button>
+        <Button disabled={isSavingSupplier} variant="contained" onClick={handleUpdateSupplier}>บันทึก</Button>
       </DialogActions>
     </Dialog>
     </>

@@ -1,0 +1,9 @@
+bin/
+obj/
+.vs/
+.verify-build/
+.git/
+.gitignore
+Dockerfile
+*.user
+*.suo

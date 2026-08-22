@@ -6,6 +6,8 @@ public sealed class StockCostLot
     public string ProductId { get; set; } = string.Empty;
     public int ReceiveHeaderId { get; set; }
     public int ReceiveDetailId { get; set; }
+    public int? SupplierId { get; set; }
+    public string SupplierName { get; set; } = string.Empty;
     public decimal UnitCost { get; set; }
     public int OriginalQty { get; set; }
     public int RemainingQty { get; set; }

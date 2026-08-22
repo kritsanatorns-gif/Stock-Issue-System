@@ -5,6 +5,11 @@ using StockIssueSystem.Api.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Keep startup errors visible in Visual Studio and the terminal.
+builder.Logging.ClearProviders();
+builder.Logging.AddConsole();
+builder.Logging.AddDebug();
+
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
@@ -33,6 +38,7 @@ if (app.Environment.IsDevelopment())
 
 app.UseStaticFiles();
 app.UseCors("Frontend");
+app.UseMiddleware<AuditLogMiddleware>();
 
 app.MapGet("/", () => Results.Ok(new
 {
@@ -43,16 +49,50 @@ app.MapGet("/", () => Results.Ok(new
 
 app.MapControllers();
 
+app.Logger.LogInformation("Preparing database schema: employee department");
 await EnsureEmployeeDepartmentColumn(app);
+app.Logger.LogInformation("Preparing database schema: stock header remarks");
 await EnsureStockHeaderSeparatedRemarkColumns(app);
+app.Logger.LogInformation("Preparing database schema: urgent requisitions");
 await EnsureStockHeaderUrgentColumns(app);
+app.Logger.LogInformation("Preparing database schema: document statuses");
 await EnsureStockHeaderStatuses(app);
+app.Logger.LogInformation("Preparing database schema: product remarks");
 await EnsureProductRemarkColumn(app);
+app.Logger.LogInformation("Preparing database schema: stock adjustment menu");
 await EnsureStockAdjustMenu(app);
+app.Logger.LogInformation("Preparing database schema: requisition workflow");
 await EnsureRequisitionWorkflow(app);
+app.Logger.LogInformation("Preparing database schema: supplier workflow");
 await EnsureSupplierWorkflow(app);
+await EnsureAuditLogTable(app);
+app.Logger.LogInformation("Database schema preparation completed.");
 
 app.Run();
+
+static async Task EnsureAuditLogTable(WebApplication app)
+{
+    await using var scope = app.Services.CreateAsyncScope();
+    var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+    await dbContext.Database.ExecuteSqlRawAsync("""
+        IF OBJECT_ID(N'dbo.AuditLog', N'U') IS NULL
+        BEGIN
+            CREATE TABLE dbo.AuditLog (
+                AuditLogId bigint IDENTITY(1,1) NOT NULL PRIMARY KEY,
+                OccurredAt datetime2 NOT NULL,
+                EmployeeId int NULL,
+                EmployeeName nvarchar(100) NOT NULL CONSTRAINT DF_AuditLog_EmployeeName DEFAULT N'',
+                ActionType nvarchar(10) NOT NULL,
+                Resource nvarchar(250) NOT NULL,
+                StatusCode int NOT NULL,
+                IpAddress nvarchar(64) NOT NULL CONSTRAINT DF_AuditLog_IpAddress DEFAULT N''
+            );
+            CREATE INDEX IX_AuditLog_OccurredAt ON dbo.AuditLog (OccurredAt DESC);
+            CREATE INDEX IX_AuditLog_EmployeeId ON dbo.AuditLog (EmployeeId);
+        END
+        """);
+}
 
 static async Task EnsureEmployeeDepartmentColumn(WebApplication app)
 {
@@ -326,8 +366,7 @@ static async Task EnsureRequisitionWorkflow(WebApplication app)
         INSERT INTO dbo.EmployeeMenuPermission (EmployeeId, MenuId, CreatedDate)
         SELECT employee.EmployeeId, 10, GETDATE()
         FROM dbo.Employee employee
-        WHERE employee.Permission = '1'
-            AND NOT EXISTS (
+        WHERE NOT EXISTS (
                 SELECT 1
                 FROM dbo.EmployeeMenuPermission existingPermission
                 WHERE existingPermission.EmployeeId = employee.EmployeeId
@@ -464,15 +503,93 @@ static async Task EnsureSupplierWorkflow(WebApplication app)
             ALTER TABLE dbo.StockHeader ADD SupplierId int NULL;
         END
 
+        IF COL_LENGTH(N'dbo.StockCostLot', N'SupplierId') IS NULL
+        BEGIN
+            ALTER TABLE dbo.StockCostLot ADD SupplierId int NULL;
+        END
+
+        IF COL_LENGTH(N'dbo.StockCostLot', N'SupplierName') IS NULL
+        BEGIN
+            ALTER TABLE dbo.StockCostLot ADD SupplierName nvarchar(150) NOT NULL
+                CONSTRAINT DF_StockCostLot_SupplierName DEFAULT N'';
+        END
+
+        IF COL_LENGTH(N'dbo.StockIssueCost', N'SupplierId') IS NULL
+        BEGIN
+            ALTER TABLE dbo.StockIssueCost ADD SupplierId int NULL;
+        END
+
+        IF COL_LENGTH(N'dbo.StockIssueCost', N'SupplierName') IS NULL
+        BEGIN
+            ALTER TABLE dbo.StockIssueCost ADD SupplierName nvarchar(150) NOT NULL
+                CONSTRAINT DF_StockIssueCost_SupplierName DEFAULT N'';
+        END
+
         IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_StockHeader_SupplierId' AND object_id = OBJECT_ID(N'dbo.StockHeader'))
         BEGIN
             CREATE INDEX IX_StockHeader_SupplierId ON dbo.StockHeader(SupplierId);
+        END
+
+        IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_StockCostLot_SupplierId' AND object_id = OBJECT_ID(N'dbo.StockCostLot'))
+        BEGIN
+            CREATE INDEX IX_StockCostLot_SupplierId ON dbo.StockCostLot(SupplierId);
+        END
+
+        IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_StockIssueCost_SupplierId' AND object_id = OBJECT_ID(N'dbo.StockIssueCost'))
+        BEGIN
+            CREATE INDEX IX_StockIssueCost_SupplierId ON dbo.StockIssueCost(SupplierId);
         END
 
         IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'UX_Supplier_SupplierName' AND object_id = OBJECT_ID(N'dbo.Supplier'))
         BEGIN
             CREATE UNIQUE INDEX UX_Supplier_SupplierName ON dbo.Supplier(SupplierName);
         END
+
+    """);
+
+    await dbContext.Database.ExecuteSqlRawAsync("""
+        IF NOT EXISTS (SELECT 1 FROM dbo.Menu WHERE MenuId = 11 OR MenuCode = 'SUPPLIERS')
+        BEGIN
+            SET IDENTITY_INSERT dbo.Menu ON;
+            INSERT INTO dbo.Menu (MenuId, MenuCode, MenuName, MenuPath, SortOrder, IsActive)
+            VALUES (11, 'SUPPLIERS', N'จัดการผู้ขาย', '/suppliers', 11, 1);
+            SET IDENTITY_INSERT dbo.Menu OFF;
+        END
+        ELSE
+        BEGIN
+            UPDATE dbo.Menu
+            SET MenuCode = 'SUPPLIERS', MenuName = N'จัดการผู้ขาย', MenuPath = '/suppliers', SortOrder = 11, IsActive = 1
+            WHERE MenuId = 11 OR MenuCode = 'SUPPLIERS';
+        END
+
+        INSERT INTO dbo.EmployeeMenuPermission (EmployeeId, MenuId, CreatedDate)
+        SELECT employee.EmployeeId, 11, GETDATE()
+        FROM dbo.Employee employee
+        WHERE employee.Permission = '1'
+          AND NOT EXISTS (
+              SELECT 1 FROM dbo.EmployeeMenuPermission permission
+              WHERE permission.EmployeeId = employee.EmployeeId AND permission.MenuId = 11
+          );
+    """);
+
+    // Run data backfills separately so SQL Server can resolve columns added above.
+    await dbContext.Database.ExecuteSqlRawAsync("""
+        UPDATE lot
+        SET lot.SupplierId = header.SupplierId,
+            lot.SupplierName = COALESCE(supplier.SupplierName, N'')
+        FROM dbo.StockCostLot lot
+        INNER JOIN dbo.StockHeader header ON header.HeaderId = lot.ReceiveHeaderId
+        LEFT JOIN dbo.Supplier supplier ON supplier.SupplierId = header.SupplierId
+        WHERE (lot.SupplierId IS NULL OR lot.SupplierId = 0)
+          AND header.SupplierId IS NOT NULL;
+
+        UPDATE issueCost
+        SET issueCost.SupplierId = lot.SupplierId,
+            issueCost.SupplierName = COALESCE(lot.SupplierName, N'')
+        FROM dbo.StockIssueCost issueCost
+        INNER JOIN dbo.StockCostLot lot ON lot.CostLotId = issueCost.CostLotId
+        WHERE (issueCost.SupplierId IS NULL OR issueCost.SupplierId = 0)
+          AND lot.SupplierId IS NOT NULL;
     """);
 }
 

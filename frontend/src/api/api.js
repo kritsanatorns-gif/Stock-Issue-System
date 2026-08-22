@@ -93,6 +93,12 @@ export async function getHrEmployee(employeeCode, department = '') {
   return response.data
 }
 
+export async function getHrEmployees(department) {
+  const response = await api.get('/hr-employees', { params: { department } })
+
+  return response.data
+}
+
 export async function getCategories() {
   const response = await api.get('/categories')
 
@@ -299,8 +305,26 @@ export async function updateSupplierStatus(supplierId, supplierStatus) {
   return response.data
 }
 
+export async function updateSupplier(supplierId, supplierName) {
+  const response = await api.put(`/suppliers/${supplierId}`, { supplierName })
+
+  return response.data
+}
+
 export async function getPurchasesBySupplier(params = {}) {
   const response = await api.get('/reports/purchases-by-supplier', { params })
+
+  return response.data
+}
+
+export async function getPurchaseTrend(params = {}) {
+  const response = await api.get('/reports/purchase-trend', { params })
+
+  return response.data
+}
+
+export async function getSupplierPurchaseItems(supplierId, params = {}) {
+  const response = await api.get(`/reports/purchases-by-supplier/${supplierId}/items`, { params })
 
   return response.data
 }

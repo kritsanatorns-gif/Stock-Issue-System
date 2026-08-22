@@ -9,6 +9,9 @@ public sealed class StockHeader
     [MaxLength(20)]
     public string DocType { get; set; } = string.Empty;
 
+    [MaxLength(100)]
+    public string PoInvoiceNo { get; set; } = string.Empty;
+
     [MaxLength(20)]
     public string EmployeeId { get; set; } = string.Empty;
 

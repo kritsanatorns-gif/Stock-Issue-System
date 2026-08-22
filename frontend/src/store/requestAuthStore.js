@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
+import { useAuthStore } from './authStore'
 
 const SESSION_DURATION_MS = 4 * 60 * 60 * 1000
 
@@ -17,6 +18,8 @@ export const useRequestAuthStore = create(
         const safeDepartment = department.trim()
         const safeEmployeeCode = String(employeeCode ?? '').trim()
         const safeEmployeeName = String(employeeName ?? safeUsername).trim()
+
+        useAuthStore.getState().logout()
 
         set({
           employee: {

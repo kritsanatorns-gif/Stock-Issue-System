@@ -87,21 +87,6 @@ function StockAdjustPage() {
     [selectedItems],
   )
 
-  const totals = useMemo(() => {
-    return selectedItems.reduce(
-      (summary, item) => {
-        const diff = Number(item.newQty) - Number(item.currentQty)
-
-        return {
-          decrease: summary.decrease + (diff < 0 ? Math.abs(diff) : 0),
-          increase: summary.increase + (diff > 0 ? diff : 0),
-          unchanged: summary.unchanged + (diff === 0 ? 1 : 0),
-        }
-      },
-      { decrease: 0, increase: 0, unchanged: 0 },
-    )
-  }, [selectedItems])
-
   const loadProducts = async () => {
     setIsLoading(true)
     setLoadError('')
@@ -405,39 +390,6 @@ function StockAdjustPage() {
       {loadError ? <Alert severity="error">{loadError}</Alert> : null}
 
       <Grid container spacing={2}>
-        <Grid size={4}>
-          <Card elevation={0} sx={{ bgcolor: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 2 }}>
-            <CardContent sx={{ p: 2 }}>
-              <Typography sx={{ color: '#475569', fontSize: 13, fontWeight: 700 }}>รายการที่เลือก</Typography>
-              <Typography sx={{ color: '#0f172a', fontSize: 26, fontWeight: 900, mt: 0.5 }}>
-                {selectedItems.length.toLocaleString('th-TH')}
-              </Typography>
-            </CardContent>
-          </Card>
-        </Grid>
-        <Grid size={4}>
-          <Card elevation={0} sx={{ bgcolor: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 2 }}>
-            <CardContent sx={{ p: 2 }}>
-              <Typography sx={{ color: '#475569', fontSize: 13, fontWeight: 700 }}>ยอดเพิ่มรวม</Typography>
-              <Typography sx={{ color: '#0f172a', fontSize: 26, fontWeight: 900, mt: 0.5 }}>
-                {totals.increase.toLocaleString('th-TH')}
-              </Typography>
-            </CardContent>
-          </Card>
-        </Grid>
-        <Grid size={4}>
-          <Card elevation={0} sx={{ bgcolor: '#fff1f2', border: '1px solid #fecdd3', borderRadius: 2 }}>
-            <CardContent sx={{ p: 2 }}>
-              <Typography sx={{ color: '#475569', fontSize: 13, fontWeight: 700 }}>ยอดลดรวม</Typography>
-              <Typography sx={{ color: '#0f172a', fontSize: 26, fontWeight: 900, mt: 0.5 }}>
-                {totals.decrease.toLocaleString('th-TH')}
-              </Typography>
-            </CardContent>
-          </Card>
-        </Grid>
-      </Grid>
-
-      <Grid container spacing={2}>
         <Grid size={7}>
           <Card elevation={0} sx={{ bgcolor: '#ffffff', border: '1px solid #d9e0ea', borderRadius: 2 }}>
             <CardContent sx={{ p: 2.5 }}>
@@ -524,4 +476,3 @@ function StockAdjustPage() {
 }
 
 export default StockAdjustPage
-

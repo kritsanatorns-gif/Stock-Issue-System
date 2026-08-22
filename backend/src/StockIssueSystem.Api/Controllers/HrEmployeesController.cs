@@ -11,6 +11,47 @@ namespace StockIssueSystem.Api.Controllers;
 [Route("api/hr-employees")]
 public sealed class HrEmployeesController(AppDbContext dbContext) : ControllerBase
 {
+    [HttpGet]
+    public async Task<ActionResult<IReadOnlyList<HrEmployeeDto>>> GetEmployees([FromQuery] string? department = null)
+    {
+        var employeeDepartment = department?.Trim() ?? string.Empty;
+
+        if (string.IsNullOrWhiteSpace(employeeDepartment))
+        {
+            return BadRequest("Department is required.");
+        }
+
+        await using var connection = new SqlConnection(dbContext.Database.GetConnectionString());
+        await using var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT CAST(Code AS nvarchar(50)) AS Code,
+                LTRIM(RTRIM(ISNULL(Name1, N'') + N' ' + ISNULL(Lastname1, N''))) AS Name,
+                ISNULL(Department, N'') AS Department,
+                ISNULL(UnitRef, N'') AS UnitRef
+            FROM MARSHR.HRM.dbo.EMPLOYEE
+            WHERE Department = @Department
+            ORDER BY Code
+            """;
+        command.Parameters.Add(new SqlParameter("@Department", SqlDbType.NVarChar, 100) { Value = employeeDepartment });
+
+        await connection.OpenAsync();
+        await using var reader = await command.ExecuteReaderAsync();
+        var employees = new List<HrEmployeeDto>();
+
+        while (await reader.ReadAsync())
+        {
+            employees.Add(new HrEmployeeDto
+            {
+                Code = reader["Code"]?.ToString() ?? string.Empty,
+                Name = reader["Name"]?.ToString() ?? string.Empty,
+                Department = reader["Department"]?.ToString() ?? string.Empty,
+                UnitRef = reader["UnitRef"]?.ToString() ?? string.Empty,
+            });
+        }
+
+        return Ok(employees);
+    }
+
     [HttpGet("{code}")]
     public async Task<ActionResult<HrEmployeeDto>> GetEmployee(string code, [FromQuery] string? department = null)
     {

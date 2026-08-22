@@ -549,7 +549,7 @@ function ApprovalsPage() {
           </Card>
         </Grid>
         <Grid size={{ xs: 12, md: 3 }}>
-          <Card sx={{ border: '1px solid #cbd5e1', background: 'linear-gradient(135deg, #f8fafc 0%, #ffffff 100%)' }}>
+          <Card sx={{ border: '1px solid #bbf7d0', background: 'linear-gradient(135deg, #f0fdf4 0%, #ffffff 100%)' }}>
             <CardContent>
               <Typography sx={{ color: '#475569', fontSize: 13, fontWeight: 800 }}>รอจัดของ</Typography>
               <Typography sx={{ fontSize: 28, fontWeight: 900 }}>{summary.pending}</Typography>
@@ -557,7 +557,7 @@ function ApprovalsPage() {
           </Card>
         </Grid>
         <Grid size={{ xs: 12, md: 3 }}>
-          <Card sx={{ border: '1px solid #ddd6fe', background: 'linear-gradient(135deg, #f5f3ff 0%, #ffffff 100%)' }}>
+          <Card sx={{ border: '1px solid #fed7aa', background: 'linear-gradient(135deg, #fff7ed 0%, #ffffff 100%)' }}>
             <CardContent>
               <Typography sx={{ color: '#475569', fontSize: 13, fontWeight: 800 }}>งานค้าง</Typography>
               <Typography sx={{ fontSize: 28, fontWeight: 900 }}>{summary.backlog}</Typography>

@@ -511,6 +511,12 @@ namespace StockIssueSystem.Api.Migrations
                         .HasColumnType("bit")
                         .HasDefaultValue(false);
 
+                    b.Property<string>("PoInvoiceNo")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)")
+                        .HasDefaultValue("");
+
                     b.Property<string>("Remark")
                         .IsRequired()
                         .HasMaxLength(255)

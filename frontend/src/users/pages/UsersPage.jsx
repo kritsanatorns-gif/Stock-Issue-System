@@ -108,9 +108,9 @@ const defaultStatusOptions = [
 ]
 
 const roleDefaultMenuCodes = {
-  1: ['DASHBOARD', 'STOCK_OUT', 'STOCK_IN', 'STOCK_ADJUST', 'PRODUCTS', 'HISTORY', 'REPORTS', 'USERS', 'DEPARTMENTS'],
-  2: ['DASHBOARD', 'STOCK_OUT', 'STOCK_IN', 'STOCK_ADJUST', 'PRODUCTS', 'HISTORY', 'REPORTS'],
-  3: ['DASHBOARD', 'STOCK_OUT'],
+  1: ['DASHBOARD', 'STOCK_OUT', 'APPROVALS', 'STOCK_IN', 'STOCK_ADJUST', 'PRODUCTS', 'HISTORY', 'REPORTS', 'USERS', 'DEPARTMENTS', 'SUPPLIERS'],
+  2: ['DASHBOARD', 'STOCK_OUT', 'APPROVALS', 'STOCK_IN', 'STOCK_ADJUST', 'PRODUCTS', 'HISTORY', 'REPORTS'],
+  3: ['DASHBOARD', 'STOCK_OUT', 'APPROVALS'],
 }
 
 function getStatusOption(status, options = defaultStatusOptions) {
@@ -131,7 +131,11 @@ function getDefaultMenuIdsByRole(role, menuOptions) {
   const defaultCodes = roleDefaultMenuCodes[roleKey] ?? roleDefaultMenuCodes[3]
 
   return menuOptions
-    .filter((menu) => defaultCodes.includes(menu.code))
+    .filter((menu) => {
+      const menuCode = String(menu.code ?? '').trim().toUpperCase()
+
+      return defaultCodes.includes(menuCode) || menuCode === 'APPROVALS'
+    })
     .map((menu) => menu.id)
 }
 

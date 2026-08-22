@@ -13,6 +13,7 @@ import ReportsPage from '../reports/pages/ReportsPage'
 import StockAdjustPage from '../stockAdjust/pages/StockAdjustPage'
 import StockInPage from '../stockIn/pages/StockInPage'
 import StockIssuePage from '../stockIssue/pages/StockOutPage'
+import SuppliersPage from '../suppliers/pages/SuppliersPage'
 import HistoryPage from '../transactions/pages/HistoryPage'
 import UsersPage from '../users/pages/UsersPage'
 import RequestLoginPage from '../request/pages/RequestLoginPage'
@@ -96,6 +97,14 @@ export const router = createBrowserRouter([
             element: (
               <RequireMenuAccess menuCode="STOCK_ADJUST">
                 <StockAdjustPage />
+              </RequireMenuAccess>
+            ),
+          },
+          {
+            path: 'suppliers',
+            element: (
+              <RequireMenuAccess menuCode="SUPPLIERS">
+                <SuppliersPage />
               </RequireMenuAccess>
             ),
           },

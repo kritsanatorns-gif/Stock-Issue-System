@@ -5,6 +5,7 @@ namespace StockIssueSystem.Api.Data;
 
 public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(options)
 {
+    public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
     public DbSet<Category> Categories => Set<Category>();
     public DbSet<Department> Departments => Set<Department>();
     public DbSet<Employee> Employees => Set<Employee>();
@@ -24,6 +25,18 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
+
+        modelBuilder.Entity<AuditLog>(entity =>
+        {
+            entity.ToTable("AuditLog", "dbo");
+            entity.HasKey(log => log.AuditLogId);
+            entity.Property(log => log.EmployeeName).HasMaxLength(100).HasDefaultValue(string.Empty);
+            entity.Property(log => log.ActionType).HasMaxLength(10).IsRequired();
+            entity.Property(log => log.Resource).HasMaxLength(250).IsRequired();
+            entity.Property(log => log.IpAddress).HasMaxLength(64).HasDefaultValue(string.Empty);
+            entity.HasIndex(log => log.OccurredAt);
+            entity.HasIndex(log => log.EmployeeId);
+        });
 
         modelBuilder.Entity<Category>(entity =>
         {
@@ -166,8 +179,10 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
             entity.ToTable("StockCostLot", "dbo");
             entity.HasKey(lot => lot.CostLotId);
             entity.Property(lot => lot.ProductId).HasMaxLength(50).IsRequired();
+            entity.Property(lot => lot.SupplierName).HasMaxLength(150).HasDefaultValue(string.Empty);
             entity.Property(lot => lot.UnitCost).HasColumnType("decimal(18, 2)");
             entity.Property(lot => lot.CreatedDate).HasDefaultValueSql("GETDATE()");
+            entity.HasIndex(lot => lot.SupplierId);
             entity.HasIndex(lot => new
             {
                 lot.ProductId,
@@ -181,6 +196,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
             entity.ToTable("StockHeader", "dbo");
             entity.HasKey(header => header.HeaderId);
             entity.Property(header => header.DocType).HasMaxLength(20).IsRequired();
+            entity.Property(header => header.PoInvoiceNo).HasMaxLength(100).HasDefaultValue("");
             entity.Property(header => header.EmployeeId).HasMaxLength(20).IsRequired();
             entity.Property(header => header.TransactionDate).HasDefaultValueSql("GETDATE()");
             entity.Property(header => header.Department).HasMaxLength(50).HasDefaultValue("");
@@ -225,8 +241,10 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
             entity.HasKey(cost => cost.IssueCostId);
             entity.Property(cost => cost.UnitCost).HasColumnType("decimal(18, 2)");
             entity.Property(cost => cost.TotalCost).HasColumnType("decimal(18, 2)");
+            entity.Property(cost => cost.SupplierName).HasMaxLength(150).HasDefaultValue(string.Empty);
             entity.HasIndex(cost => cost.IssueDetailId);
             entity.HasIndex(cost => cost.CostLotId);
+            entity.HasIndex(cost => cost.SupplierId);
         });
     }
 }

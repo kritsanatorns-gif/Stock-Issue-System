@@ -1,15 +1,57 @@
+.login-panel__footer {
+  display: none !important;
+}
+
+.login-panel__robot {
+  align-self: center;
+  background: linear-gradient(145deg, #162f67, #07183d);
+  border: 2px solid #5da3ff;
+  border-radius: 26px;
+  box-shadow: 0 0 22px rgba(59,130,246,.4), inset 0 0 18px rgba(96,165,250,.18);
+  height: 88px;
+  margin-bottom: -64px;
+  position: relative;
+  top: -64px;
+  width: 124px;
+}
+.login-panel__robot-antenna { background: #60a5fa; border-radius: 4px; height: 14px; left: 59px; position: absolute; top: -17px; width: 5px; box-shadow: 0 0 8px #60a5fa; }
+.login-panel__robot-antenna::before { background: #93c5fd; border-radius: 50%; box-shadow: 0 0 10px #60a5fa; content: ''; height: 11px; left: -3px; position: absolute; top: -7px; width: 11px; }
+.login-panel__robot-face { display: flex; gap: 28px; left: 24px; position: absolute; top: 27px; }
+.login-panel__robot-eye { background: #67e8f9; border-radius: 50%; box-shadow: 0 0 10px #22d3ee; height: 14px; transition: transform .12s ease-out; width: 14px; }
+.login-panel__robot-mouth { border: 2px solid #67e8f9; border-radius: 0 0 14px 14px; border-top: 0; height: 10px; left: 44px; position: absolute; top: 55px; width: 32px; }
+.login-panel__robot.is-covering .login-panel__robot-eye { border-radius: 8px; height: 4px; margin-top: 5px; }
+.login-panel__robot.has-error { margin-bottom: -20px; top: -20px; }
+.login-panel__robot.is-success { animation: robot-success .55s ease-in-out 2; }
+.login-panel__robot.is-success .login-panel__robot-mouth { border-radius: 14px 14px 0 0; border-bottom: 0; border-top: 2px solid #67e8f9; top: 48px; }
+.login-panel__robot.is-laughing { animation: robot-user-look .6s ease-in-out infinite alternate; }
+.login-panel__robot.is-laughing .login-panel__robot-eye { transform: scaleY(.45); }
+.login-panel__robot.is-laughing .login-panel__robot-mouth { border-radius: 4px 4px 16px 16px; height: 17px; top: 50px; }
+.login-panel__robot.is-looking-user { rotate: -7deg; }
+@keyframes robot-success { 50% { transform: translateY(-8px) scale(1.06); } }
+@keyframes robot-laugh { from { rotate: -3deg; } to { rotate: 3deg; } }
+@keyframes robot-user-look { from { transform: rotate(-7deg); } to { transform: rotate(7deg); } }
+
+.login-panel__options,
+.login-panel__divider,
+.login-panel__company-login {
+  display: none !important;
+}
+
 .login-page {
-  max-width: 390px;
+  max-width: 540px;
   width: 100%;
 }
 
 .login-panel {
   width: 100%;
+  max-width: 520px;
+  padding-top: 54px;
+  transform: translateY(-110px);
 }
 
 .login-panel__title.MuiTypography-root {
-  color: #0f172a;
-  font-size: 24px;
+  color: #16233f;
+  font-size: 30px;
   font-weight: 900;
   line-height: 1.15;
 }
@@ -20,6 +62,18 @@
   margin-top: 6px;
 }
 
+.login-panel__heading { margin-bottom: 12px; }
+.login-panel__heading svg { color: #2f73ff; filter: drop-shadow(0 3px 4px rgba(47,115,255,.25)); }
+.login-panel__options .MuiTypography-root { color:#64748b; font-size:14px; }
+.login-panel__options .MuiLink-root { color:#2563eb; font-size:14px; font-weight:800; }
+.login-panel__options .MuiCheckbox-root { color:#94a3b8; padding:4px; }
+.login-panel__divider { color:#94a3b8; margin-top:8px; }
+.login-panel__divider .MuiTypography-root { font-size:13px; }
+.login-panel__divider .MuiDivider-root { border-color:#dbe4f0; }
+.login-panel__company-login.MuiButton-root { border:0; border-radius:14px; box-shadow:0 12px 30px rgba(15,23,42,.08); color:#475569; font-size:15px; font-weight:800; min-height:54px; }
+.login-panel__footer { color:#8090aa; font-family:monospace; font-size:12px; margin-top:28px; }
+.login-panel__footer .MuiTypography-root { font-size:12px; font-weight:700; }
+
 .login-panel__hidden-input {
   display: none;
 }
@@ -27,7 +81,8 @@
 .login-panel__field .MuiOutlinedInput-root {
   background-color: rgba(255, 255, 255, 0.92);
   border-radius: 6px;
-  min-height: 56px;
+  border-radius: 12px;
+  min-height: 64px;
 }
 
 .login-panel__field .MuiInputBase-input {
@@ -49,17 +104,25 @@
 }
 
 .login-panel__submit.MuiButton-root {
-  background-color: #1d4ed8;
-  border-radius: 6px;
+  background: linear-gradient(180deg, #3478ef, #2563d8);
+  border-radius: 11px;
   box-shadow:
     0 3px 1px -2px rgba(0, 0, 0, 0.2),
     0 2px 2px 0 rgba(0, 0, 0, 0.14),
     0 1px 5px 0 rgba(0, 0, 0, 0.12);
   font-size: 15px;
   font-weight: 700;
-  min-height: 54px;
+  box-shadow: 0 12px 24px -10px rgba(37,71,184,.6);
+  min-height: 64px;
+  color: #fff !important;
+}
+
+.login-panel__submit.MuiButton-root.Mui-disabled {
+  background: linear-gradient(180deg, #3478ef, #2563d8);
+  color: #fff !important;
+  opacity: .58;
 }
 
 .login-panel__submit.MuiButton-root:hover {
-  background-color: #1e40af;
+  background: linear-gradient(180deg, #2563d8, #1d4ed8);
 }
