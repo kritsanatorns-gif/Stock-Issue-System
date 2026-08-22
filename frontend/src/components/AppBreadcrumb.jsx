@@ -5,6 +5,7 @@ import './AppShell.css'
 const labelsByPath = {
   '/dashboard': 'หน้าหลัก',
   '/stock-issue': 'เบิกสินค้า',
+  '/approvals': 'รายการขอเบิก',
   '/stock-in': 'นำของเข้า',
   '/stock-adjust': 'ปรับสต๊อก',
   '/products': 'สินค้า / ยอดคงเหลือ',
@@ -13,6 +14,7 @@ const labelsByPath = {
   '/reports': 'รายงาน',
   '/users': 'ผู้ใช้งาน',
   '/departments': 'แผนก',
+  '/suppliers': 'จัดการผู้ขาย',
 }
 
 function AppBreadcrumb() {

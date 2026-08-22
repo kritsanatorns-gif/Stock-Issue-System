@@ -1,4 +1,5 @@
 using System.Data;
+using System.Globalization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using StockIssueSystem.Api.Data;
@@ -592,7 +593,9 @@ public sealed class RequisitionsController(AppDbContext dbContext, FifoCostServi
 
     private static string FormatRequestNo(StockHeader header, int sequence)
     {
-        return $"RQ-{header.TransactionDate:yyMMdd}-{sequence:0000}";
+        var datePart = header.TransactionDate.ToString("yyMMdd", CultureInfo.InvariantCulture);
+        var sequencePart = sequence.ToString("0000", CultureInfo.InvariantCulture);
+        return $"RQ-{datePart}-{sequencePart}";
     }
 
     private static string BuildRemark(string department, string remark, string requesterName)

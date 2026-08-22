@@ -159,9 +159,9 @@ export function buildPrintableRowWithBacklog(row, requestRows) {
 
 const REQUEST_STATUS_META = {
   6: {
-    background: 'linear-gradient(135deg, #f8fafc 0%, #ffffff 100%)',
-    border: '#cbd5e1',
-    chip: '#64748b',
+    background: 'linear-gradient(135deg, #eff6ff 0%, #ffffff 100%)',
+    border: '#bfdbfe',
+    chip: '#2563eb',
     label: 'รอจัดของ',
   },
   7: {

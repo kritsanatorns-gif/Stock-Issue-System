@@ -66,4 +66,29 @@ public sealed class SuppliersController(AppDbContext dbContext) : ControllerBase
             SupplierStatus = supplier.SupplierStatus,
         });
     }
+
+    [HttpPut("{supplierId:int}")]
+    public async Task<ActionResult<SupplierDto>> UpdateSupplier(int supplierId, UpdateSupplierDto request)
+    {
+        var name = request.SupplierName.Trim();
+        if (string.IsNullOrWhiteSpace(name)) return BadRequest("Supplier name is required.");
+        if (name.Length > 150) return BadRequest("Supplier name must not exceed 150 characters.");
+        if (await dbContext.Suppliers.AnyAsync(supplier => supplier.SupplierId != supplierId && supplier.SupplierName == name))
+        {
+            return Conflict("Supplier name already exists.");
+        }
+
+        var supplier = await dbContext.Suppliers.FindAsync(supplierId);
+        if (supplier is null) return NotFound("Supplier not found.");
+
+        supplier.SupplierName = name;
+        await dbContext.SaveChangesAsync();
+
+        return Ok(new SupplierDto
+        {
+            SupplierId = supplier.SupplierId,
+            SupplierName = supplier.SupplierName,
+            SupplierStatus = supplier.SupplierStatus,
+        });
+    }
 }

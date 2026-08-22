@@ -12,12 +12,14 @@ import {
   TextField,
   Typography,
 } from '@mui/material'
-import { Barcode, Building2, ClipboardList, LogIn, Search, User } from 'lucide-react'
+import { Barcode, Building2, ClipboardCheck, ClipboardList, LogIn, PackageCheck, Search, ShieldCheck, User } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
 import { getDepartments, getHrEmployee } from '../../api/api'
 import BufferedTextField from '../../components/BufferedTextField'
 import { useRequestAuthStore } from '../../store/requestAuthStore'
+import { useAuthStore } from '../../store/authStore'
+import './RequestLoginPage.css'
 
 function normalizeDepartmentRow(row) {
   return {
@@ -34,6 +36,8 @@ function RequestLoginPage() {
   const navigate = useNavigate()
   const isAuthenticated = useRequestAuthStore((state) => state.isAuthenticated)
   const expiresAt = useRequestAuthStore((state) => state.expiresAt)
+  const isHrAuthenticated = useAuthStore((state) => state.isAuthenticated)
+  const hrExpiresAt = useAuthStore((state) => state.expiresAt)
   const login = useRequestAuthStore((state) => state.login)
   const [username, setUsername] = useState('')
   const [department, setDepartment] = useState('')
@@ -47,8 +51,21 @@ function RequestLoginPage() {
   const [hrEmployee, setHrEmployee] = useState(null)
   const [isCheckingEmployee, setIsCheckingEmployee] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [eyeOffset, setEyeOffset] = useState({ x: 0, y: 0 })
+  const [isLoginHovered, setIsLoginHovered] = useState(false)
+  const [isEmployeeFocused, setIsEmployeeFocused] = useState(false)
   const isSessionActive = isAuthenticated && expiresAt && expiresAt > Date.now()
+  const isHrSessionActive = isHrAuthenticated && hrExpiresAt && hrExpiresAt > Date.now()
   const canSubmit = username.trim() && department.trim() && !employeeCodeError && !departmentError && !isSubmitting
+
+  useEffect(() => {
+    const handleMouseMove = (event) => setEyeOffset({
+      x: (event.clientX / window.innerWidth - 0.5) * 20,
+      y: (event.clientY / window.innerHeight - 0.5) * 12,
+    })
+    window.addEventListener('mousemove', handleMouseMove)
+    return () => window.removeEventListener('mousemove', handleMouseMove)
+  }, [])
 
   const activeDepartmentOptions = useMemo(
     () => departmentOptions.filter((item) => item.status === 1),
@@ -91,6 +108,10 @@ function RequestLoginPage() {
     }
   }, [])
 
+  if (isHrSessionActive) {
+    return <Navigate to="/dashboard" replace />
+  }
+
   if (isSessionActive) {
     return <Navigate to="/request" replace />
   }
@@ -110,6 +131,7 @@ function RequestLoginPage() {
 
   const selectDepartment = (departmentRow) => {
     clearCheckedEmployee()
+    setUsername('')
     setDepartment(departmentRow?.name ?? '')
     setSelectedDepartmentCode(departmentRow?.code ?? '')
     setDepartmentCodeText(departmentRow?.code ?? '')
@@ -119,6 +141,7 @@ function RequestLoginPage() {
 
   const clearDepartment = () => {
     clearCheckedEmployee()
+    setUsername('')
     setDepartment('')
     setSelectedDepartmentCode('')
     setDepartmentCodeText('')
@@ -237,8 +260,6 @@ function RequestLoginPage() {
           ? hrEmployee
           : await getHrEmployee(employeeCode, employeeDepartment)
 
-      setHrEmployee(checkedEmployee)
-
       await login({
         department: checkedEmployee.department,
         employeeCode: checkedEmployee.code,
@@ -265,14 +286,16 @@ function RequestLoginPage() {
       sx={{
         alignItems: 'center',
         background:
-          'radial-gradient(circle at 6% 12%, rgba(178,206,255,0.96) 0 36px, transparent 38px), radial-gradient(circle at 11% 12%, rgba(255,255,255,0.96) 0 32px, transparent 34px), radial-gradient(circle at 16% 12%, rgba(198,242,255,0.98) 0 34px, transparent 36px), radial-gradient(ellipse at -4% 104%, rgba(255,255,255,0.64) 0 28%, transparent 29%), radial-gradient(ellipse at 106% 104%, rgba(255,255,255,0.58) 0 25%, transparent 26%), linear-gradient(135deg, #d8e6ff 0%, #f8fbff 52%, #d7f3ff 100%)',
+          '#0b1d45',
         display: 'flex',
         justifyContent: 'center',
+        fontFamily: "'IBM Plex Sans Thai', 'Kanit', sans-serif",
         minHeight: '100vh',
         overflow: 'hidden',
         p: { xs: 3, md: 5 },
         position: 'relative',
         '&::after': {
+          display: 'none',
           backgroundImage: 'radial-gradient(circle, rgba(255,255,255,0.92) 1.6px, transparent 1.8px)',
           backgroundSize: '18px 18px',
           bottom: 70,
@@ -289,36 +312,62 @@ function RequestLoginPage() {
         elevation={0}
         sx={{
           bgcolor: 'rgba(255,255,255,0.96)',
-          border: '1px solid rgba(96,165,250,0.24)',
-          borderRadius: 2,
-          boxShadow: '0 34px 95px rgba(30,64,175,0.24), 0 10px 26px rgba(15,23,42,0.10)',
+          border: '0 !important',
+          outline: 'none',
+          borderRadius: 0,
+          boxShadow: '0 0 0 2px #0b1d45, 0 34px 95px rgba(30,64,175,0.24), 0 10px 26px rgba(15,23,42,0.10)',
           display: 'grid',
-          gridTemplateColumns: { xs: '1fr', md: '42% 58%' },
-          minHeight: { xs: 'auto', md: 610 },
+          gridTemplateColumns: { xs: '1fr', md: '52% 48%' },
+          minHeight: { xs: 'auto', md: 850 },
           overflow: 'hidden',
-          width: 'min(1120px, 100%)',
+          width: 'min(1600px, 100%)',
         }}
       >
         <Box
           sx={{
             backgroundImage:
-              "linear-gradient(180deg, rgba(219,234,254,0.08), rgba(255,255,255,0.12)), url('/login-bg.jpg')",
+              "linear-gradient(180deg, rgba(16,38,91,.96) 0%, rgba(20,48,108,.88) 42%, rgba(18,42,86,.38) 68%, rgba(16,26,50,.06) 100%), url('/login-bg.png')",
             backgroundPosition: 'left center',
             backgroundSize: 'cover',
-            display: { xs: 'none', md: 'block' },
-            minHeight: 610,
+            display: { xs: 'none', md: 'flex' },
+            flexDirection: 'column',
+            justifyContent: 'flex-start',
+            minHeight: 850,
+            p: 5,
+            position: 'relative',
           }}
-        />
+        >
+          <Stack direction="row" spacing={2} sx={{ position: 'relative', zIndex: 1 }}>
+            <Box sx={{ alignItems: 'center', bgcolor: 'rgba(53,94,172,.85)', borderRadius: 1.5, color: '#fff', display: 'flex', fontSize: 22, fontWeight: 900, height: 58, justifyContent: 'center', width: 58 }}>TLP</Box>
+            <Box>
+              <Typography sx={{ color: '#fff', fontSize: 21, fontWeight: 900 }}>ระบบจัดการคลังสำนักงาน</Typography>
+              <Typography sx={{ color: '#b9c7e8', fontFamily: 'monospace', fontSize: 12, letterSpacing: 1, mt: .5 }}>OFFICE SUPPLY · WAREHOUSE OPS</Typography>
+            </Box>
+          </Stack>
+          <Box sx={{ marginTop: 12, position: 'relative', zIndex: 1 }}>
+            <Typography sx={{ color: '#fff', fontSize: 27, fontWeight: 900 }}>เบิกสินค้าได้ง่าย</Typography>
+            <Typography sx={{ color: '#b8c7e8', fontSize: 15, lineHeight: 1.7, mt: 1 }}>ค้นหาสินค้า ส่งคำขอเบิก และติดตามสถานะคำขอได้ในที่เดียว</Typography>
+            <Stack direction="row" spacing={2.5} sx={{ mt: 4 }}>
+              {[['ค้นหาสินค้า', 'ดูรายการสินค้าและจำนวนคงเหลือ', <PackageCheck size={21} />], ['ส่งคำขอเบิก', 'เลือกสินค้าและระบุจำนวนที่ต้องการ', <ClipboardCheck size={21} />], ['ติดตามสถานะ', 'ตรวจสอบคำขอว่าอยู่ระหว่างรอจัดของหรือดำเนินการแล้ว', <ShieldCheck size={21} />]].map(([title, text, icon]) => (
+                <Stack key={title} direction="row" spacing={1}>
+                  <Box sx={{ alignItems: 'center', bgcolor: 'rgba(69,122,211,.5)', borderRadius: 1.5, color: '#bdddff', display: 'flex', height: 46, justifyContent: 'center', width: 46 }}>{icon}</Box>
+                  <Box><Typography sx={{ color: '#fff', fontSize: 12, fontWeight: 800, whiteSpace: 'nowrap' }}>{title}</Typography><Typography sx={{ color: '#b8c7e8', fontSize: 10, whiteSpace: 'nowrap' }}>{text}</Typography></Box>
+                </Stack>
+              ))}
+            </Stack>
+          </Box>
+        </Box>
 
         <Box
+          className="request-login-form"
           component="form"
           onSubmit={handleSubmit}
           sx={{
             alignItems: 'center',
-            background: 'linear-gradient(180deg, rgba(255,255,255,0.98), rgba(248,250,252,0.98))',
+            background: '#fffdf8',
             display: 'flex',
             justifyContent: 'center',
-            p: { xs: 3, md: 6 },
+            p: { xs: 3, md: 9 },
             position: 'relative',
             '&::before': {
               background: 'linear-gradient(135deg, #d8e6ff 0%, #d7f3ff 100%)',
@@ -334,7 +383,7 @@ function RequestLoginPage() {
               width: 330,
             },
             '&::after': {
-              background: '#f8fbff',
+              background: '#0b1d45',
               bottom: 0,
               clipPath:
                 'polygon(100% 100%, 48% 100%, 55% 94%, 60% 89%, 70% 88%, 74% 82%, 80% 76%, 90% 70%, 93% 61%, 100% 55%)',
@@ -368,7 +417,7 @@ function RequestLoginPage() {
                 width: 250,
               },
               '&::after': {
-                background: '#f8fbff',
+                background: '#0b1d45',
                 clipPath:
                   'polygon(100% 0, 54% 0, 61% 6%, 67% 11%, 75% 12%, 80% 18%, 86% 24%, 94% 31%, 97% 40%, 100% 46%)',
                 content: '""',
@@ -381,7 +430,15 @@ function RequestLoginPage() {
             }}
           />
 
-          <Stack spacing={3} sx={{ maxWidth: 390, position: 'relative', width: '100%', zIndex: 1 }}>
+          <Stack spacing={3} sx={{ maxWidth: 540, position: 'relative', transform: 'translateY(-70px)', width: '100%', zIndex: 1 }}>
+            <Box className={`request-login-robot${isLoginHovered ? ' is-laughing' : ''}${isEmployeeFocused ? ' is-covering' : ''}${errorMessage ? ' has-error' : ''}`} aria-hidden="true" sx={{ transform: isLoginHovered ? undefined : `translateY(${eyeOffset.y * 0.18}px)` }}>
+              <Box className="request-login-robot-antenna" />
+              <Box className="request-login-robot-face">
+                <Box className="request-login-robot-eye" sx={{ transform: `translate(${eyeOffset.x}px, ${eyeOffset.y}px)` }} />
+                <Box className="request-login-robot-eye" sx={{ transform: `translate(${eyeOffset.x}px, ${eyeOffset.y}px)` }} />
+              </Box>
+              <Box className="request-login-robot-mouth" />
+            </Box>
             <Stack alignItems="center" direction="row" spacing={2}>
               <ClipboardList color="#1d4ed8" size={54} strokeWidth={1.6} />
               <Box>
@@ -396,21 +453,40 @@ function RequestLoginPage() {
 
             {errorMessage ? <Alert severity="error">{errorMessage}</Alert> : null}
 
+            <FormControl fullWidth required>
+              <InputLabel id="request-simple-department-select-label">เลือกแผนก</InputLabel>
+              <Select
+                label="เลือกแผนก"
+                labelId="request-simple-department-select-label"
+                value={selectedDepartmentCode}
+                onChange={(event) => handleDepartmentSelectChange(event.target.value)}
+                startAdornment={
+                  <InputAdornment position="start">
+                    <Building2 color="#5f7f99" size={22} />
+                  </InputAdornment>
+                }
+              >
+                <MenuItem value="">เลือกแผนก</MenuItem>
+                {activeDepartmentOptions.map((departmentRow) => (
+                  <MenuItem key={departmentRow.id || departmentRow.code} value={departmentRow.code}>
+                    {departmentRow.name}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+
             <BufferedTextField
               autoFocus
               fullWidth
               required
               label="รหัสพนักงาน"
               value={username}
-              onChange={(event) => {
-                handleEmployeeCodeChange(event.target.value)
-              }}
+              onFocus={() => setIsEmployeeFocused(true)}
+              onBlur={() => setIsEmployeeFocused(false)}
+              onChange={(event) => handleEmployeeCodeChange(event.target.value)}
               error={Boolean(employeeCodeError)}
               helperText={employeeCodeError || 'กรอกเฉพาะตัวเลขเท่านั้น'}
-              inputProps={{
-                inputMode: 'numeric',
-                pattern: '[0-9]*',
-              }}
+              inputProps={{ inputMode: 'numeric', pattern: '[0-9]*' }}
               InputProps={{
                 startAdornment: (
                   <InputAdornment position="start">
@@ -420,7 +496,7 @@ function RequestLoginPage() {
               }}
             />
 
-            <Stack spacing={1.5}>
+            <Stack spacing={1.5} sx={{ display: 'none' }}>
               <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}>
                 <BufferedTextField
                   fullWidth
@@ -513,6 +589,7 @@ function RequestLoginPage() {
             </Stack>
 
             <Button
+              sx={{ display: 'none' }}
               disabled={!username.trim() || !department.trim() || Boolean(employeeCodeError) || Boolean(departmentError) || isCheckingEmployee}
               onClick={handleCheckEmployee}
               startIcon={<Search size={18} />}
@@ -522,7 +599,7 @@ function RequestLoginPage() {
               {isCheckingEmployee ? 'กำลังตรวจสอบ...' : 'ตรวจสอบข้อมูล HR'}
             </Button>
 
-            {hrEmployee ? (
+            {false && hrEmployee ? (
               <Box
                 sx={{
                   bgcolor: 'rgba(239,246,255,0.86)',
@@ -552,6 +629,7 @@ function RequestLoginPage() {
               </Box>
             ) : null}
 
+            <Box onMouseEnter={() => setIsLoginHovered(true)} onMouseLeave={() => setIsLoginHovered(false)}>
             <Button
               disabled={!canSubmit}
               fullWidth
@@ -562,6 +640,7 @@ function RequestLoginPage() {
             >
               {isSubmitting ? 'กำลังเข้าสู่ระบบ...' : 'เข้าสู่หน้าขอเบิก'}
             </Button>
+            </Box>
           </Stack>
         </Box>
       </Paper>

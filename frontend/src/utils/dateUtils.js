@@ -16,13 +16,14 @@ export function toThailandDate(value) {
     return null
   }
 
-  // ASP.NET DateTime.Now is serialized without a timezone. Treat those values
-  // as Bangkok time, while preserving the timezone for values that include one.
+  // Transaction timestamps are persisted by SQL Server without a timezone.
+  // The client submits them as UTC, so values returned without an offset must
+  // be restored from UTC before displaying them in Bangkok time.
   const date = value instanceof Date
     ? dayjs(value).tz(THAILAND_TIMEZONE)
     : hasExplicitTimeZone(value)
       ? dayjs.utc(value).tz(THAILAND_TIMEZONE)
-      : dayjs.tz(value, THAILAND_TIMEZONE)
+      : dayjs.utc(value).tz(THAILAND_TIMEZONE)
 
   return date.isValid() ? date : null
 }

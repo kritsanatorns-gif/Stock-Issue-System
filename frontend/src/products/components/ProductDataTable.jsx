@@ -222,16 +222,28 @@ function ProductDataTable({
     },
     { key: 'stockQty', label: 'ยอดคงเหลือ', width: 115 },
     {
+      key: 'stockStatus',
+      label: 'สถานะสต๊อก',
+      width: 125,
+      align: 'center',
+      searchable: false,
+      render: (row) => {
+        const stockQty = Number(row.stockQty ?? 0)
+        const minQty = Number(row.minQty ?? 10)
+        const status = stockQty <= 0
+          ? { color: 'error', label: 'หมด' }
+          : stockQty <= minQty
+            ? { color: 'warning', label: 'ใกล้หมด' }
+            : { color: 'success', label: 'พร้อมเบิก' }
+
+        return <Chip color={status.color} label={status.label} size="small" />
+      },
+    },
+    {
       key: 'currentUnitCost',
       label: 'ต้นทุน FIFO',
       width: 115,
       render: (row) => formatMoney(row.currentUnitCost),
-    },
-    {
-      key: 'remainingCostValue',
-      label: 'มูลค่าของที่ยังไม่ถูกเบิก',
-      width: 130,
-      render: (row) => formatMoney(row.remainingCostValue),
     },
     {
       key: 'costLots',

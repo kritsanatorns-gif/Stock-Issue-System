@@ -1,6 +1,6 @@
-import { Alert, Box, Button, IconButton, InputAdornment, Stack, Typography } from '@mui/material'
-import { ClipboardList, Eye, EyeOff, Lock, LogIn, User } from 'lucide-react'
-import { useState } from 'react'
+import { Alert, Box, Button, Checkbox, Divider, IconButton, InputAdornment, Link, Stack, Typography } from '@mui/material'
+import { ArrowRight, BriefcaseBusiness, ClipboardList, Eye, EyeOff, Lock, User } from 'lucide-react'
+import { useEffect, useState } from 'react'
 import { useAuthStore } from '../store/authStore'
 import { normalizeUsernameInput } from '../utils/inputGuards'
 import BufferedTextField from './BufferedTextField'
@@ -15,8 +15,22 @@ function LoginPanel({ onSuccess }) {
   const [usernameHasThai, setUsernameHasThai] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
+  const [isPasswordFocused, setIsPasswordFocused] = useState(false)
+  const [loginSucceeded, setLoginSucceeded] = useState(false)
+  const [isLoginHovered, setIsLoginHovered] = useState(false)
+  const [eyeOffset, setEyeOffset] = useState({ x: 0, y: 0 })
   const login = useAuthStore((state) => state.login)
   const canSubmit = username.trim() && password.trim() && !usernameHasThai && !isSubmitting
+
+  useEffect(() => {
+    const handleMouseMove = (event) => {
+      const x = (event.clientX / window.innerWidth - 0.5) * 20
+      const y = (event.clientY / window.innerHeight - 0.5) * 12
+      setEyeOffset({ x, y })
+    }
+    window.addEventListener('mousemove', handleMouseMove)
+    return () => window.removeEventListener('mousemove', handleMouseMove)
+  }, [])
 
   const handleUsernameChange = (value) => {
     setErrorMessage('')
@@ -36,7 +50,8 @@ function LoginPanel({ onSuccess }) {
 
     try {
       await login({ employeeId: username, password })
-      onSuccess?.()
+      setLoginSucceeded(true)
+      window.setTimeout(() => onSuccess?.(), 700)
     } catch {
       setErrorMessage('เข้าสู่ระบบไม่สำเร็จ กรุณาตรวจสอบชื่อผู้ใช้และรหัสผ่าน')
     } finally {
@@ -46,7 +61,15 @@ function LoginPanel({ onSuccess }) {
 
   return (
     <Stack className="login-panel" spacing={3}>
-      <Stack alignItems="center" direction="row" spacing={2}>
+      <Box className={`login-panel__robot${isPasswordFocused ? ' is-covering' : ''}${loginSucceeded ? ' is-success' : ''}${isLoginHovered ? ' is-laughing' : ''}${errorMessage ? ' has-error' : ''}`} aria-hidden="true" sx={{ transform: isLoginHovered ? undefined : `translateY(${eyeOffset.y * 0.18}px)` }}>
+        <Box className="login-panel__robot-antenna" />
+        <Box className="login-panel__robot-face">
+          <Box className="login-panel__robot-eye" sx={{ transform: `translate(${eyeOffset.x}px, ${eyeOffset.y}px)` }} />
+          <Box className="login-panel__robot-eye" sx={{ transform: `translate(${eyeOffset.x}px, ${eyeOffset.y}px)` }} />
+        </Box>
+        <Box className="login-panel__robot-mouth" />
+      </Box>
+      <Stack alignItems="center" className="login-panel__heading" direction="row" spacing={2}>
         <ClipboardList color="#1d4ed8" size={54} strokeWidth={1.6} />
         <Box>
           <Typography className="login-panel__title">เข้าสู่ระบบ HR</Typography>
@@ -105,6 +128,8 @@ function LoginPanel({ onSuccess }) {
             type={showPassword ? 'text' : 'password'}
             value={password}
             onChange={(event) => setPassword(event.target.value)}
+            onFocus={() => setIsPasswordFocused(true)}
+            onBlur={() => setIsPasswordFocused(false)}
             InputProps={{
               startAdornment: (
                 <InputAdornment position="start">
@@ -126,17 +151,40 @@ function LoginPanel({ onSuccess }) {
             }}
           />
 
+          <Stack alignItems="center" className="login-panel__options" direction="row" justifyContent="space-between">
+            <Stack alignItems="center" direction="row" spacing={0.25}>
+              <Checkbox size="small" />
+              <Typography>จดจำฉันไว้</Typography>
+            </Stack>
+            <Link component="button" type="button" underline="none">ลืมรหัสผ่าน?</Link>
+          </Stack>
+
+          <Box onMouseEnter={() => setIsLoginHovered(true)} onMouseLeave={() => setIsLoginHovered(false)}>
           <Button
             className="login-panel__submit"
             disabled={!canSubmit}
             fullWidth
             size="large"
-            startIcon={<LogIn size={20} />}
+            endIcon={<ArrowRight size={20} />}
             type="submit"
             variant="contained"
           >
             {isSubmitting ? 'กำลังเข้าสู่ระบบ...' : 'เข้าสู่ระบบ'}
           </Button>
+          </Box>
+
+          <Stack alignItems="center" className="login-panel__divider" direction="row" spacing={2}>
+            <Divider flexItem />
+            <Typography>หรือ</Typography>
+            <Divider flexItem />
+          </Stack>
+          <Button className="login-panel__company-login" fullWidth startIcon={<BriefcaseBusiness size={19} />} type="button" variant="outlined">
+            เข้าสู่ระบบด้วยบัญชีบริษัท
+          </Button>
+          <Stack className="login-panel__footer" direction="row" justifyContent="space-between">
+            <Typography>VERSION 1.0.0</Typography>
+            <Typography>HR-20240622-001</Typography>
+          </Stack>
         </Stack>
       </Box>
     </Stack>

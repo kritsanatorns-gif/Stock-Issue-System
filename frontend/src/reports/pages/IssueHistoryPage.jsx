@@ -46,6 +46,7 @@ const exportColumns = [
   { header: 'วันที่', value: (row) => row.date },
   { header: 'ประเภท', value: (row) => row.documentTypeLabel },
   { header: 'แผนกทำรายการ', value: (row) => row.employeeDepartment },
+  { header: 'แผนกผู้เบิก', value: (row) => row.requestDepartment },
   { header: 'จำนวนรายการสินค้า', value: (row) => row.totalItems },
   { header: 'จำนวนรวม', value: (row) => row.totalQty },
   { header: 'ต้นทุนรวม', value: (row) => row.totalCost },
@@ -162,10 +163,14 @@ function buildDocumentRows(reports) {
       createdAt: report.createdAt,
       date: formatDisplayDateTime(report.createdAt),
       documentNo: report.documentNo,
+      poInvoiceNo: getTextValue(report.poInvoiceNo, report.PoInvoiceNo),
       documentType: report.documentType ?? 'ISSUE',
       documentTypeLabel: report.documentTypeLabel ?? 'เบิกสินค้า',
       employeeDepartment: report.employeeDepartment || 'HR',
       employeeName: report.employeeName,
+      requestDepartment: (report.documentType ?? 'ISSUE') === 'ISSUE'
+        ? cleanReportDepartment(report.department)
+        : '-',
       status: report.status,
       sortId,
       totalCost: items.reduce((total, item) => total + Number(item.totalCost ?? 0), 0),
@@ -1074,6 +1079,14 @@ function ReportsPage() {
                     {selectedReport.totalQty} ชิ้น/หน่วย
                   </Typography>
                 </Grid>
+                {selectedReport.documentType === 'RECEIVE' && (
+                  <Grid size={3}>
+                    <Typography sx={{ color: '#64748b', fontSize: 12, fontWeight: 700 }}>เลขที่ PO / Invoice</Typography>
+                    <Typography sx={{ color: '#0f172a', fontSize: 14, fontWeight: 800 }}>
+                      {selectedReport.poInvoiceNo || '-'}
+                    </Typography>
+                  </Grid>
+                )}
               </Grid>
 
               <AppTable

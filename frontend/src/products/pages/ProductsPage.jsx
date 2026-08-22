@@ -15,7 +15,7 @@ import {
   TextField,
   Typography,
 } from '@mui/material'
-import { Download, FolderCog, Pencil, Plus, Save, Upload } from 'lucide-react'
+import { AlertTriangle, CircleCheck, Download, FolderCog, Package, PackageX, Pencil, Plus, Save, Upload } from 'lucide-react'
 import dayjs from 'dayjs'
 import { useEffect, useMemo, useState } from 'react'
 import toast from 'react-hot-toast'
@@ -33,6 +33,7 @@ import {
   updateProduct,
 } from '../../api/api'
 import AppTable from '../../components/common/AppTable'
+import SummaryCard from '../../Dashboard/components/SummaryCard'
 import { useAuthStore } from '../../store/authStore'
 import { formatDisplayDateTime } from '../../utils/dateUtils'
 import { exportRowsToExcel } from '../../utils/excelUtils'
@@ -73,7 +74,7 @@ const productExportColumns = [
   { header: 'จำนวนต่อ 1 หน่วยรับเข้า', value: (row) => row.conversionQty },
   { header: 'ยอดคงเหลือ', value: (row) => row.stockQty },
   { header: 'ต้นทุน FIFO', value: (row) => row.currentUnitCost },
-  { header: 'มูลค่าของที่ยังไม่ถูกเบิก', value: (row) => row.remainingCostValue },
+  { header: 'มูลค่าต้นทุนรวม', value: (row) => row.remainingCostValue },
   { header: 'หมายเหตุสินค้า', value: (row) => row.productRemark },
   { header: 'สถานะ', value: (row) => (row.status === 'Active' ? 'ใช้งาน' : 'ไม่ใช้งาน') },
 ]
@@ -93,6 +94,7 @@ function mapProduct(row) {
     lastRemarkSource: row.lastRemarkSource ?? row.LastRemarkSource ?? '',
     latestUnitCost: Number(row.latestUnitCost ?? row.LatestUnitCost ?? 0),
     locationId: row.locationId ?? row.LocationId ?? 'MAIN',
+    minQty: Number(row.minQty ?? row.MinQty ?? 10),
     productId: row.productId ?? row.ProductId ?? row.code ?? '',
     productName: row.productName ?? row.ProductName ?? row.name ?? '',
     productRemark: row.productRemark ?? row.ProductRemark ?? '',
@@ -146,6 +148,7 @@ const importTemplateHeaders = [
   'รหัสสินค้า',
   'บาร์โค้ด',
   'ชื่อสินค้า',
+  'ผู้ขาย',
   'หมวดหมู่',
   'รับเข้าเป็น',
   'เบิกออกเป็น',
@@ -165,6 +168,8 @@ const importColumnAliases = {
   productid: 'productId',
   productname: 'productName',
   productremark: 'productRemark',
+  supplier: 'supplierName',
+  suppliername: 'supplierName',
   receiveqty: 'receiveQty',
   receiveunit: 'receiveUnit',
   remark: 'productRemark',
@@ -176,6 +181,7 @@ const importColumnAliases = {
   ต้นทุน: 'unitCost',
   บาร์โค้ด: 'barcode',
   ราคาซื้อ: 'unitCost',
+  ผู้ขาย: 'supplierName',
   รับเข้าเป็น: 'receiveUnit',
   รหัสสินค้า: 'productId',
   หน่วยรับเข้า: 'receiveUnit',
@@ -247,6 +253,7 @@ function mapImportRow(row) {
     productRemark: String(mappedRow.productRemark ?? '').trim(),
     receiveQty,
     receiveUnit,
+    supplierName: normalizePlainName(mappedRow.supplierName ?? ''),
     stockQty,
     unitCost: parseImportNumber(mappedRow.unitCost, 0),
   }
@@ -291,6 +298,16 @@ function ProductsPage() {
 
     return [...new Set(categoryNames.map((name) => String(name ?? '').trim()).filter(Boolean))]
   }, [categories, products])
+
+  const productSummary = useMemo(
+    () => ({
+      productCount: products.length,
+      readyCount: products.filter((product) => product.stockQty > product.minQty).length,
+      lowStockCount: products.filter((product) => product.stockQty > 0 && product.stockQty <= product.minQty).length,
+      outOfStockCount: products.filter((product) => product.stockQty <= 0).length,
+    }),
+    [products],
+  )
 
   const loadProducts = async () => {
     setIsLoading(true)
@@ -515,7 +532,8 @@ function ProductsPage() {
     && editForm.productName.trim()
 
   const canSaveCategory = categoryForm.categoryName.trim()
-  const canImportProducts = importRows.length > 0 && importRows.every((row) => row.errors.length === 0)
+  const canImportProducts = importRows.length > 0
+    && importRows.every((row) => row.errors.length === 0)
 
   const handleExportProducts = () => {
     exportRowsToExcel(
@@ -566,6 +584,10 @@ function ProductsPage() {
 
       if (!row.issueUnit) {
         errors.push('กรุณากรอกหน่วยเบิก')
+      }
+
+      if (!row.supplierName) {
+        errors.push('กรุณากรอกผู้ขาย')
       }
 
       if (row.conversionQty <= 0) {
@@ -620,10 +642,14 @@ function ProductsPage() {
       const worksheet = workbook.Sheets[workbook.SheetNames[0]]
       const rows = XLSX.utils.sheet_to_json(worksheet, { defval: '' })
       const mappedRows = rows
-        .map((row, index) => ({
-          ...mapImportRow(row),
-          rowNo: index + 2,
-        }))
+        .map((row, index) => {
+          const mappedRow = mapImportRow(row)
+
+          return {
+            ...mappedRow,
+            rowNo: index + 2,
+          }
+        })
         .filter((row) =>
           row.productId
           || row.barcode
@@ -876,11 +902,7 @@ function ProductsPage() {
 
   return (
     <Stack spacing={2.5}>
-      <Stack
-        direction="row"
-        spacing={2}
-        sx={{ alignItems: 'flex-start', justifyContent: 'space-between', width: '100%' }}
-      >
+      <Stack spacing={2} sx={{ width: '100%' }}>
         <Box sx={{ flex: 1 }}>
           <Typography sx={{ color: '#111827', fontSize: 24, fontWeight: 800 }}>
             สินค้า / ยอดคงเหลือ
@@ -890,46 +912,81 @@ function ProductsPage() {
           </Typography>
         </Box>
 
-        <Box
-          sx={{
-            display: 'flex',
-            flexWrap: 'wrap',
-            gap: 1.5,
-            justifyContent: 'flex-end',
-            minWidth: { xs: 0, md: 360 },
-            width: { xs: '100%', md: 'auto' },
-          }}
-        >
-          <Button
-            disabled={!products.length}
-            startIcon={<Download size={18} />}
-            sx={{ fontWeight: 700, height: 40, minWidth: 150, py: 0 }}
-            variant="outlined"
-            onClick={handleExportProducts}
-          >
-            ส่งออก Excel
-          </Button>
-          <Button
-            component="label"
-            startIcon={<Upload size={18} />}
-            sx={{ fontWeight: 700, height: 40, minWidth: 140, py: 0 }}
-            variant="contained"
-            onClick={() => setIsImportOpen(true)}
-          >
-            นำเข้า Excel
-          </Button>
-          <Button
-            startIcon={<FolderCog size={18} />}
-            sx={{ fontWeight: 700, height: 40, minWidth: 160, py: 0 }}
-            variant="outlined"
-            onClick={() => setIsCategoryDialogOpen(true)}
-          >
-            จัดการหมวดหมู่
-          </Button>
-        </Box>
       </Stack>
 
       {loadError ? <Alert severity="error">{loadError}</Alert> : null}
+
+      <Grid container spacing={2.5}>
+        <Grid size={{ xs: 12, sm: 6, lg: 3 }}>
+          <SummaryCard
+            color="#2563eb"
+            icon={Package}
+            label="จำนวนสินค้าทั้งหมด"
+            value={productSummary.productCount.toLocaleString('th-TH')}
+          />
+        </Grid>
+        <Grid size={{ xs: 12, sm: 6, lg: 3 }}>
+          <SummaryCard
+            color="#16a34a"
+            icon={CircleCheck}
+            label="สินค้าพร้อมเบิก"
+            value={productSummary.readyCount.toLocaleString('th-TH')}
+          />
+        </Grid>
+        <Grid size={{ xs: 12, sm: 6, lg: 3 }}>
+          <SummaryCard
+            color="#f59e0b"
+            icon={AlertTriangle}
+            label="สินค้าใกล้หมด"
+            value={productSummary.lowStockCount.toLocaleString('th-TH')}
+          />
+        </Grid>
+        <Grid size={{ xs: 12, sm: 6, lg: 3 }}>
+          <SummaryCard
+            color="#dc2626"
+            icon={PackageX}
+            label="สินค้าหมด"
+            value={productSummary.outOfStockCount.toLocaleString('th-TH')}
+          />
+        </Grid>
+      </Grid>
+
+      <Box
+        sx={{
+          display: 'flex',
+          flexWrap: 'wrap',
+          gap: 1.5,
+          justifyContent: 'flex-end',
+          width: '100%',
+        }}
+      >
+        <Button
+          disabled={!products.length}
+          startIcon={<Download size={18} />}
+          sx={{ fontWeight: 700, height: 40, minWidth: 150, py: 0 }}
+          variant="outlined"
+          onClick={handleExportProducts}
+        >
+          ส่งออก Excel
+        </Button>
+        <Button
+          component="label"
+          startIcon={<Upload size={18} />}
+          sx={{ fontWeight: 700, height: 40, minWidth: 140, py: 0 }}
+          variant="contained"
+          onClick={() => setIsImportOpen(true)}
+        >
+          นำเข้า Excel
+        </Button>
+        <Button
+          startIcon={<FolderCog size={18} />}
+          sx={{ fontWeight: 700, height: 40, minWidth: 160, py: 0 }}
+          variant="outlined"
+          onClick={() => setIsCategoryDialogOpen(true)}
+        >
+          จัดการหมวดหมู่
+        </Button>
+      </Box>
 
       <Card
         elevation={0}
@@ -963,7 +1020,7 @@ function ProductsPage() {
         <DialogContent>
           <Stack spacing={2} sx={{ pt: 1 }}>
             <Alert severity="info">
-              ใช้สำหรับนำเข้าข้อมูลสินค้าเริ่มต้น ระบบจะตรวจรหัสสินค้าและ Barcode ซ้ำก่อนบันทึกจริง
+              ระบุชื่อผู้ขายในคอลัมน์ “ผู้ขาย” ของ Excel ให้ตรงกับชื่อผู้ขายที่มีในระบบ ระบบจะแยกล็อต FIFO ตามผู้ขายของแต่ละรายการ
             </Alert>
 
             <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
@@ -996,6 +1053,7 @@ function ProductsPage() {
                 { key: 'productId', label: 'รหัสสินค้า', width: 150, align: 'center' },
                 { key: 'barcode', label: 'Barcode', width: 170, align: 'center' },
                 { key: 'productName', label: 'ชื่อสินค้า', width: 240, align: 'center' },
+                { key: 'supplierName', label: 'ผู้ขาย', width: 180, align: 'center' },
                 { key: 'categoryName', label: 'หมวดหมู่', width: 140, align: 'center' },
                 { key: 'receiveUnit', label: 'รับเข้าเป็น', width: 120, align: 'center' },
                 { key: 'issueUnit', label: 'เบิกออกเป็น', width: 120, align: 'center' },
@@ -1600,7 +1658,7 @@ function ProductsPage() {
               </Grid>
               <Grid size={3}>
                 <Box sx={{ bgcolor: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 1.5, p: 1.5 }}>
-                  <Typography sx={{ color: '#475569', fontSize: 12, fontWeight: 700 }}>มูลค่าของที่ยังไม่ถูกเบิก</Typography>
+                  <Typography sx={{ color: '#475569', fontSize: 12, fontWeight: 700 }}>มูลค่าต้นทุนรวม</Typography>
                   <Typography sx={{ color: '#0f172a', fontSize: 22, fontWeight: 900 }}>
                     {Number(costLotsData?.totalRemainingCostValue ?? 0).toLocaleString('th-TH', {
                       maximumFractionDigits: 2,
@@ -1647,7 +1705,7 @@ function ProductsPage() {
                 },
                 {
                   key: 'totalRemainingCostValue',
-                  label: 'มูลค่าของที่ยังไม่ถูกเบิก',
+                  label: 'มูลค่าต้นทุนรวม',
                   width: 190,
                   align: 'center',
                   render: (row) => Number(row.totalRemainingCostValue ?? 0).toLocaleString('th-TH', {
@@ -1695,7 +1753,7 @@ function ProductsPage() {
                 },
                 {
                   key: 'remainingCostValue',
-                  label: 'มูลค่าของที่ยังไม่ถูกเบิก',
+                  label: 'มูลค่าต้นทุนรวม',
                   width: 190,
                   align: 'center',
                   render: (row) =>

@@ -20,7 +20,7 @@ public sealed class ProductsController(AppDbContext dbContext) : ControllerBase
     private static readonly Regex PlainNamePattern = new(@"^[A-Za-z0-9\u0E00-\u0E7F\s._/-]+$", RegexOptions.Compiled);
 
     [HttpGet]
-    public async Task<IActionResult> GetProducts([FromQuery] string? search)
+    public async Task<IActionResult> GetProducts([FromQuery] string? search, [FromQuery] int? supplierId)
     {
         var query = dbContext.Products.AsNoTracking().AsQueryable();
 
@@ -32,6 +32,14 @@ public sealed class ProductsController(AppDbContext dbContext) : ControllerBase
                 product.ProductId.Contains(keyword)
                 || product.ProductName.Contains(keyword)
                 || product.Barcode.Contains(keyword));
+        }
+
+        if (supplierId is > 0)
+        {
+            query = query.Where(product => dbContext.StockCostLots.Any(lot =>
+                lot.ProductId == product.ProductId
+                && lot.SupplierId == supplierId
+                && lot.Status != 2));
         }
 
         var productRows = await query
@@ -268,6 +276,8 @@ public sealed class ProductsController(AppDbContext dbContext) : ControllerBase
                 ReceiveDetailId = lot.ReceiveDetailId,
                 OriginalQty = lot.OriginalQty,
                 RemainingQty = lot.RemainingQty,
+                SupplierId = lot.SupplierId,
+                SupplierName = lot.SupplierName,
                 UnitCost = lot.UnitCost,
             })
             .ToListAsync();
@@ -443,6 +453,8 @@ public sealed class ProductsController(AppDbContext dbContext) : ControllerBase
                 ReceiveDetailId = lot.ReceiveDetailId,
                 ReceiveHeaderId = lot.ReceiveHeaderId,
                 RemainingQty = lot.RemainingQty,
+                SupplierId = lot.SupplierId,
+                SupplierName = lot.SupplierName,
                 UnitCost = lot.UnitCost,
             })
             .ToListAsync();
@@ -538,7 +550,17 @@ public sealed class ProductsController(AppDbContext dbContext) : ControllerBase
 
     private async Task PopulateSupplierDetails(IReadOnlyCollection<ProductCostLotView> lots)
     {
-        var headerIds = lots
+        var legacyLots = lots
+            .Where(lot => (!lot.SupplierId.HasValue || lot.SupplierId <= 0)
+                && string.IsNullOrWhiteSpace(lot.SupplierName))
+            .ToList();
+
+        if (legacyLots.Count == 0)
+        {
+            return;
+        }
+
+        var headerIds = legacyLots
             .Select(lot => lot.ReceiveHeaderId)
             .Where(headerId => headerId > 0)
             .Distinct()
@@ -563,7 +585,7 @@ public sealed class ProductsController(AppDbContext dbContext) : ControllerBase
             .Where(supplier => supplierIds.Contains(supplier.SupplierId))
             .ToDictionaryAsync(supplier => supplier.SupplierId, supplier => supplier.SupplierName);
 
-        foreach (var lot in lots)
+        foreach (var lot in legacyLots)
         {
             if (!supplierIdByHeaderId.TryGetValue(lot.ReceiveHeaderId, out var supplierId)
                 || !supplierId.HasValue)
@@ -700,6 +722,11 @@ public sealed class ProductsController(AppDbContext dbContext) : ControllerBase
             });
         }
 
+        if (request.Items.Any(item => string.IsNullOrWhiteSpace(item.SupplierName)))
+        {
+            return BadRequest("Each imported product must have a supplier.");
+        }
+
         var productIds = request.Items
             .Select(item => item.ProductId.Trim())
             .Distinct(StringComparer.OrdinalIgnoreCase)
@@ -758,6 +785,37 @@ public sealed class ProductsController(AppDbContext dbContext) : ControllerBase
             });
         }
 
+        var supplierNames = request.Items
+            .Select(item => item.SupplierName.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        var existingSuppliers = await dbContext.Suppliers
+            .Where(supplier => supplierNames.Contains(supplier.SupplierName))
+            .ToListAsync();
+        var existingSupplierNames = existingSuppliers
+            .Select(supplier => supplier.SupplierName)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var supplierName in supplierNames.Where(supplierName => !existingSupplierNames.Contains(supplierName)))
+        {
+            dbContext.Suppliers.Add(new Supplier
+            {
+                SupplierName = supplierName,
+                SupplierStatus = 1,
+                CreatedDate = now,
+            });
+        }
+
+        await dbContext.SaveChangesAsync();
+
+        var suppliersByName = await dbContext.Suppliers
+            .Where(supplier => supplierNames.Contains(supplier.SupplierName))
+            .ToDictionaryAsync(supplier => supplier.SupplierName, StringComparer.OrdinalIgnoreCase);
+        var supplierIds = suppliersByName.Values
+            .Select(supplier => supplier.SupplierId)
+            .Distinct()
+            .ToList();
+
         var stockHeader = new StockHeader
         {
             CreateBy = request.EmployeeId.ToString(),
@@ -765,6 +823,7 @@ public sealed class ProductsController(AppDbContext dbContext) : ControllerBase
             DocType = ReceiveDocType,
             EmployeeId = request.EmployeeId.ToString(),
             Remark = "Import Excel",
+            SupplierId = supplierIds.Count == 1 ? supplierIds[0] : null,
             Status = StockHeaderStatuses.Completed,
             TransactionDate = now,
         };
@@ -827,6 +886,7 @@ public sealed class ProductsController(AppDbContext dbContext) : ControllerBase
         foreach (var detail in stockHeader.Details)
         {
             var row = request.Items.First(item => item.ProductId.Trim() == detail.ProductId);
+            var supplier = suppliersByName[row.SupplierName.Trim()];
 
             dbContext.StockCostLots.Add(new StockCostLot
             {
@@ -836,6 +896,8 @@ public sealed class ProductsController(AppDbContext dbContext) : ControllerBase
                 ReceiveDetailId = detail.DetailId,
                 ReceiveHeaderId = stockHeader.HeaderId,
                 RemainingQty = detail.Qty,
+                SupplierId = supplier.SupplierId,
+                SupplierName = supplier.SupplierName,
                 Status = 1,
                 UnitCost = row.UnitCost,
             });

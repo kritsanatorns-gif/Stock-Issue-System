@@ -1,0 +1,57 @@
+.request-login-form,
+.request-login-form * {
+  font-family: 'IBM Plex Sans Thai', 'Kanit', sans-serif;
+}
+
+.request-login-robot { align-self:center; background:linear-gradient(145deg,#162f67,#07183d); border:2px solid #5da3ff; border-radius:26px; box-shadow:0 0 22px rgba(59,130,246,.4),inset 0 0 18px rgba(96,165,250,.18); height:88px; margin-bottom:-64px; position:relative; top:-64px; width:124px; }
+.request-login-robot-antenna { background:#60a5fa; border-radius:4px; height:14px; left:59px; position:absolute; top:-17px; width:5px; box-shadow:0 0 8px #60a5fa; }
+.request-login-robot-antenna::before { background:#93c5fd; border-radius:50%; box-shadow:0 0 10px #60a5fa; content:''; height:11px; left:-3px; position:absolute; top:-7px; width:11px; }
+.request-login-robot-face { display:flex; gap:28px; left:24px; position:absolute; top:27px; }
+.request-login-robot-eye { background:#67e8f9; border-radius:50%; box-shadow:0 0 10px #22d3ee; height:14px; transition:transform .12s ease-out; width:14px; }
+.request-login-robot-mouth { border:2px solid #67e8f9; border-radius:0 0 14px 14px; border-top:0; height:10px; left:44px; position:absolute; top:55px; width:32px; }
+.request-login-robot.is-laughing { animation: request-robot-laugh .6s ease-in-out infinite alternate; }
+.request-login-robot.is-laughing .request-login-robot-eye { transform:scaleY(.45); }
+.request-login-robot.is-laughing .request-login-robot-mouth { border-radius:4px 4px 16px 16px; height:17px; top:50px; }
+.request-login-robot.is-covering .request-login-robot-eye { border-radius:8px; height:4px; margin-top:5px; }
+.request-login-robot.has-error { margin-bottom:-20px; top:-20px; }
+@keyframes request-robot-laugh { from { transform:rotate(-7deg); } to { transform:rotate(7deg); } }
+
+/* Match the HR login typography scale. */
+.request-login-form > .MuiStack-root > .MuiStack-root:first-child .MuiTypography-root:first-child {
+  font-size: 30px !important;
+}
+
+.request-login-form .MuiOutlinedInput-root {
+  min-height: 64px;
+  border-radius: 12px;
+  background: rgba(255,255,255,.94);
+}
+
+.request-login-form .MuiOutlinedInput-notchedOutline {
+  border-color: #dbe4f0;
+  border-width: 1.5px;
+}
+
+.request-login-form .MuiOutlinedInput-root:hover .MuiOutlinedInput-notchedOutline,
+.request-login-form .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline {
+  border-color: #3b82f6;
+}
+
+.request-login-form .MuiButton-contained {
+  min-height: 64px;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #3478ef, #2563d8);
+  box-shadow: 0 12px 24px -10px rgba(37,99,216,.6);
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.request-login-form .MuiButton-contained:hover {
+  background: linear-gradient(180deg, #2563d8, #1d4ed8);
+}
+
+.request-login-form .MuiButton-contained.Mui-disabled {
+  color: #ffffff;
+  background: linear-gradient(180deg, #3478ef, #2563d8);
+  opacity: .58;
+}

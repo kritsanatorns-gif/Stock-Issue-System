@@ -62,6 +62,20 @@ function createColumns(onViewDocument) {
       },
     },
     { key: 'employeeDepartment', label: 'แผนกทำรายการ', width: 170, align: 'center' },
+    {
+      key: 'requestDepartment',
+      label: 'แผนกผู้เบิก',
+      width: 170,
+      align: 'center',
+      render: (row) => row.documentType === 'ISSUE' ? (row.requestDepartment || '-') : '-',
+    },
+    {
+      key: 'poInvoiceNo',
+      label: 'PO / Invoice',
+      width: 150,
+      align: 'center',
+      render: (row) => row.documentType === 'RECEIVE' ? (row.poInvoiceNo || '-') : '-',
+    },
     { key: 'totalItems', label: 'จำนวนรายการสินค้า', width: 150, align: 'center' },
     { key: 'totalQty', label: 'จำนวนรวม', width: 130, align: 'center' },
     {

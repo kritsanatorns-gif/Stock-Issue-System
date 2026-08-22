@@ -323,7 +323,6 @@ function printRequestSlip({ backlogItems = [], department, isUrgent = false, ite
 
           .sheet {
             border: 2px solid #111;
-            min-height: 273mm;
             padding: 5mm 1mm;
             position: relative;
             width: 100%;
@@ -369,15 +368,15 @@ function printRequestSlip({ backlogItems = [], department, isUrgent = false, ite
           }
 
           .line-xs {
-            min-width: 48px;
+            min-width: 36px;
           }
 
           .line-sm {
-            min-width: 82px;
+            min-width: 62px;
           }
 
           .line-md {
-            min-width: 150px;
+            min-width: 88px;
           }
 
           .line-lg {
@@ -385,7 +384,7 @@ function printRequestSlip({ backlogItems = [], department, isUrgent = false, ite
           }
 
           .line-xl {
-            min-width: 430px;
+            min-width: 270px;
           }
 
           .top-section {
@@ -413,9 +412,11 @@ function printRequestSlip({ backlogItems = [], department, isUrgent = false, ite
 
           .approval-title {
             border-bottom: 1px solid #111;
+            font-size: 11px;
             font-weight: 700;
             margin: -3px -6px 36px;
-            padding: 3px;
+            padding: 3px 2px;
+            white-space: nowrap;
           }
 
           .approval-sign-line {
@@ -454,9 +455,11 @@ function printRequestSlip({ backlogItems = [], department, isUrgent = false, ite
           th,
           td {
             border: 1px solid #111;
-            height: 31px;
-            padding: 4px 7px;
+            font-size: 12px;
+            height: 29px;
+            padding: 3px 5px;
             vertical-align: middle;
+            word-break: break-word;
           }
 
           th {
@@ -573,12 +576,12 @@ function printRequestSlip({ backlogItems = [], department, isUrgent = false, ite
             <thead>
               <tr>
                 <th style="width: 58px;">ลำดับ</th>
-                <th style="width: 90px;">หมวด</th>
-                <th style="width: 150px;">รายการ</th>
-                <th style="width: 95px;">จำนวน</th>
-                <th style="width: 72px;">ค้าง</th>
-                <th style="width: 95px;">หน่วยนับ</th>
-                <th style="width: 290px;">หมายเหตุ</th>
+                <th style="width: 70px;">หมวด</th>
+                <th style="width: 135px;">รายการ</th>
+                <th style="width: 68px;">จำนวน</th>
+                <th style="width: 58px;">ค้าง</th>
+                <th style="width: 72px;">หน่วยนับ</th>
+                <th style="width: 220px;">หมายเหตุ</th>
               </tr>
             </thead>
             <tbody>
@@ -820,7 +823,7 @@ function RequestPage() {
           items: submittedItems,
           remark: isUrgent ? urgentRemark.trim() : '',
           requesterName,
-          requestNo: savedRequest?.requestNo ?? savedRequest?.RequestNo ?? `RQ-${String(savedRequest?.headerId ?? savedRequest?.HeaderId ?? '').padStart(6, '0')}`,
+          requestNo: savedRequest?.requestNo ?? savedRequest?.RequestNo ?? 'รอเลขคำขอ',
         })
       }
     } catch (error) {

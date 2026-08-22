@@ -87,6 +87,8 @@ public sealed class FifoCostService(AppDbContext dbContext)
                 {
                     CostLotId = lot.CostLotId,
                     IssueDetailId = line.Detail.DetailId,
+                    SupplierId = lot.SupplierId,
+                    SupplierName = lot.SupplierName,
                     Qty = usedQty,
                     UnitCost = lot.UnitCost,
                     TotalCost = Math.Round(usedQty * lot.UnitCost, 2, MidpointRounding.AwayFromZero),

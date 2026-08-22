@@ -15,5 +15,6 @@ public sealed class CreateStockIssueDetailDto
     public decimal? ReceiveQuantity { get; set; }
     public string ReceiveUnit { get; set; } = string.Empty;
     public decimal StockQty { get; set; }
+    public int? SupplierId { get; set; }
     public string Unit { get; set; } = string.Empty;
 }
