@@ -8,6 +8,7 @@ function LoginLayout() {
     <Box className="login-layout">
       <Paper className="login-layout__card" elevation={0}>
         <Box className="login-layout__image">
+          <Box alt="TLP" className="login-layout__corporate-logo" component="img" src="/tlp-logo.png" />
           <Stack className="login-layout__brand" direction="row" spacing={2}>
             <Box className="login-layout__brand-mark">HR</Box>
             <Box>
@@ -18,7 +19,7 @@ function LoginLayout() {
 
           <Box className="login-layout__message">
             <Typography className="login-layout__message-title">จัดการคลังสินค้าอย่างมืออาชีพ</Typography>
-            <Typography className="login-layout__message-text">ควบคุมสต๊อก เพิ่มประสิทธิภาพการทำงาน<br />แม่นยำ รวดเร็ว เชื่อถือได้</Typography>
+            <Typography className="login-layout__message-text">ควบคุมสต๊อก เพิ่มประสิทธิภาพการทำงาน แม่นยำ รวดเร็ว เชื่อถือได้</Typography>
             <Stack className="login-layout__features" direction="row" spacing={3}>
               <Feature icon={<PackageCheck size={23} />} title="ควบคุมสต๊อก" text="แบบเรียลไทม์" />
               <Feature icon={<ClipboardCheck size={23} />} title="ตรวจสอบง่าย" text="มีประวัติครบถ้วน" />

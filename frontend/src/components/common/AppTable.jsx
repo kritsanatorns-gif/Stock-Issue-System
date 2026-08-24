@@ -204,6 +204,12 @@ function AppTable({
                     fontWeight: 800,
                     minWidth: fitToWidth ? 0 : column.width,
                     width: column.width,
+                    '& .MuiTableSortLabel-icon': {
+                      opacity: 0.55,
+                    },
+                    '& .MuiTableSortLabel-root.Mui-active .MuiTableSortLabel-icon': {
+                      opacity: 1,
+                    },
                   }}
                 >
                   {column.sortable !== false ? (
