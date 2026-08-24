@@ -164,7 +164,7 @@ function DepartmentsPage() {
           variant="outlined"
           onClick={() => handleEdit(row)}
         >
-          แก้ไขครับ
+          แก้ไข
         </Button>
       ),
     },

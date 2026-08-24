@@ -337,14 +337,20 @@ function RequestLoginPage() {
             position: 'relative',
           }}
         >
+          <Box
+            alt="TLP"
+            component="img"
+            src="/tlp-logo.png"
+            sx={{ filter: 'brightness(0) invert(1)', height: 'auto', opacity: 0.92, position: 'absolute', right: 38, top: 36, width: 86, zIndex: 1 }}
+          />
           <Stack direction="row" spacing={2} sx={{ position: 'relative', zIndex: 1 }}>
-            <Box sx={{ alignItems: 'center', bgcolor: 'rgba(53,94,172,.85)', borderRadius: 1.5, color: '#fff', display: 'flex', fontSize: 22, fontWeight: 900, height: 58, justifyContent: 'center', width: 58 }}>TLP</Box>
+            <Box sx={{ alignItems: 'center', bgcolor: 'rgba(53,94,172,.85)', borderRadius: 1.5, color: '#fff', display: 'flex', fontSize: 17, fontWeight: 900, height: 58, justifyContent: 'center', width: 58 }}>User</Box>
             <Box>
               <Typography sx={{ color: '#fff', fontSize: 21, fontWeight: 900 }}>ระบบจัดการคลังสำนักงาน</Typography>
               <Typography sx={{ color: '#b9c7e8', fontFamily: 'monospace', fontSize: 12, letterSpacing: 1, mt: .5 }}>OFFICE SUPPLY · WAREHOUSE OPS</Typography>
             </Box>
           </Stack>
-          <Box sx={{ marginTop: 12, position: 'relative', zIndex: 1 }}>
+          <Box sx={{ marginTop: 14, position: 'relative', zIndex: 1 }}>
             <Typography sx={{ color: '#fff', fontSize: 27, fontWeight: 900 }}>เบิกสินค้าได้ง่าย</Typography>
             <Typography sx={{ color: '#b8c7e8', fontSize: 15, lineHeight: 1.7, mt: 1 }}>ค้นหาสินค้า ส่งคำขอเบิก และติดตามสถานะคำขอได้ในที่เดียว</Typography>
             <Stack direction="row" spacing={2.5} sx={{ mt: 4 }}>

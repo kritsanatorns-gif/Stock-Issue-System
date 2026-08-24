@@ -32,6 +32,7 @@ import {
   updateCategory,
   updateProduct,
 } from '../../api/api'
+import { apiOrigin } from '../../api/apiConfig'
 import AppTable from '../../components/common/AppTable'
 import SummaryCard from '../../Dashboard/components/SummaryCard'
 import { useAuthStore } from '../../store/authStore'
@@ -131,7 +132,7 @@ function getProductImageUrl(imageName) {
     return normalizedImageName
   }
 
-  const baseUrl = import.meta.env.VITE_API_BASE_URL?.replace(/\/api\/?$/, '') ?? ''
+  const baseUrl = apiOrigin
 
   if (normalizedImageName.startsWith('/')) {
     return `${baseUrl}${normalizedImageName}`

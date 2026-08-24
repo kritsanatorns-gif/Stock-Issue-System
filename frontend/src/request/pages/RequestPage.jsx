@@ -20,6 +20,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Navigate } from 'react-router-dom'
 import Swal from 'sweetalert2'
 import { createRequisition, getProducts, getRequisitions } from '../../api/api'
+import { apiOrigin } from '../../api/apiConfig'
 import { useRequestAuthStore } from '../../store/requestAuthStore'
 import { formatDisplayDateTime, getThailandDateParts } from '../../utils/dateUtils'
 import { normalizeWholeNumberInput } from '../../utils/inputGuards'
@@ -55,7 +56,7 @@ function getImageUrl(imageName) {
     return normalizedImageName
   }
 
-  const baseUrl = import.meta.env.VITE_API_BASE_URL?.replace(/\/api\/?$/, '') ?? ''
+  const baseUrl = apiOrigin
 
   if (normalizedImageName.startsWith('/')) {
     return `${baseUrl}${normalizedImageName}`

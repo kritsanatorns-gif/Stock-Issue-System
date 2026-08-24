@@ -58,6 +58,16 @@
   position: relative;
 }
 
+.login-layout__corporate-logo {
+  filter: brightness(0) invert(1);
+  height: auto;
+  opacity: 0.92;
+  position: absolute;
+  right: 38px;
+  top: 36px;
+  width: 86px;
+}
+
 .login-layout__brand,
 .login-layout__message { position: relative; z-index: 1; }
 .login-layout__message { margin-top: 112px; }
