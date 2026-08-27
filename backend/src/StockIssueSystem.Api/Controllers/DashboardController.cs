@@ -8,7 +8,7 @@ namespace StockIssueSystem.Api.Controllers;
 [Route("api/dashboard")]
 public sealed class DashboardController(AppDbContext dbContext) : ControllerBase
 {
-    private const int LowStockThreshold = 10;
+    private const decimal DefaultLowStockThreshold = 10;
     private const string RequisitionDocType = "REQUISITION";
 
     [HttpGet("summary")]
@@ -36,7 +36,12 @@ public sealed class DashboardController(AppDbContext dbContext) : ControllerBase
             .ToListAsync();
 
         var lowStockItems = stockRows
-            .Where(row => row.Balance.Qty > 0 && row.Balance.Qty <= LowStockThreshold)
+            // Each product can define its own reorder/low-stock point.  Fall back
+            // to 10 only for older product records that do not yet have a value.
+            .Where(row => row.Balance.Qty > 0
+                && row.Balance.Qty <= (row.Product == null || row.Product.MinQty < 0
+                    ? DefaultLowStockThreshold
+                    : row.Product.MinQty))
             .OrderBy(row => row.Balance.Qty)
             .ThenBy(row => row.Balance.ProductId)
             .Select(row => new
@@ -47,7 +52,9 @@ public sealed class DashboardController(AppDbContext dbContext) : ControllerBase
                 Unit = row.Product?.IssueUnit ?? string.Empty,
                 LocationId = row.Balance.LocationId,
                 Qty = row.Balance.Qty,
-                MinQty = LowStockThreshold,
+                MinQty = row.Product == null || row.Product.MinQty < 0
+                    ? DefaultLowStockThreshold
+                    : row.Product.MinQty,
                 Status = "ใกล้หมด",
                 LastUpdate = row.Balance.LastUpdate,
             })
@@ -64,7 +71,9 @@ public sealed class DashboardController(AppDbContext dbContext) : ControllerBase
                 Unit = row.Product?.IssueUnit ?? string.Empty,
                 LocationId = row.Balance.LocationId,
                 Qty = row.Balance.Qty,
-                MinQty = LowStockThreshold,
+                MinQty = row.Product == null || row.Product.MinQty < 0
+                    ? DefaultLowStockThreshold
+                    : row.Product.MinQty,
                 Status = "สินค้าหมด",
                 LastUpdate = row.Balance.LastUpdate,
             })
@@ -75,7 +84,7 @@ public sealed class DashboardController(AppDbContext dbContext) : ControllerBase
             IssueTodayQty = requisitionTodayCount,
             LowStockCount = lowStockItems.Count,
             OutOfStockCount = outOfStockItems.Count,
-            LowStockThreshold,
+            LowStockThreshold = DefaultLowStockThreshold,
             CriticalStockItems = outOfStockItems.Concat(lowStockItems).ToList(),
         });
     }

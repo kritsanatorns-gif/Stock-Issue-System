@@ -101,7 +101,7 @@ function DashboardPage() {
       },
       {
         color: '#f59e0b',
-        helper: `คงเหลือ 1-${summary.lowStockThreshold} ชิ้น`,
+        helper: 'นับตามจุดแจ้งเตือนของสินค้า',
         icon: AlertTriangle,
         label: 'สินค้าใกล้หมด',
         value: summary.lowStockCount.toLocaleString('th-TH'),

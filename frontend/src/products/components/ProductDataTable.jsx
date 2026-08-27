@@ -293,7 +293,7 @@ function ProductDataTable({
     },
     {
       key: 'lastRemark',
-      label: 'รายละเอียด',
+      label: 'รายละเอียดรับเข้า',
       width: 125,
       align: 'center',
       searchable: false,

@@ -23,6 +23,8 @@ public sealed class Product
 
     public decimal ConversionQty { get; set; } = 1;
 
+    public decimal MinQty { get; set; } = 10;
+
     [MaxLength(100)]
     public string Barcode { get; set; } = string.Empty;
 

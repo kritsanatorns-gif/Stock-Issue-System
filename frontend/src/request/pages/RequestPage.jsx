@@ -500,10 +500,17 @@ function printRequestSlip({ backlogItems = [], department, isUrgent = false, ite
           }
 
           .bottom-sign-title {
+            align-items: center;
             border-bottom: 1px solid #111;
+            box-sizing: border-box;
+            display: flex;
+            font-size: 11px;
             font-weight: 700;
+            height: 28px;
+            justify-content: center;
             margin: 0 -8px 42px;
             padding: 4px;
+            white-space: nowrap;
           }
 
           .remark-line {

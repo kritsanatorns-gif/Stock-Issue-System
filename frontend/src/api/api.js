@@ -180,6 +180,18 @@ export async function uploadProductImage(file) {
   return response.data
 }
 
+export async function importProductImagesFromExcel(file, items) {
+  const formData = new FormData()
+  formData.append('file', file)
+  formData.append('items', JSON.stringify(items))
+  const response = await api.post('/uploads/products-from-excel', formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data',
+    },
+  })
+  return response.data
+}
+
 export async function getProductFavorites(params = {}) {
   const response = await api.get('/product-favorites', { params })
 

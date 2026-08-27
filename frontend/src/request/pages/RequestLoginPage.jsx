@@ -324,6 +324,7 @@ function RequestLoginPage() {
         }}
       >
         <Box
+          className="request-login-visual"
           sx={{
             backgroundImage:
               "linear-gradient(180deg, rgba(16,38,91,.96) 0%, rgba(20,48,108,.88) 42%, rgba(18,42,86,.38) 68%, rgba(16,26,50,.06) 100%), url('/login-bg.png')",

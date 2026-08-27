@@ -264,6 +264,7 @@ public sealed class StockReceiveController(AppDbContext dbContext) : ControllerB
                 CreatedName = request.EmployeeId.ToString(),
                 Img = item.ImageName.Trim(),
                 IssueUnit = item.Unit.Trim(),
+                MinQty = item.MinQty < 0 ? 10 : item.MinQty,
                 ProductId = productId,
                 ProductName = item.ProductName.Trim(),
                 ReceiveUnit = string.IsNullOrWhiteSpace(item.ReceiveUnit) ? item.Unit.Trim() : item.ReceiveUnit.Trim(),
