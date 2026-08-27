@@ -435,7 +435,7 @@ export function printHistorySlip(row) {
           .bottom-sign-box { border: 1px solid #111; display: grid; grid-template-columns: 1fr 1fr; min-height: 104px; }
           .bottom-sign-cell { padding: 0 8px 6px; text-align: center; }
           .bottom-sign-cell + .bottom-sign-cell { border-left: 1px solid #111; }
-          .bottom-sign-title { border-bottom: 1px solid #111; font-size: 11px; font-weight: 700; margin: 0 -8px 42px; padding: 4px 2px; white-space: nowrap; }
+          .bottom-sign-title { align-items: center; border-bottom: 1px solid #111; box-sizing: border-box; display: flex; font-size: 11px; font-weight: 700; height: 28px; justify-content: center; margin: 0 -8px 42px; padding: 4px 2px; white-space: nowrap; }
           .remark-line { display: inline-block; margin-left: 6px; max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; width: 300px; }
           .print-value { font-weight: 700; }
           @media print {

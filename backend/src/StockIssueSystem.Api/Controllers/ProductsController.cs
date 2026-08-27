@@ -17,7 +17,7 @@ public sealed class ProductsController(AppDbContext dbContext) : ControllerBase
     private const string IssueDocType = "ISSUE";
     private const string ReceiveDocType = "RECEIVE";
     private static readonly Regex CodePattern = new(@"^[A-Za-z0-9._/-]+$", RegexOptions.Compiled);
-    private static readonly Regex PlainNamePattern = new(@"^[A-Za-z0-9\u0E00-\u0E7F\s._/-]+$", RegexOptions.Compiled);
+    private static readonly Regex PlainNamePattern = new(@"^[A-Za-z0-9\u0E00-\u0E7F\s.,_/#()+""'-]+$", RegexOptions.Compiled);
 
     [HttpGet]
     public async Task<IActionResult> GetProducts([FromQuery] string? search, [FromQuery] int? supplierId)
@@ -68,7 +68,7 @@ public sealed class ProductsController(AppDbContext dbContext) : ControllerBase
                 ReceiveUnit = row.Product.ReceiveUnit,
                 ConversionQty = row.Product.ConversionQty <= 0 ? 1 : row.Product.ConversionQty,
                 StockQty = row.Balance == null ? 0 : row.Balance.Qty,
-                MinQty = DefaultMinQty,
+                MinQty = row.Product.MinQty,
                 LocationId = row.Balance == null ? MainLocationId : row.Balance.LocationId,
                 ImageName = row.Product.Img,
                 ProductRemark = row.Product.ProductRemark,
@@ -87,6 +87,7 @@ public sealed class ProductsController(AppDbContext dbContext) : ControllerBase
                         })
                     .Where(item =>
                         item.Remark != ""
+                        && item.Remark != "Import Excel"
                         && (item.DocType != IssueDocType
                             || item.Status == StockHeaderStatuses.Cancelled
                             || item.Status == StockHeaderStatuses.PartiallyCancelled))
@@ -108,6 +109,7 @@ public sealed class ProductsController(AppDbContext dbContext) : ControllerBase
                         })
                     .Where(item =>
                         item.Remark != ""
+                        && item.Remark != "Import Excel"
                         && (item.DocType != IssueDocType
                             || item.Status == StockHeaderStatuses.Cancelled
                             || item.Status == StockHeaderStatuses.PartiallyCancelled))
@@ -235,7 +237,8 @@ public sealed class ProductsController(AppDbContext dbContext) : ControllerBase
 
     private static string CleanDocumentRemark(string remark)
     {
-        if (string.IsNullOrWhiteSpace(remark))
+        if (string.IsNullOrWhiteSpace(remark)
+            || string.Equals(remark.Trim(), "Import Excel", StringComparison.OrdinalIgnoreCase))
         {
             return string.Empty;
         }
@@ -656,6 +659,7 @@ public sealed class ProductsController(AppDbContext dbContext) : ControllerBase
             ProductRemark = request.ProductRemark.Trim(),
             Status = "Active",
             ConversionQty = request.ConversionQty <= 0 ? 1 : request.ConversionQty,
+            MinQty = DefaultMinQty,
             IssueUnit = issueUnit,
             ReceiveUnit = receiveUnit,
         };
@@ -687,7 +691,7 @@ public sealed class ProductsController(AppDbContext dbContext) : ControllerBase
             ReceiveUnit = product.ReceiveUnit,
             ConversionQty = product.ConversionQty <= 0 ? 1 : product.ConversionQty,
             StockQty = request.StockQty,
-            MinQty = DefaultMinQty,
+            MinQty = product.MinQty,
             LocationId = MainLocationId,
             ImageName = product.Img,
             ProductRemark = product.ProductRemark,
@@ -737,9 +741,22 @@ public sealed class ProductsController(AppDbContext dbContext) : ControllerBase
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
 
-        if (await dbContext.Products.AnyAsync(product => productIds.Contains(product.ProductId)))
+        var existingProducts = await dbContext.Products
+            .Where(product => productIds.Contains(product.ProductId))
+            .Select(product => new
+            {
+                product.ProductId,
+                product.ProductName,
+            })
+            .ToListAsync();
+
+        if (existingProducts.Count > 0)
         {
-            return Conflict("Some product IDs already exist.");
+            return Conflict(new
+            {
+                Message = "Some product IDs already exist.",
+                ExistingProducts = existingProducts,
+            });
         }
 
         if (barcodes.Count > 0 && await dbContext.Products.AnyAsync(product => barcodes.Contains(product.Barcode)))
@@ -822,7 +839,7 @@ public sealed class ProductsController(AppDbContext dbContext) : ControllerBase
             CreateDate = now,
             DocType = ReceiveDocType,
             EmployeeId = request.EmployeeId.ToString(),
-            Remark = "Import Excel",
+            Remark = string.Empty,
             SupplierId = supplierIds.Count == 1 ? supplierIds[0] : null,
             Status = StockHeaderStatuses.Completed,
             TransactionDate = now,
@@ -840,7 +857,9 @@ public sealed class ProductsController(AppDbContext dbContext) : ControllerBase
                     ? Convert.ToInt32(Math.Round(item.ReceiveQty * conversionQty, MidpointRounding.AwayFromZero))
                     : 0;
             var receiveQty = item.ReceiveQty > 0 ? item.ReceiveQty : Math.Round(stockQty / conversionQty, 2);
-            var totalCost = Math.Round(stockQty * item.UnitCost, 2);
+            // Excel uses the same rule as the receive form: this is the total
+            // amount paid for the whole received row, not a per-issue-unit cost.
+            var totalCost = Math.Round(item.UnitCost, 2);
 
             dbContext.Products.Add(new Product
             {
@@ -851,6 +870,7 @@ public sealed class ProductsController(AppDbContext dbContext) : ControllerBase
                 CreatedName = request.EmployeeId.ToString(),
                 Img = string.Empty,
                 IssueUnit = item.IssueUnit.Trim(),
+                MinQty = item.MinQty < 0 ? DefaultMinQty : item.MinQty,
                 ProductId = productId,
                 ProductName = item.ProductName.Trim(),
                 ProductRemark = item.ProductRemark.Trim(),
@@ -899,7 +919,9 @@ public sealed class ProductsController(AppDbContext dbContext) : ControllerBase
                 SupplierId = supplier.SupplierId,
                 SupplierName = supplier.SupplierName,
                 Status = 1,
-                UnitCost = row.UnitCost,
+                UnitCost = detail.Qty <= 0
+                    ? 0
+                    : Math.Round(decimal.Parse(detail.CostLot, CultureInfo.InvariantCulture) / detail.Qty, 4),
             });
         }
 
@@ -1015,7 +1037,7 @@ public sealed class ProductsController(AppDbContext dbContext) : ControllerBase
             ReceiveUnit = product.ReceiveUnit,
             ConversionQty = product.ConversionQty <= 0 ? 1 : product.ConversionQty,
             StockQty = balance?.Qty ?? 0,
-            MinQty = DefaultMinQty,
+            MinQty = product.MinQty,
             LocationId = MainLocationId,
             ImageName = product.Img,
             ProductRemark = product.ProductRemark,
@@ -1129,6 +1151,11 @@ public sealed class ProductsController(AppDbContext dbContext) : ControllerBase
             if (item.UnitCost < 0)
             {
                 errors.Add($"Row {rowNo}: UnitCost must be zero or greater.");
+            }
+
+            if (item.MinQty < 0)
+            {
+                errors.Add($"Row {rowNo}: MinQty must be zero or greater.");
             }
 
             if (!string.IsNullOrWhiteSpace(productId) && !productIds.Add(productId))

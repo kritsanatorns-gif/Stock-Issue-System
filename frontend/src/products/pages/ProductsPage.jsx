@@ -28,6 +28,7 @@ import {
   getProductMovements,
   getProducts,
   importProducts,
+  importProductImagesFromExcel,
   uploadProductImage,
   updateCategory,
   updateProduct,
@@ -146,17 +147,18 @@ function getProductImageUrl(imageName) {
 }
 
 const importTemplateHeaders = [
-  'รหัสสินค้า',
-  'บาร์โค้ด',
-  'ชื่อสินค้า',
-  'ผู้ขาย',
-  'หมวดหมู่',
+  'รูป',
+  'รหัส',
+  'รายการ',
+  'ยอดสต๊อก',
   'รับเข้าเป็น',
-  'เบิกออกเป็น',
+  'หน่วยการจ่าย',
   'อัตราแปลง',
-  'จำนวนรับเข้า',
-  'ยอดคงเหลือ',
-  'ราคาซื้อ',
+  'บาร์โค้ด',
+  'หมวดหมู่',
+  'ผู้ขาย',
+  'เตือนเมื่อของใกล้หมด',
+  'ราคาซื้อรวม',
   'หมายเหตุ',
 ]
 
@@ -176,12 +178,17 @@ const importColumnAliases = {
   remark: 'productRemark',
   stockqty: 'stockQty',
   unitcost: 'unitCost',
+  รหัส: 'productId',
+  รายการ: 'productName',
+  ยอดสต๊อก: 'stockQty',
+  หน่วยการจ่าย: 'issueUnit',
   หมวดหมู่: 'categoryName',
   จำนวนคงเหลือ: 'stockQty',
   จำนวนรับเข้า: 'receiveQty',
   ต้นทุน: 'unitCost',
   บาร์โค้ด: 'barcode',
   ราคาซื้อ: 'unitCost',
+  ราคาซื้อรวม: 'unitCost',
   ผู้ขาย: 'supplierName',
   รับเข้าเป็น: 'receiveUnit',
   รหัสสินค้า: 'productId',
@@ -218,16 +225,26 @@ function parseImportNumber(value, fallback = 0) {
   }
 
   const normalized = String(value).replace(/,/g, '').trim()
+
+  if (!normalized || normalized === '-') {
+    return fallback
+  }
   const parsedValue = Number(normalized)
 
   return Number.isFinite(parsedValue) ? parsedValue : fallback
 }
 
-function mapImportRow(row) {
+function mapImportRow(row, defaults = {}) {
   const mappedRow = {}
 
   Object.entries(row).forEach(([key, value]) => {
-    const mappedKey = importColumnAliases[normalizeImportHeader(key)]
+    const normalizedHeader = normalizeImportHeader(key)
+    const mappedKey = importColumnAliases[normalizedHeader]
+      ?? (normalizedHeader.startsWith(normalizeImportHeader('ยอดคงเหลือ'))
+        ? 'stockQty'
+        : normalizedHeader.startsWith(normalizeImportHeader('เตือนเมื่อของใกล้หมด'))
+          ? 'minQty'
+          : undefined)
 
     if (mappedKey) {
       mappedRow[mappedKey] = value
@@ -238,26 +255,87 @@ function mapImportRow(row) {
   const issueUnit = normalizePlainName(mappedRow.issueUnit ?? '')
   const conversionQty = parseImportNumber(mappedRow.conversionQty, receiveUnit && issueUnit && receiveUnit === issueUnit ? 1 : 1)
   const receiveQty = parseImportNumber(mappedRow.receiveQty, 0)
-  const rawStockQty = mappedRow.stockQty
-  const hasStockQty = rawStockQty !== null && rawStockQty !== undefined && String(rawStockQty).trim() !== ''
-  const parsedStockQty = parseImportNumber(rawStockQty, 0)
-  const computedStockQty = hasStockQty ? parsedStockQty : receiveQty * (conversionQty > 0 ? conversionQty : 1)
-  const stockQty = Number.isInteger(computedStockQty) ? computedStockQty : Math.trunc(computedStockQty)
+  const computedStockQty = receiveQty * (conversionQty > 0 ? conversionQty : 1)
+  const importedStockQty = parseImportNumber(mappedRow.stockQty, Number.NaN)
+  const stockQty = Number.isFinite(importedStockQty)
+    ? Math.max(0, Math.trunc(importedStockQty))
+    : Number.isInteger(computedStockQty)
+      ? computedStockQty
+      : Math.trunc(computedStockQty)
 
   return {
     barcode: normalizeBarcodeInput(mappedRow.barcode ?? ''),
-    categoryName: normalizePlainName(mappedRow.categoryName ?? 'General') || 'General',
+    categoryName: normalizePlainName(mappedRow.categoryName ?? defaults.categoryName ?? 'General') || 'General',
     conversionQty: conversionQty > 0 ? conversionQty : 1,
-    issueUnit,
+    issueUnit: issueUnit || receiveUnit,
+    minQty: parseImportNumber(mappedRow.minQty, 10),
     productId: normalizeBarcodeInput(mappedRow.productId ?? ''),
     productName: normalizePlainName(mappedRow.productName ?? ''),
     productRemark: String(mappedRow.productRemark ?? '').trim(),
-    receiveQty,
-    receiveUnit,
-    supplierName: normalizePlainName(mappedRow.supplierName ?? ''),
+    receiveQty: receiveQty || stockQty,
+    receiveUnit: receiveUnit || issueUnit,
+    supplierName: normalizePlainName(mappedRow.supplierName ?? defaults.supplierName ?? ''),
     stockQty,
     unitCost: parseImportNumber(mappedRow.unitCost, 0),
   }
+}
+
+function getCatalogHeaderMap(row) {
+  const headerMap = {}
+
+  row.forEach((value, columnIndex) => {
+    const mappedKey = importColumnAliases[normalizeImportHeader(value)]
+
+    if (mappedKey) {
+      headerMap[mappedKey] = columnIndex
+    }
+  })
+
+  return headerMap.productId !== undefined
+    && headerMap.productName !== undefined
+    && headerMap.issueUnit !== undefined
+    ? headerMap
+    : null
+}
+
+function readCatalogRows(workbook) {
+  const rows = []
+
+  workbook.SheetNames.forEach((sheetName) => {
+    const worksheet = workbook.Sheets[sheetName]
+    const sheetRows = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '', raw: false })
+    let headerMap = null
+    let categoryName = sheetName
+
+    sheetRows.forEach((sheetRow, rowIndex) => {
+      const nextHeaderMap = getCatalogHeaderMap(sheetRow)
+
+      if (nextHeaderMap) {
+        headerMap = nextHeaderMap
+        const heading = sheetRows[rowIndex - 1]?.find((value) => String(value ?? '').trim())
+        categoryName = normalizePlainName(heading || sheetName) || sheetName
+        return
+      }
+
+      if (!headerMap) {
+        return
+      }
+
+      const row = Object.fromEntries(
+        Object.entries(headerMap).map(([field, columnIndex]) => [field, sheetRow[columnIndex] ?? '']),
+      )
+      const mappedRow = mapImportRow(row, {
+        categoryName,
+        supplierName: 'นำเข้าจากแคตตาล็อก',
+      })
+
+      if (mappedRow.productId || mappedRow.productName) {
+        rows.push({ ...mappedRow, rowNo: `${sheetName} · แถว ${rowIndex + 1}`, sourceRowNo: rowIndex + 1, sourceSheetName: sheetName })
+      }
+    })
+  })
+
+  return rows
 }
 
 function ProductsPage() {
@@ -284,6 +362,7 @@ function ProductsPage() {
   const [movementErrors, setMovementErrors] = useState({})
   const [movementLoading, setMovementLoading] = useState({})
   const [importFileName, setImportFileName] = useState('')
+  const [importFile, setImportFile] = useState(null)
   const [importRows, setImportRows] = useState([])
   const [products, setProducts] = useState([])
   const [selectedRemarkProduct, setSelectedRemarkProduct] = useState(null)
@@ -545,11 +624,13 @@ function ProductsPage() {
   }
 
   const validateImportRows = (rows) => {
-    const existingProductIds = new Set(products.map((product) => product.productId.toLowerCase()))
-    const existingBarcodes = new Set(
+    const existingProductsById = new Map(
+      products.map((product) => [product.productId.toLowerCase(), product]),
+    )
+    const existingProductsByBarcode = new Map(
       products
-        .map((product) => product.barcode.toLowerCase())
-        .filter(Boolean),
+        .filter((product) => product.barcode)
+        .map((product) => [product.barcode.toLowerCase(), product]),
     )
     const fileProductIds = new Set()
     const fileBarcodes = new Set()
@@ -561,15 +642,17 @@ function ProductsPage() {
 
       if (!row.productId) {
         errors.push('กรุณากรอกรหัสสินค้า')
-      } else if (existingProductIds.has(productIdKey)) {
-        errors.push('รหัสสินค้านี้มีอยู่แล้ว')
+      } else if (existingProductsById.has(productIdKey)) {
+        const product = existingProductsById.get(productIdKey)
+        errors.push(`รหัสสินค้า ${product.productId} (${product.productName}) มีอยู่แล้ว`)
       } else if (fileProductIds.has(productIdKey)) {
         errors.push('รหัสสินค้าซ้ำในไฟล์')
       }
 
       if (row.barcode) {
-        if (existingBarcodes.has(barcodeKey)) {
-          errors.push('Barcode นี้มีอยู่แล้ว')
+        if (existingProductsByBarcode.has(barcodeKey)) {
+          const product = existingProductsByBarcode.get(barcodeKey)
+          errors.push(`Barcode นี้เป็นของ ${product.productId} (${product.productName}) ที่มีอยู่แล้ว`)
         } else if (fileBarcodes.has(barcodeKey)) {
           errors.push('Barcode ซ้ำในไฟล์')
         }
@@ -599,8 +682,12 @@ function ProductsPage() {
         errors.push('ยอดคงเหลือต้องไม่ติดลบ')
       }
 
+      if (row.minQty < 0) {
+        errors.push('จำนวนแจ้งเตือนต้องไม่ติดลบ')
+      }
+
       if (row.unitCost < 0) {
-        errors.push('ต้นทุนต้องไม่ติดลบ')
+        errors.push('ราคาซื้อรวมต้องไม่ติดลบ')
       }
 
       if (row.productId) {
@@ -619,11 +706,32 @@ function ProductsPage() {
   }
 
   const handleDownloadImportTemplate = () => {
-    const worksheet = XLSX.utils.aoa_to_sheet([importTemplateHeaders])
+    const worksheet = XLSX.utils.aoa_to_sheet([
+      ['แค็ตตาล็อกสินค้า สำหรับนำเข้าระบบ Stock Issue'],
+      ['วางรูปในคอลัมน์ “รูป” ให้ตรงกับแถวสินค้าเดียวกัน · หากรูปเดียวใช้หลายสินค้า ให้ขยายรูปครอบคลุมแถวของสินค้านั้น · อัตราแปลง 12 หมายถึง รับเข้า 1 กล่อง × 12 = 12 ชิ้น (หน่วยเบิก)'],
+      [],
+      importTemplateHeaders,
+    ])
+    worksheet['!merges'] = [
+      { s: { c: 0, r: 0 }, e: { c: importTemplateHeaders.length - 1, r: 0 } },
+      { s: { c: 0, r: 1 }, e: { c: importTemplateHeaders.length - 1, r: 1 } },
+    ]
+    worksheet['!cols'] = [
+      { wch: 16 }, { wch: 22 }, { wch: 36 }, { wch: 14 }, { wch: 16 }, { wch: 16 },
+      { wch: 14 }, { wch: 25 }, { wch: 22 }, { wch: 25 }, { wch: 20 }, { wch: 16 }, { wch: 28 },
+    ]
+    worksheet['!rows'] = [{ hpt: 28 }, { hpt: 34 }, {}, { hpt: 24 }]
     const workbook = XLSX.utils.book_new()
 
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'Products')
-    XLSX.writeFile(workbook, 'product-import-template.xlsx')
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'แค็ตตาล็อกสินค้า')
+    XLSX.writeFile(workbook, 'stock-issue-catalog-template.xlsx')
+  }
+
+  const closeImportDialog = () => {
+    setIsImportOpen(false)
+    setImportFile(null)
+    setImportFileName('')
+    setImportRows([])
   }
 
   const handleImportFileChange = async (event) => {
@@ -636,28 +744,16 @@ function ProductsPage() {
     }
 
     setImportFileName(file.name)
+    setImportFile(file)
 
     try {
       const buffer = await file.arrayBuffer()
       const workbook = XLSX.read(buffer, { type: 'array' })
-      const worksheet = workbook.Sheets[workbook.SheetNames[0]]
-      const rows = XLSX.utils.sheet_to_json(worksheet, { defval: '' })
-      const mappedRows = rows
-        .map((row, index) => {
-          const mappedRow = mapImportRow(row)
+      const mappedRows = readCatalogRows(workbook)
 
-          return {
-            ...mappedRow,
-            rowNo: index + 2,
-          }
-        })
-        .filter((row) =>
-          row.productId
-          || row.barcode
-          || row.productName
-          || row.receiveUnit
-          || row.issueUnit,
-        )
+      if (mappedRows.length === 0) {
+        throw new Error('No supported product rows found')
+      }
 
       setImportRows(validateImportRows(mappedRows))
     } catch {
@@ -729,9 +825,13 @@ function ProductsPage() {
         employeeName,
         items: importRows.map(({ errors: _errors, rowNo: _rowNo, ...row }) => row),
       })
+      if (importFile) {
+        await importProductImagesFromExcel(importFile, importRows.map((row) => ({ sheetName: row.sourceSheetName, rowNo: row.sourceRowNo, productId: row.productId })))
+      }
       setIsImportOpen(false)
       setImportRows([])
       setImportFileName('')
+      setImportFile(null)
       await loadProducts()
       await loadCategories()
       await Swal.fire({
@@ -746,7 +846,13 @@ function ProductsPage() {
     } catch (error) {
       const errorData = error?.response?.data
       const duplicateBalanceIds = errorData?.productIds ?? errorData?.ProductIds
-      const message = duplicateBalanceIds?.length
+      const existingProducts = errorData?.existingProducts ?? errorData?.ExistingProducts
+      const existingProductsText = existingProducts?.length
+        ? existingProducts.map((product) => `${product.productId ?? product.ProductId} (${product.productName ?? product.ProductName})`).join(', ')
+        : ''
+      const message = existingProductsText
+        ? `พบสินค้าที่มีอยู่แล้วในระบบ: ${existingProductsText}`
+        : duplicateBalanceIds?.length
         ? `พบยอดคงเหลือของรหัสสินค้า ${duplicateBalanceIds.join(', ')} ค้างอยู่ในระบบ กรุณาตรวจสอบข้อมูลเดิม หรือใช้เมนูปรับสต๊อกแทน`
         : errorData?.message
           ?? errorData?.Message
@@ -1016,12 +1122,18 @@ function ProductsPage() {
         </CardContent>
       </Card>
 
-      <Dialog fullWidth maxWidth="xl" open={isImportOpen} onClose={() => setIsImportOpen(false)}>
+      <Dialog
+        fullWidth
+        maxWidth={false}
+        open={isImportOpen}
+        PaperProps={{ sx: { height: 'calc(100vh - 32px)', maxWidth: 'none', width: 'calc(100vw - 32px)' } }}
+        onClose={closeImportDialog}
+      >
         <DialogTitle>นำเข้า Excel สินค้า</DialogTitle>
         <DialogContent>
           <Stack spacing={2} sx={{ pt: 1 }}>
             <Alert severity="info">
-              ระบุชื่อผู้ขายในคอลัมน์ “ผู้ขาย” ของ Excel ให้ตรงกับชื่อผู้ขายที่มีในระบบ ระบบจะแยกล็อต FIFO ตามผู้ขายของแต่ละรายการ
+              รองรับแค็ตตาล็อกที่มีหลายชีตและหัวตารางซ้ำ โดยใช้รหัสสินค้า ชื่อสินค้า ยอดสต๊อก หน่วยการจ่าย และบาร์โค้ดตามไฟล์ต้นฉบับ ส่วนผู้ขายจะตั้งเป็น “นำเข้าจากแค็ตตาล็อก”, ราคาซื้อรวมเป็น 0 และจุดแจ้งเตือนเป็น 10 หน่วย หากไฟล์ไม่ได้ระบุไว้
             </Alert>
 
             <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
@@ -1050,28 +1162,6 @@ function ProductsPage() {
 
             <AppTable
               columns={[
-                { key: 'rowNo', label: 'แถว', width: 70, align: 'center', searchable: false },
-                { key: 'productId', label: 'รหัสสินค้า', width: 150, align: 'center' },
-                { key: 'barcode', label: 'Barcode', width: 170, align: 'center' },
-                { key: 'productName', label: 'ชื่อสินค้า', width: 240, align: 'center' },
-                { key: 'supplierName', label: 'ผู้ขาย', width: 180, align: 'center' },
-                { key: 'categoryName', label: 'หมวดหมู่', width: 140, align: 'center' },
-                { key: 'receiveUnit', label: 'รับเข้าเป็น', width: 120, align: 'center' },
-                { key: 'issueUnit', label: 'เบิกออกเป็น', width: 120, align: 'center' },
-                { key: 'conversionQty', label: 'อัตราแปลง', width: 120, align: 'center' },
-                { key: 'receiveQty', label: 'จำนวนรับเข้า', width: 130, align: 'center' },
-                { key: 'stockQty', label: 'ยอดคงเหลือ', width: 130, align: 'center' },
-                {
-                  key: 'unitCost',
-                  label: 'ต้นทุน/หน่วย',
-                  width: 130,
-                  align: 'center',
-                  render: (row) =>
-                    Number(row.unitCost ?? 0).toLocaleString('th-TH', {
-                      maximumFractionDigits: 2,
-                      minimumFractionDigits: 2,
-                    }),
-                },
                 {
                   key: 'errors',
                   label: 'สถานะตรวจสอบ',
@@ -1085,9 +1175,31 @@ function ProductsPage() {
                       <Chip color="error" label={row.errors.join(', ')} size="small" />
                     ),
                 },
+                { key: 'productId', label: 'รหัสสินค้า', width: 150, align: 'center' },
+                { key: 'barcode', label: 'Barcode', width: 170, align: 'center' },
+                { key: 'productName', label: 'ชื่อสินค้า', width: 240, align: 'center' },
+                { key: 'supplierName', label: 'ผู้ขาย', width: 180, align: 'center' },
+                { key: 'categoryName', label: 'หมวดหมู่', width: 140, align: 'center' },
+                { key: 'receiveUnit', label: 'รับเข้าเป็น', width: 120, align: 'center' },
+                { key: 'issueUnit', label: 'เบิกออกเป็น', width: 120, align: 'center' },
+                { key: 'conversionQty', label: 'อัตราแปลง', width: 120, align: 'center' },
+                { key: 'receiveQty', label: 'จำนวนรับเข้า', width: 130, align: 'center' },
+                { key: 'stockQty', label: 'ยอดคงเหลือ (หน่วยเบิก)', width: 160, align: 'center' },
+                { key: 'minQty', label: 'เตือนเมื่อของใกล้หมด', width: 170, align: 'center' },
+                {
+                  key: 'unitCost',
+                  label: 'ราคาซื้อรวม',
+                  width: 130,
+                  align: 'center',
+                  render: (row) =>
+                    Number(row.unitCost ?? 0).toLocaleString('th-TH', {
+                      maximumFractionDigits: 2,
+                      minimumFractionDigits: 2,
+                    }),
+                },
               ]}
               defaultSortField="rowNo"
-              maxHeight="420px"
+              maxHeight="520px"
               noDataText="เลือกไฟล์ Excel เพื่อดูตัวอย่างข้อมูล"
               rowKey="rowNo"
               rows={importRows}
@@ -1169,7 +1281,7 @@ function ProductsPage() {
           </Stack>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2.5 }}>
-          <Button color="inherit" onClick={() => setIsImportOpen(false)}>
+          <Button color="inherit" onClick={closeImportDialog}>
             ยกเลิก
           </Button>
           <Button

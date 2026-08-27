@@ -6,6 +6,7 @@ public sealed class ImportProductRowDto
     public string CategoryName { get; set; } = "General";
     public decimal ConversionQty { get; set; } = 1;
     public string IssueUnit { get; set; } = string.Empty;
+    public decimal MinQty { get; set; } = 10;
     public string ProductId { get; set; } = string.Empty;
     public string ProductName { get; set; } = string.Empty;
     public string ProductRemark { get; set; } = string.Empty;

@@ -126,6 +126,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
             entity.Property(product => product.ReceiveUnit).HasMaxLength(20);
             entity.Property(product => product.IssueUnit).HasMaxLength(20);
             entity.Property(product => product.ConversionQty).HasColumnType("decimal(18, 2)").HasDefaultValue(1);
+            entity.Property(product => product.MinQty).HasColumnType("decimal(18, 2)").HasDefaultValue(10);
             entity.Property(product => product.Barcode).HasMaxLength(100);
             entity.Property(product => product.Img).HasMaxLength(200);
             entity.Property(product => product.ProductRemark).HasMaxLength(500).HasDefaultValue("");
@@ -180,7 +181,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
             entity.HasKey(lot => lot.CostLotId);
             entity.Property(lot => lot.ProductId).HasMaxLength(50).IsRequired();
             entity.Property(lot => lot.SupplierName).HasMaxLength(150).HasDefaultValue(string.Empty);
-            entity.Property(lot => lot.UnitCost).HasColumnType("decimal(18, 2)");
+            entity.Property(lot => lot.UnitCost).HasColumnType("decimal(18, 4)");
             entity.Property(lot => lot.CreatedDate).HasDefaultValueSql("GETDATE()");
             entity.HasIndex(lot => lot.SupplierId);
             entity.HasIndex(lot => new

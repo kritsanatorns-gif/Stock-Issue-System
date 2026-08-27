@@ -1,6 +1,6 @@
 const thaiCharacterPattern = /[\u0E00-\u0E7F]/g
 const barcodeCharacterPattern = /[^A-Za-z0-9._/-]/g
-const plainNameCharacterPattern = /[^A-Za-z0-9\u0E00-\u0E7F\s._/-]/g
+const plainNameCharacterPattern = /[^A-Za-z0-9\u0E00-\u0E7F\s.,_/#()+"'-]/g
 
 export function removeThaiCharacters(value) {
   return String(value ?? '').replace(thaiCharacterPattern, '')

@@ -1,18 +1,23 @@
 import {
   Box,
+  FormControl,
   InputAdornment,
   Table,
   TableBody,
   TableCell,
   TableContainer,
   TableHead,
+  TablePagination,
   TableRow,
   TableSortLabel,
   TextField,
+  Select,
+  MenuItem,
+  Typography,
   IconButton,
 } from '@mui/material'
 import { ChevronDown, ChevronRight, Search } from 'lucide-react'
-import { Fragment, useMemo, useState } from 'react'
+import { Fragment, useEffect, useMemo, useState } from 'react'
 
 function getCellValue(row, column) {
   if (column.value) {
@@ -63,6 +68,7 @@ function AppTable({
   rowKey,
   showColumnFilters = true,
   showGlobalSearch = false,
+  showPagination = true,
 }) {
   const firstSortableColumn = columns.find((column) => column.sortable !== false)
   const [globalSearch, setGlobalSearch] = useState('')
@@ -71,6 +77,8 @@ function AppTable({
     direction: defaultSortDirection,
     field: defaultSortField ?? firstSortableColumn?.key ?? '',
   })
+  const [page, setPage] = useState(0)
+  const [rowsPerPage, setRowsPerPage] = useState(10)
 
   const visibleColumns = columns.filter((column) => column.hidden !== true)
 
@@ -112,6 +120,15 @@ function AppTable({
     )
   }, [filteredRows, sortConfig, visibleColumns])
 
+  const paginatedRows = useMemo(
+    () => showPagination ? sortedRows.slice(page * rowsPerPage, (page + 1) * rowsPerPage) : sortedRows,
+    [page, rowsPerPage, showPagination, sortedRows],
+  )
+
+  useEffect(() => {
+    setPage(0)
+  }, [columnFilters, globalSearch, rows, sortConfig])
+
   const handleSort = (field) => {
     setSortConfig((current) => ({
       direction: current.field === field && current.direction === 'asc' ? 'desc' : 'asc',
@@ -133,24 +150,35 @@ function AppTable({
 
   return (
     <Box>
-      {showGlobalSearch ? (
-        <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 2 }}>
-          <TextField
-            placeholder={globalSearchPlaceholder}
-            size="small"
-            value={globalSearch}
-            onChange={(event) => setGlobalSearch(event.target.value)}
-            slotProps={{
-              input: {
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <Search color="#64748b" size={18} />
-                  </InputAdornment>
-                ),
-              },
-            }}
-            sx={{ maxWidth: 560, width: '100%' }}
-          />
+      {showPagination || showGlobalSearch ? (
+        <Box sx={{ alignItems: 'center', display: 'flex', justifyContent: 'space-between', mb: 2 }}>
+          {showPagination ? (
+            <Box sx={{ alignItems: 'center', display: 'flex', gap: 1 }}>
+              <Typography sx={{ color: '#475569', fontSize: 14 }}>แสดงต่อหน้า:</Typography>
+              <FormControl size="small">
+                <Select
+                  value={rowsPerPage}
+                  onChange={(event) => {
+                    setRowsPerPage(Number(event.target.value))
+                    setPage(0)
+                  }}
+                  sx={{ fontSize: 14, minWidth: 72 }}
+                >
+                  {[10, 25, 50, 100].map((size) => <MenuItem key={size} value={size}>{size}</MenuItem>)}
+                </Select>
+              </FormControl>
+            </Box>
+          ) : <Box />}
+          {showGlobalSearch ? (
+            <TextField
+              placeholder={globalSearchPlaceholder}
+              size="small"
+              value={globalSearch}
+              onChange={(event) => setGlobalSearch(event.target.value)}
+              slotProps={{ input: { startAdornment: <InputAdornment position="start"><Search color="#64748b" size={18} /></InputAdornment> } }}
+              sx={{ maxWidth: 560, width: '100%' }}
+            />
+          ) : null}
         </Box>
       ) : null}
 
@@ -278,8 +306,8 @@ function AppTable({
           </TableHead>
 
           <TableBody>
-            {sortedRows.map((row, index) => {
-              const key = getRowKey(row, index)
+            {paginatedRows.map((row, index) => {
+              const key = getRowKey(row, page * rowsPerPage + index)
               const expanded = Boolean(isRowExpanded?.(row))
 
               return (
@@ -354,6 +382,24 @@ function AppTable({
           </TableBody>
         </Table>
       </TableContainer>
+
+      {showPagination ? (
+        <TablePagination
+          component="div"
+          count={sortedRows.length}
+          labelDisplayedRows={({ from, to, count }) => `${from}-${to} จาก ${count}`}
+          labelRowsPerPage=""
+          page={page}
+          rowsPerPage={rowsPerPage}
+          rowsPerPageOptions={[]}
+          onPageChange={(_event, nextPage) => setPage(nextPage)}
+          onRowsPerPageChange={(event) => {
+            setRowsPerPage(Number(event.target.value))
+            setPage(0)
+          }}
+          sx={{ borderTop: '1px solid #e2e8f0', mt: 0.5 }}
+        />
+      ) : null}
     </Box>
   )
 }

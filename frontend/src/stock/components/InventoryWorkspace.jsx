@@ -24,7 +24,6 @@ import {
   Boxes,
   Camera,
   CheckSquare,
-  FileSpreadsheet,
   PackagePlus,
   PackageCheck,
   Pencil,
@@ -73,7 +72,7 @@ const defaultProductForm = {
   costLot: '',
   imageName: '',
   issueUnit: 'ชิ้น',
-  minQty: '100',
+  minQty: '10',
   name: '',
   receiveHint: '',
   receiveUnit: 'แพ็ค',
@@ -1288,13 +1287,6 @@ function InventoryWorkspace({ mode }) {
             {config.subtitle}
           </Typography>
         </Box>
-        <Button
-          startIcon={<FileSpreadsheet size={18} />}
-          sx={{ fontWeight: 700, minHeight: 40 }}
-          variant="outlined"
-        >
-          ส่งออก Excel
-        </Button>
       </Box>
 
       {loadError ? <Alert severity="error">{loadError}</Alert> : null}
@@ -1540,7 +1532,7 @@ function InventoryWorkspace({ mode }) {
                             {isOutOfStock ? (
                               <Chip color="error" label="ของหมด" size="small" />
                             ) : isLowStock ? (
-                              <Chip color="error" label="ใกล้หมด" size="small" />
+                              <Chip color="warning" label="ใกล้หมด" size="small" />
                             ) : (
                               <Chip color="success" label="พร้อมเบิก" size="small" />
                             )}

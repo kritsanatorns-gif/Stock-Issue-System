@@ -18,6 +18,7 @@ import { getPurchasesBySupplier, getPurchaseTrend, getRequisitions, getStockIssu
 import AppTable from '../../components/common/AppTable'
 import { formatDisplayDate, formatDisplayDateTime, getDateSortValue, getElapsedDuration, getIdSortValue } from '../../utils/dateUtils'
 import { exportRowsToExcel } from '../../utils/excelUtils'
+import { exportTableToPdf } from '../../utils/pdfUtils'
 
 const shortMonthNames = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.']
 const palette = ['#2563eb', '#22b8cf', '#f97316', '#8b5cf6', '#ef4444', '#14b8a6', '#64748b', '#f59e0b']
@@ -889,6 +890,7 @@ function ReportsPage() {
   const [requisitions, setRequisitions] = useState([])
   const [purchaseReports, setPurchaseReports] = useState([])
   const [purchaseTrendReports, setPurchaseTrendReports] = useState([])
+  const [isPdfLoading, setIsPdfLoading] = useState(false)
   const [expandedDepartment, setExpandedDepartment] = useState('')
   const [expandedSupplier, setExpandedSupplier] = useState('')
   const [supplierPurchaseItems, setSupplierPurchaseItems] = useState({})
@@ -1146,6 +1148,43 @@ function ReportsPage() {
     )
   }
 
+  const handlePdfExport = async () => {
+    let columns = exportColumns
+    let rows = reportRows
+    let title = 'รายงานการเบิก'
+    let filePrefix = 'issue-report'
+
+    if (reportMode === 'purchase') {
+      columns = purchaseExportColumns
+      rows = purchaseRows
+      title = 'รายงานยอดซื้อแยกตามผู้ขาย'
+      filePrefix = 'purchase-by-supplier'
+    } else if (reportMode === 'product') {
+      columns = productRankingExportColumns
+      rows = productRows
+      title = 'รายงานสินค้าที่ถูกเบิกเยอะสุด'
+      filePrefix = 'top-issued-products'
+    } else if (reportMode === 'backlog') {
+      columns = backlogExportColumns
+      rows = backlogRows
+      title = 'รายงานรายการค้างจัด'
+      filePrefix = 'backlog-report'
+    }
+
+    setIsPdfLoading(true)
+    try {
+      await exportTableToPdf({
+        columns,
+        fileName: `${filePrefix}-${reportPeriod}-${selectedYear}-${dayjs().format('YYYYMMDD-HHmm')}.pdf`,
+        periodLabel: reportPeriod === 'daily' ? 'ช่วงเวลา: 7 วันล่าสุด' : `ช่วงเวลา: ปี ${selectedYear}`,
+        rows,
+        title,
+      })
+    } finally {
+      setIsPdfLoading(false)
+    }
+  }
+
   return (
     <Stack spacing={2.5}>
       <Stack
@@ -1219,6 +1258,16 @@ function ReportsPage() {
             onClick={handleExport}
           >
             ส่งออก Excel
+          </Button>
+          <Button
+            disabled={isPdfLoading}
+            size="small"
+            startIcon={<FileText size={16} />}
+            sx={{ fontSize: 13, fontWeight: 800, height: 40, minWidth: 126, px: 1.5 }}
+            variant="outlined"
+            onClick={handlePdfExport}
+          >
+            {isPdfLoading ? 'กำลังสร้าง PDF...' : 'ส่งออก PDF'}
           </Button>
         </Stack>
       </Stack>

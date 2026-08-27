@@ -59,6 +59,8 @@ app.Logger.LogInformation("Preparing database schema: document statuses");
 await EnsureStockHeaderStatuses(app);
 app.Logger.LogInformation("Preparing database schema: product remarks");
 await EnsureProductRemarkColumn(app);
+app.Logger.LogInformation("Preparing database schema: product minimum quantity");
+await EnsureProductMinQtyColumn(app);
 app.Logger.LogInformation("Preparing database schema: stock adjustment menu");
 await EnsureStockAdjustMenu(app);
 app.Logger.LogInformation("Preparing database schema: requisition workflow");
@@ -402,6 +404,27 @@ static async Task EnsureProductRemarkColumn(WebApplication app)
             ALTER TABLE dbo.Product
             ADD ProductRemark nvarchar(500) NOT NULL
                 CONSTRAINT DF_Product_ProductRemark DEFAULT N''
+        END
+    """);
+}
+
+static async Task EnsureProductMinQtyColumn(WebApplication app)
+{
+    await using var scope = app.Services.CreateAsyncScope();
+    var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+    await dbContext.Database.ExecuteSqlRawAsync("""
+        IF NOT EXISTS (
+            SELECT 1
+            FROM sys.columns columns
+            INNER JOIN sys.tables tables ON columns.object_id = tables.object_id
+            INNER JOIN sys.schemas schemas ON tables.schema_id = schemas.schema_id
+            WHERE schemas.name = N'dbo' AND tables.name = N'Product' AND columns.name = N'MinQty'
+        )
+        BEGIN
+            ALTER TABLE dbo.Product
+            ADD MinQty decimal(18, 2) NOT NULL
+                CONSTRAINT DF_Product_MinQty DEFAULT (10) WITH VALUES
         END
     """);
 }
