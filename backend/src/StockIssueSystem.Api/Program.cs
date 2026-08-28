@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using StockIssueSystem.Api.Data;
+using StockIssueSystem.Api.Hubs;
 using StockIssueSystem.Api.Models;
 using StockIssueSystem.Api.Services;
 
@@ -11,6 +12,7 @@ builder.Logging.AddConsole();
 builder.Logging.AddDebug();
 
 builder.Services.AddControllers();
+builder.Services.AddSignalR();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 builder.Services.AddDbContext<AppDbContext>(options =>
@@ -24,7 +26,8 @@ builder.Services.AddCors(options =>
         policy
             .WithOrigins(builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [])
             .AllowAnyHeader()
-            .AllowAnyMethod();
+            .AllowAnyMethod()
+            .AllowCredentials();
     });
 });
 
@@ -48,13 +51,18 @@ app.MapGet("/", () => Results.Ok(new
 }));
 
 app.MapControllers();
+app.MapHub<NotificationHub>("/hubs/notifications");
 
 app.Logger.LogInformation("Preparing database schema: employee department");
 await EnsureEmployeeDepartmentColumn(app);
 app.Logger.LogInformation("Preparing database schema: stock header remarks");
 await EnsureStockHeaderSeparatedRemarkColumns(app);
+app.Logger.LogInformation("Removing unused requisition header remark");
+await RemoveStockHeaderHrRemarkColumn(app);
 app.Logger.LogInformation("Preparing database schema: urgent requisitions");
 await EnsureStockHeaderUrgentColumns(app);
+app.Logger.LogInformation("Preparing database schema: requisition item remarks");
+await EnsureStockDetailRemarkColumn(app);
 app.Logger.LogInformation("Preparing database schema: document statuses");
 await EnsureStockHeaderStatuses(app);
 app.Logger.LogInformation("Preparing database schema: product remarks");
@@ -167,21 +175,31 @@ static async Task EnsureStockHeaderSeparatedRemarkColumns(WebApplication app)
                 CONSTRAINT DF_StockHeader_RequesterName DEFAULT N''
         END
 
-        IF NOT EXISTS (
-            SELECT 1
-            FROM sys.columns columns
-            INNER JOIN sys.tables tables
-                ON columns.object_id = tables.object_id
-            INNER JOIN sys.schemas schemas
-                ON tables.schema_id = schemas.schema_id
-            WHERE schemas.name = N'dbo'
-                AND tables.name = N'StockHeader'
-                AND columns.name = N'HrRemark'
-        )
+    """);
+}
+
+static async Task RemoveStockHeaderHrRemarkColumn(WebApplication app)
+{
+    await using var scope = app.Services.CreateAsyncScope();
+    var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+    await dbContext.Database.ExecuteSqlRawAsync("""
+        IF COL_LENGTH(N'dbo.StockHeader', N'HrRemark') IS NOT NULL
         BEGIN
-            ALTER TABLE dbo.StockHeader
-            ADD HrRemark nvarchar(500) NOT NULL
-                CONSTRAINT DF_StockHeader_HrRemark DEFAULT N''
+            DECLARE @defaultConstraint sysname;
+
+            SELECT @defaultConstraint = constraints.name
+            FROM sys.default_constraints constraints
+            INNER JOIN sys.columns columns
+                ON constraints.parent_object_id = columns.object_id
+                AND constraints.parent_column_id = columns.column_id
+            WHERE constraints.parent_object_id = OBJECT_ID(N'dbo.StockHeader')
+                AND columns.name = N'HrRemark';
+
+            IF @defaultConstraint IS NOT NULL
+                EXEC(N'ALTER TABLE dbo.StockHeader DROP CONSTRAINT [' + @defaultConstraint + N']');
+
+            ALTER TABLE dbo.StockHeader DROP COLUMN HrRemark;
         END
     """);
 }
@@ -224,6 +242,31 @@ static async Task EnsureStockHeaderUrgentColumns(WebApplication app)
             ALTER TABLE dbo.StockHeader
             ADD UrgentRemark nvarchar(500) NOT NULL
                 CONSTRAINT DF_StockHeader_UrgentRemark DEFAULT N''
+        END
+    """);
+}
+
+static async Task EnsureStockDetailRemarkColumn(WebApplication app)
+{
+    await using var scope = app.Services.CreateAsyncScope();
+    var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+    await dbContext.Database.ExecuteSqlRawAsync("""
+        IF NOT EXISTS (
+            SELECT 1
+            FROM sys.columns columns
+            INNER JOIN sys.tables tables
+                ON columns.object_id = tables.object_id
+            INNER JOIN sys.schemas schemas
+                ON tables.schema_id = schemas.schema_id
+            WHERE schemas.name = N'dbo'
+                AND tables.name = N'StockDetail'
+                AND columns.name = N'Remark'
+        )
+        BEGIN
+            ALTER TABLE dbo.StockDetail
+            ADD Remark nvarchar(500) NOT NULL
+                CONSTRAINT DF_StockDetail_Remark DEFAULT N''
         END
     """);
 }

@@ -51,6 +51,30 @@ function compareValues(firstValue, secondValue, direction) {
   return direction === 'asc' ? result : -result
 }
 
+function getDefaultSortField(columns, configuredField) {
+  if (configuredField) {
+    return configuredField
+  }
+
+  const latestFirstKeys = [
+    'transactionDate',
+    'createdAt',
+    'createdDate',
+    'updatedAt',
+    'lastUpdate',
+    'receivedAt',
+    'receiveDate',
+    'date',
+    'headerId',
+    'documentId',
+    'id',
+  ]
+
+  return latestFirstKeys.find((key) => columns.some((column) => column.key === key))
+    ?? columns.find((column) => column.sortable !== false)?.key
+    ?? ''
+}
+
 function AppTable({
   columns,
   rows,
@@ -64,18 +88,18 @@ function AppTable({
   fitToWidth = false,
   isRowExpanded,
   onToggleRow,
+  prioritySortValue,
   renderExpandedRow,
   rowKey,
   showColumnFilters = true,
   showGlobalSearch = false,
   showPagination = true,
 }) {
-  const firstSortableColumn = columns.find((column) => column.sortable !== false)
   const [globalSearch, setGlobalSearch] = useState('')
   const [columnFilters, setColumnFilters] = useState({})
   const [sortConfig, setSortConfig] = useState({
     direction: defaultSortDirection,
-    field: defaultSortField ?? firstSortableColumn?.key ?? '',
+    field: getDefaultSortField(columns, defaultSortField),
   })
   const [page, setPage] = useState(0)
   const [rowsPerPage, setRowsPerPage] = useState(10)
@@ -111,14 +135,24 @@ function AppTable({
       return filteredRows
     }
 
-    return [...filteredRows].sort((firstRow, secondRow) =>
-      compareValues(
+    return [...filteredRows].sort((firstRow, secondRow) => {
+      if (prioritySortValue) {
+        const priorityDifference = compareValues(
+          prioritySortValue(firstRow),
+          prioritySortValue(secondRow),
+          'desc',
+        )
+
+        if (priorityDifference !== 0) return priorityDifference
+      }
+
+      return compareValues(
         getSortValue(firstRow, sortColumn),
         getSortValue(secondRow, sortColumn),
         sortConfig.direction,
-      ),
-    )
-  }, [filteredRows, sortConfig, visibleColumns])
+      )
+    })
+  }, [filteredRows, prioritySortValue, sortConfig, visibleColumns])
 
   const paginatedRows = useMemo(
     () => showPagination ? sortedRows.slice(page * rowsPerPage, (page + 1) * rowsPerPage) : sortedRows,

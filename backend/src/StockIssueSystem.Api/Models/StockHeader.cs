@@ -23,9 +23,6 @@ public sealed class StockHeader
     [MaxLength(100)]
     public string RequesterName { get; set; } = string.Empty;
 
-    [MaxLength(500)]
-    public string HrRemark { get; set; } = string.Empty;
-
     public bool IsUrgent { get; set; }
 
     [MaxLength(500)]

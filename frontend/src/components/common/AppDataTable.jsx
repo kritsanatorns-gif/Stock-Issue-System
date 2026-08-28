@@ -41,7 +41,7 @@ function AppDataTable({
   isLoading = false,
   noDataText = 'No records found',
   defaultSortFieldId,
-  defaultSortAsc = true,
+  defaultSortAsc = false,
   pagination = true,
   paginationPerPage = 10,
   paginationRowsPerPageOptions = [10, 25, 50, 100],

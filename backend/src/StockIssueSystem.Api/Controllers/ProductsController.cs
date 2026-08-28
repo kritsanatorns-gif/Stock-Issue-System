@@ -16,6 +16,7 @@ public sealed class ProductsController(AppDbContext dbContext) : ControllerBase
     private const string MainLocationId = "MAIN";
     private const string IssueDocType = "ISSUE";
     private const string ReceiveDocType = "RECEIVE";
+    private const string AdjustDocType = "ADJUST";
     private static readonly Regex CodePattern = new(@"^[A-Za-z0-9._/-]+$", RegexOptions.Compiled);
     private static readonly Regex PlainNamePattern = new(@"^[A-Za-z0-9\u0E00-\u0E7F\s.,_/#()+""'-]+$", RegexOptions.Compiled);
 
@@ -422,6 +423,31 @@ public sealed class ProductsController(AppDbContext dbContext) : ControllerBase
             .ThenByDescending(row => row.DetailId)
             .ToListAsync();
 
+        var adjustmentRows = await dbContext.StockDetails
+            .AsNoTracking()
+            .Where(detail => detail.ProductId == productId)
+            .Join(
+                dbContext.StockHeaders.AsNoTracking().Where(header =>
+                    header.DocType == AdjustDocType
+                    && header.Status != StockHeaderStatuses.Cancelled),
+                detail => detail.HeaderId,
+                header => header.HeaderId,
+                (detail, header) => new
+                {
+                    Date = header.TransactionDate,
+                    DateText = header.TransactionDate.ToString("dd/MM/yyyy HH:mm"),
+                    detail.DetailId,
+                    detail.HeaderId,
+                    Qty = detail.Qty,
+                    Unit = detail.Unit,
+                    header.EmployeeId,
+                    header.Remark,
+                    Status = "ปรับสต๊อก",
+                })
+            .OrderByDescending(row => row.Date)
+            .ThenByDescending(row => row.DetailId)
+            .ToListAsync();
+
         return Ok(new
         {
             ProductId = product.ProductId,
@@ -431,6 +457,7 @@ public sealed class ProductsController(AppDbContext dbContext) : ControllerBase
             TotalInQty = receiveRows.Sum(row => row.Qty),
             TotalOutQty = issueRows.Sum(row => row.Qty),
             Receives = receiveRows,
+            Adjustments = adjustmentRows,
             Issues = issueRows,
         });
     }

@@ -1,5 +1,6 @@
 ﻿import { Button, Grid, TextField } from '@mui/material'
 import { Download } from 'lucide-react'
+import DateInputField from '../../components/common/DateInputField'
 
 function HistoryFilters({
   barcode,
@@ -15,25 +16,21 @@ function HistoryFilters({
   return (
     <Grid container spacing={2}>
       <Grid size={2.4}>
-        <TextField
+        <DateInputField
           fullWidth
-          InputLabelProps={{ shrink: true }}
           label="วันที่เริ่มต้น"
           size="small"
-          type="date"
           value={startDate}
-          onChange={(event) => onStartDateChange(event.target.value)}
+          onChange={onStartDateChange}
         />
       </Grid>
       <Grid size={2.4}>
-        <TextField
+        <DateInputField
           fullWidth
-          InputLabelProps={{ shrink: true }}
           label="วันที่สิ้นสุด"
           size="small"
-          type="date"
           value={endDate}
-          onChange={(event) => onEndDateChange(event.target.value)}
+          onChange={onEndDateChange}
         />
       </Grid>
       <Grid size={2.4}>

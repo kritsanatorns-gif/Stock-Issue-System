@@ -4,6 +4,7 @@ import { Pencil, Plus, Save } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { createSupplier, getPurchasesBySupplier, getSupplierPurchaseItems, getSuppliers, updateSupplier, updateSupplierStatus } from '../../api/api'
 import AppTable from '../../components/common/AppTable'
+import DateInputField from '../../components/common/DateInputField'
 import { formatDisplayDate, getDateSortValue } from '../../utils/dateUtils'
 
 const money = (value) => Number(value ?? 0).toLocaleString('th-TH', {
@@ -12,7 +13,8 @@ const money = (value) => Number(value ?? 0).toLocaleString('th-TH', {
 })
 
 function SuppliersPage() {
-  const [year, setYear] = useState(dayjs().year())
+  const [startDate, setStartDate] = useState(() => dayjs().startOf('month').format('YYYY-MM-DD'))
+  const [endDate, setEndDate] = useState(() => dayjs().format('YYYY-MM-DD'))
   const [purchaseRows, setPurchaseRows] = useState([])
   const [expandedSupplierId, setExpandedSupplierId] = useState(null)
   const [purchaseItemsBySupplier, setPurchaseItemsBySupplier] = useState({})
@@ -24,6 +26,7 @@ function SuppliersPage() {
   const [supplierStatus, setSupplierStatus] = useState(1)
   const [editingSupplier, setEditingSupplier] = useState(null)
   const [isSavingSupplier, setIsSavingSupplier] = useState(false)
+  const purchaseRangeKey = `${startDate || 'all'}:${endDate || 'all'}`
 
   const loadSupplierRows = async () => {
     try {
@@ -66,7 +69,7 @@ function SuppliersPage() {
     setExpandedSupplierId(null)
     setPurchaseItemsBySupplier({})
 
-    getPurchasesBySupplier({ year })
+    getPurchasesBySupplier({ startDate, endDate })
       .then((rows) => active && setPurchaseRows(Array.isArray(rows) ? rows : []))
       .catch(() => active && setPurchaseRows([]))
       .finally(() => active && setIsLoading(false))
@@ -76,7 +79,7 @@ function SuppliersPage() {
       .catch(() => active && setSupplierRows([]))
 
     return () => { active = false }
-  }, [year])
+  }, [endDate, startDate])
 
   const toggleSupplier = async (supplier) => {
     if (expandedSupplierId === supplier.supplierId) {
@@ -85,19 +88,20 @@ function SuppliersPage() {
     }
 
     setExpandedSupplierId(supplier.supplierId)
-    if (purchaseItemsBySupplier[supplier.supplierId]) {
+    const cacheKey = `${purchaseRangeKey}:${supplier.supplierId}`
+    if (purchaseItemsBySupplier[cacheKey]) {
       return
     }
 
     setIsLoadingItems(true)
     try {
-      const rows = await getSupplierPurchaseItems(supplier.supplierId, { year })
+      const rows = await getSupplierPurchaseItems(supplier.supplierId, { startDate, endDate })
       setPurchaseItemsBySupplier((current) => ({
         ...current,
-        [supplier.supplierId]: Array.isArray(rows) ? rows : [],
+        [cacheKey]: Array.isArray(rows) ? rows : [],
       }))
     } catch {
-      setPurchaseItemsBySupplier((current) => ({ ...current, [supplier.supplierId]: [] }))
+      setPurchaseItemsBySupplier((current) => ({ ...current, [cacheKey]: [] }))
     } finally {
       setIsLoadingItems(false)
     }
@@ -161,9 +165,20 @@ function SuppliersPage() {
 
       <Box sx={{ display: 'flex', justifyContent: 'flex-end', width: '100%' }}>
         <Stack direction="row" spacing={1}>
-          <TextField select label="ปี" size="small" value={year} onChange={(event) => setYear(Number(event.target.value))} sx={{ width: 120 }}>
-            {[dayjs().year() - 1, dayjs().year(), dayjs().year() + 1].map((option) => <MenuItem key={option} value={option}>{option}</MenuItem>)}
-          </TextField>
+          <DateInputField
+            label="วันที่เริ่มต้น"
+            size="small"
+            sx={{ width: 180 }}
+            value={startDate}
+            onChange={setStartDate}
+          />
+          <DateInputField
+            label="วันที่สิ้นสุด"
+            size="small"
+            sx={{ width: 180 }}
+            value={endDate}
+            onChange={setEndDate}
+          />
           <Button startIcon={<Plus size={18} />} variant="contained" onClick={() => { setEditingSupplier(null); setSupplierForm(''); setSupplierStatus(1); setIsManageOpen(true) }}>
             เพิ่มผู้ขาย
           </Button>
@@ -189,7 +204,7 @@ function SuppliersPage() {
                 </Typography>
                 <AppTable
                   columns={itemColumns}
-                  rows={purchaseItemsBySupplier[supplier.supplierId] ?? []}
+                  rows={purchaseItemsBySupplier[`${purchaseRangeKey}:${supplier.supplierId}`] ?? []}
                   rowKey={(row) => `${row.receiveHeaderId}-${row.productCode}-${row.receivedAt}`}
                   isLoading={isLoadingItems && expandedSupplierId === supplier.supplierId}
                   maxHeight={360}

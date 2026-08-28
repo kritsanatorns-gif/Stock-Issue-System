@@ -157,7 +157,7 @@ const importTemplateHeaders = [
   'บาร์โค้ด',
   'หมวดหมู่',
   'ผู้ขาย',
-  'เตือนเมื่อของใกล้หมด',
+  'Min Stock',
   'ราคาซื้อรวม',
   'หมายเหตุ',
 ]
@@ -242,7 +242,8 @@ function mapImportRow(row, defaults = {}) {
     const mappedKey = importColumnAliases[normalizedHeader]
       ?? (normalizedHeader.startsWith(normalizeImportHeader('ยอดคงเหลือ'))
         ? 'stockQty'
-        : normalizedHeader.startsWith(normalizeImportHeader('เตือนเมื่อของใกล้หมด'))
+        : (normalizedHeader.startsWith(normalizeImportHeader('min stock'))
+          || normalizedHeader.startsWith(normalizeImportHeader('เตือนเมื่อของใกล้หมด')))
           ? 'minQty'
           : undefined)
 
@@ -1185,7 +1186,7 @@ function ProductsPage() {
                 { key: 'conversionQty', label: 'อัตราแปลง', width: 120, align: 'center' },
                 { key: 'receiveQty', label: 'จำนวนรับเข้า', width: 130, align: 'center' },
                 { key: 'stockQty', label: 'ยอดคงเหลือ (หน่วยเบิก)', width: 160, align: 'center' },
-                { key: 'minQty', label: 'เตือนเมื่อของใกล้หมด', width: 170, align: 'center' },
+                { key: 'minQty', label: 'Min Stock', width: 170, align: 'center' },
                 {
                   key: 'unitCost',
                   label: 'ราคาซื้อรวม',

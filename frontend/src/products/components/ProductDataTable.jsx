@@ -4,15 +4,19 @@ import {
   Button,
   Chip,
   CircularProgress,
+  MenuItem,
   Stack,
   Table,
   TableBody,
   TableCell,
   TableHead,
+  TablePagination,
   TableRow,
+  TextField,
   Typography,
 } from '@mui/material'
 import { Coins, FileText, Pencil } from 'lucide-react'
+import { useEffect, useState } from 'react'
 import AppTable from '../../components/common/AppTable'
 import { formatDisplayDateTime } from '../../utils/dateUtils'
 
@@ -34,9 +38,37 @@ function readValue(row, camelKey, pascalKey = camelKey) {
 }
 
 function MovementMiniTable({ columns, noDataText, rows }) {
+  const [page, setPage] = useState(0)
+  const [rowsPerPage, setRowsPerPage] = useState(10)
+  const lastPage = Math.max(0, Math.ceil(rows.length / rowsPerPage) - 1)
+  const safePage = Math.min(page, lastPage)
+  const visibleRows = rows.slice(safePage * rowsPerPage, (safePage + 1) * rowsPerPage)
+
+  useEffect(() => {
+    setPage(0)
+  }, [rows.length])
+
+  const handleRowsPerPageChange = (event) => {
+    setRowsPerPage(Number(event.target.value))
+    setPage(0)
+  }
+
   return (
-    <Box sx={{ border: '1px solid #cbd5e1', borderRadius: 1.5, overflow: 'hidden' }}>
-      <Table size="small" sx={{ tableLayout: 'fixed', width: '100%' }}>
+    <Box>
+      <Stack alignItems="center" direction="row" spacing={1} sx={{ mb: 1 }}>
+        <Typography sx={{ color: '#475569', fontSize: 12 }}>แสดงต่อหน้า:</Typography>
+        <TextField
+          select
+          size="small"
+          sx={{ width: 76, '& .MuiInputBase-input': { fontSize: 13, py: 0.75 } }}
+          value={rowsPerPage}
+          onChange={handleRowsPerPageChange}
+        >
+          {[5, 10, 20, 50].map((option) => <MenuItem key={option} value={option}>{option}</MenuItem>)}
+        </TextField>
+      </Stack>
+      <Box sx={{ border: '1px solid #cbd5e1', borderRadius: 1.5, overflow: 'hidden' }}>
+        <Table size="small" sx={{ tableLayout: 'fixed', width: '100%' }}>
         <TableHead>
           <TableRow>
             {columns.map((column) => (
@@ -59,7 +91,7 @@ function MovementMiniTable({ columns, noDataText, rows }) {
         </TableHead>
         <TableBody>
           {rows.length ? (
-            rows.map((row, index) => (
+            visibleRows.map((row, index) => (
               <TableRow key={`${readValue(row, 'headerId', 'HeaderId') ?? ''}-${readValue(row, 'detailId', 'DetailId') ?? index}`}>
                 {columns.map((column) => (
                   <TableCell
@@ -80,36 +112,65 @@ function MovementMiniTable({ columns, noDataText, rows }) {
             </TableRow>
           )}
         </TableBody>
-      </Table>
+        </Table>
+        {rows.length > 0 ? (
+          <TablePagination
+            component="div"
+            count={rows.length}
+            labelDisplayedRows={({ from, to, count }) => `${from}-${to} จาก ${count}`}
+            labelRowsPerPage=""
+            page={safePage}
+            rowsPerPage={rowsPerPage}
+            rowsPerPageOptions={[]}
+            onPageChange={(_event, nextPage) => setPage(nextPage)}
+            sx={{ borderTop: '1px solid #e2e8f0', minHeight: 42, '& .MuiTablePagination-toolbar': { minHeight: 42 } }}
+          />
+        ) : null}
+      </Box>
     </Box>
   )
 }
 
 function ProductMovementDetails({ error, isLoading, movement }) {
   const receives = movement?.receives ?? movement?.Receives ?? []
+  const adjustments = movement?.adjustments ?? movement?.Adjustments ?? []
+  const inboundRows = [
+    ...receives.map((row) => ({ ...row, movementType: 'รับเข้า' })),
+    ...adjustments.map((row) => ({ ...row, movementType: 'ปรับสต๊อก' })),
+  ].sort((firstRow, secondRow) => new Date(readValue(secondRow, 'date', 'Date')) - new Date(readValue(firstRow, 'date', 'Date')))
   const issues = movement?.issues ?? movement?.Issues ?? []
 
   const receiveColumns = [
     {
+      key: 'movementType',
+      label: 'ประเภท',
+      render: (row) => {
+        const isAdjustment = readValue(row, 'movementType') === 'ปรับสต๊อก'
+        return <Chip color={isAdjustment ? 'warning' : 'success'} label={readValue(row, 'movementType')} size="small" />
+      },
+    },
+    {
       key: 'dateText',
-      label: 'วันที่รับเข้า',
+      label: 'วันที่ทำรายการ',
       render: (row) => formatDisplayDateTime(readValue(row, 'date', 'Date') ?? readValue(row, 'dateText', 'DateText')),
     },
     {
       key: 'receiveQty',
-      label: 'รับเข้าจริง',
+      label: 'จำนวนรับเข้า',
       render: (row) =>
-        `${formatQty(readValue(row, 'receiveQty', 'ReceiveQty') ?? readValue(row, 'qty', 'Qty'))} ${readValue(row, 'receiveUnit', 'ReceiveUnit') || readValue(row, 'unit', 'Unit') || ''}`,
+        readValue(row, 'movementType') === 'ปรับสต๊อก'
+          ? '-'
+          : `${formatQty(readValue(row, 'receiveQty', 'ReceiveQty') ?? readValue(row, 'qty', 'Qty'))} ${readValue(row, 'receiveUnit', 'ReceiveUnit') || readValue(row, 'unit', 'Unit') || ''}`,
     },
     {
       key: 'qty',
-      label: 'เพิ่มสต๊อก',
+      label: 'ผลต่อสต๊อก',
       render: (row) => `${formatQty(readValue(row, 'qty', 'Qty'))} ${readValue(row, 'unit', 'Unit') || ''}`,
     },
     {
       key: 'costLot',
       label: 'ราคาซื้อ',
-      render: (row) => formatMoney(readValue(row, 'costLot', 'CostLot')),
+      render: (row) => readValue(row, 'movementType') === 'ปรับสต๊อก' ? '-' : formatMoney(readValue(row, 'costLot', 'CostLot')),
     },
     { key: 'employeeId', label: 'ผู้ทำรายการ', align: 'center' },
   ]
@@ -151,11 +212,11 @@ function ProductMovementDetails({ error, isLoading, movement }) {
       <Box sx={{ flex: 1, minWidth: 0, width: '50%' }}>
         <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
           <Typography sx={{ color: '#0f172a', fontSize: 15, fontWeight: 800 }}>
-            ประวัตินำเข้า
+            ประวัติรับเข้า / ปรับสต๊อก
           </Typography>
-          <Chip label={`${receives.length} รอบ`} size="small" />
+          <Chip label={`${inboundRows.length} รอบ`} size="small" />
         </Stack>
-        <MovementMiniTable columns={receiveColumns} noDataText="ยังไม่มีประวัตินำเข้า" rows={receives} />
+        <MovementMiniTable columns={receiveColumns} noDataText="ยังไม่มีประวัติรับเข้า/ปรับสต๊อก" rows={inboundRows} />
       </Box>
 
       <Box sx={{ flex: 1, minWidth: 0, width: '50%' }}>
@@ -203,7 +264,6 @@ function ProductDataTable({
       ),
     },
     { key: 'productId', label: 'รหัสสินค้า', width: 145 },
-    { key: 'barcode', label: 'Barcode', width: 155 },
     { key: 'productName', label: 'ชื่อสินค้า', width: 230 },
     { key: 'categoryName', label: 'หมวดหมู่', width: 120, align: 'center' },
     {
@@ -221,6 +281,13 @@ function ProductDataTable({
       render: (row) => row.issueUnit || '-',
     },
     { key: 'stockQty', label: 'ยอดคงเหลือ', width: 115 },
+    {
+      key: 'minQty',
+      label: 'Min Stock',
+      width: 105,
+      align: 'center',
+      value: (row) => Number(row.minQty ?? 10).toLocaleString('th-TH', { maximumFractionDigits: 2 }),
+    },
     {
       key: 'stockStatus',
       label: 'สถานะสต๊อก',

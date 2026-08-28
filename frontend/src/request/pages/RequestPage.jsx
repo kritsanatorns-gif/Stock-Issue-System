@@ -99,6 +99,8 @@ const stockStatusOptions = [
   { label: 'ของหมด', value: 'out' },
 ]
 
+const MAX_ITEMS_PER_REQUEST = 20
+
 function printRequestSlipOld({ department, items, remark, requesterName, requestNo = 'รอเลขคำขอ' }) {
   const printedAt = formatDisplayDateTime(new Date())
   const rows = items.map((item, index) => `
@@ -259,7 +261,7 @@ async function getCarryOverBacklogItems({ currentHeaderId, department, employeeI
   }
 }
 
-function printRequestSlip({ backlogItems = [], department, isUrgent = false, items, remark, requesterName, requestNo = '' }) {
+function printRequestSlip({ department, isUrgent = false, items, remark, requesterName, requestNo = '' }) {
   const escapeHtml = (value) =>
     String(value ?? '')
       .replaceAll('&', '&amp;')
@@ -274,9 +276,9 @@ function printRequestSlip({ backlogItems = [], department, isUrgent = false, ite
     time: requestTime,
     year: requestYear,
   } = getThailandDateParts(new Date())
-  const printItems = [...items, ...backlogItems]
-  const hasCarryOverBacklog = backlogItems.length > 0
-  const stampText = [isUrgent ? 'ด่วน' : '', hasCarryOverBacklog ? 'ค้าง' : ''].filter(Boolean).join(' / ')
+  const printItems = items
+  const fixedRowCount = 20
+  const stampText = isUrgent ? 'ด่วน' : ''
   const rows = printItems
     .map(
       (item, index) => `
@@ -285,13 +287,18 @@ function printRequestSlip({ backlogItems = [], department, isUrgent = false, ite
           <td class="center">${escapeHtml(item.category || '')}</td>
           <td>${escapeHtml(item.productName)}</td>
           <td class="center">${Number(item.quantity || 0).toLocaleString('th-TH')}</td>
-          <td class="center">${item.isCarryOverBacklog ? Number(item.quantity || 0).toLocaleString('th-TH') : '-'}</td>
           <td class="center">${escapeHtml(item.issueUnit)}</td>
           <td>${escapeHtml(item.remark || '')}</td>
         </tr>
       `,
     )
     .join('')
+    + Array.from({ length: Math.max(0, fixedRowCount - printItems.length) }, (_, index) => `
+      <tr>
+        <td class="center">${printItems.length + index + 1}</td>
+        <td></td><td></td><td></td><td></td><td></td>
+      </tr>
+    `).join('')
   const printWindow = window.open('', '_blank', 'width=900,height=900')
 
   if (!printWindow) {
@@ -324,6 +331,10 @@ function printRequestSlip({ backlogItems = [], department, isUrgent = false, ite
 
           .sheet {
             border: 2px solid #111;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            min-height: 287mm;
             padding: 5mm 1mm;
             position: relative;
             width: 100%;
@@ -587,9 +598,8 @@ function printRequestSlip({ backlogItems = [], department, isUrgent = false, ite
                 <th style="width: 70px;">หมวด</th>
                 <th style="width: 135px;">รายการ</th>
                 <th style="width: 68px;">จำนวน</th>
-                <th style="width: 58px;">ค้าง</th>
                 <th style="width: 72px;">หน่วยนับ</th>
-                <th style="width: 220px;">หมายเหตุ</th>
+                <th style="width: 278px;">หมายเหตุ</th>
               </tr>
             </thead>
             <tbody>
@@ -672,7 +682,7 @@ function RequestPage() {
       try {
         const rows = await getProducts()
 
-        setProducts((rows ?? []).map(normalizeProduct).filter((item) => item.stockQty > 0))
+        setProducts((rows ?? []).map(normalizeProduct))
       } catch {
         setLoadError('โหลดข้อมูลสินค้าไม่สำเร็จ กรุณาตรวจสอบว่า Backend API เปิดอยู่')
       }
@@ -701,6 +711,10 @@ function RequestPage() {
   }
 
   const handleAddItem = (product) => {
+    if (!selectedItems.some((item) => item.productId === product.productId) && selectedItems.length >= MAX_ITEMS_PER_REQUEST) {
+      Swal.fire('ครบจำนวนรายการแล้ว', `ใบเบิกหนึ่งใบเลือกได้ไม่เกิน ${MAX_ITEMS_PER_REQUEST} รายการสินค้า`, 'warning')
+      return
+    }
     setSelectedItems((current) => {
       if (current.some((item) => item.productId === product.productId)) {
         return current
@@ -717,6 +731,10 @@ function RequestPage() {
   }
 
   const handleToggleItem = (product) => {
+    if (!selectedItems.some((item) => item.productId === product.productId) && selectedItems.length >= MAX_ITEMS_PER_REQUEST) {
+      Swal.fire('ครบจำนวนรายการแล้ว', `ใบเบิกหนึ่งใบเลือกได้ไม่เกิน ${MAX_ITEMS_PER_REQUEST} รายการสินค้า`, 'warning')
+      return
+    }
     setSelectedItems((current) => {
       if (current.some((item) => item.productId === product.productId)) {
         return current.filter((item) => item.productId !== product.productId)
@@ -757,7 +775,7 @@ function RequestPage() {
       return
     }
 
-    const invalidItem = selectedItems.find((item) => Number(item.quantity) <= 0 || Number(item.quantity) > item.stockQty)
+    const invalidItem = selectedItems.find((item) => Number(item.quantity) <= 0)
 
     if (invalidItem) {
       Swal.fire('จำนวนไม่ถูกต้อง', `กรุณาตรวจสอบจำนวนของ ${invalidItem.productName}`, 'warning')
@@ -817,15 +835,7 @@ function RequestPage() {
       })
 
       if (printResult.isConfirmed) {
-        const savedHeaderId = savedRequest?.headerId ?? savedRequest?.HeaderId ?? 0
-        const backlogItems = await getCarryOverBacklogItems({
-          currentHeaderId: savedHeaderId,
-          department,
-          employeeId,
-        })
-
         printRequestSlip({
-          backlogItems,
           department,
           isUrgent,
           items: submittedItems,
@@ -1084,7 +1094,7 @@ function RequestPage() {
                   <PackageCheck size={20} />
                   <Typography sx={{ fontWeight: 900 }}>รายการที่ขอเบิก</Typography>
                 </Stack>
-                <Chip label={`${selectedItems.length} รายการ`} size="small" />
+                <Chip label={`${selectedItems.length}/${MAX_ITEMS_PER_REQUEST} รายการ`} size="small" />
               </Stack>
               <Stack divider={<Divider />} spacing={1.5}>
                 {selectedItems.map((item) => (

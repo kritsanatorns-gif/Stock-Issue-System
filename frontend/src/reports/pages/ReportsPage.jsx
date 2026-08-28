@@ -517,19 +517,12 @@ function StatCard({ color, helper, icon: Icon, label, value }) {
   )
 }
 
-function DonutChart({ action, rows, subtitle, title, totalLabel = 'สินค้าที่ถูกเบิก' }) {
-  const totalQty = rows.reduce((total, row) => total + row.totalQty, 0)
+function DonutChart({ action, legendValueLabel = 'เบิก', rows, subtitle, title, totalLabel = 'สินค้าที่ถูกเบิก' }) {
   const topRows = [...rows]
     .sort((first, second) => Number(second.totalQty ?? 0) - Number(first.totalQty ?? 0))
-    .slice(0, 10)
-  const otherQty = rows
-    .slice(0)
-    .sort((first, second) => Number(second.totalQty ?? 0) - Number(first.totalQty ?? 0))
-    .slice(10)
-    .reduce((total, row) => total + Number(row.totalQty ?? 0), 0)
-  const chartRows = otherQty > 0
-    ? [...topRows, { color: '#94a3b8', label: 'อื่นๆ', totalQty: otherQty }]
-    : topRows
+    .slice(0, 5)
+  const chartRows = topRows
+  const totalQty = chartRows.reduce((total, row) => total + Number(row.totalQty ?? 0), 0)
   let currentPercent = 0
   const gradient = totalQty
     ? chartRows.map((row) => {
@@ -572,7 +565,7 @@ function DonutChart({ action, rows, subtitle, title, totalLabel = 'สินค�
             alignItems: 'center',
             display: 'grid',
             gap: 2.5,
-            gridTemplateColumns: 'minmax(250px, 1fr) 130px',
+            gridTemplateColumns: 'minmax(250px, 1fr) 150px',
             ml: 5,
             mt: 4,
             width: 'calc(100% - 40px)',
@@ -612,13 +605,18 @@ function DonutChart({ action, rows, subtitle, title, totalLabel = 'สินค�
             </Box>
           </Box>
 
-          <Stack alignItems="flex-start" gap={1.2} justifyContent="flex-start" sx={{ alignSelf: 'start', flexShrink: 0, mt: 1.5, width: 130 }}>
+          <Stack alignItems="flex-start" gap={1.2} justifyContent="flex-start" sx={{ alignSelf: 'start', flexShrink: 0, mt: 1.5, width: 150 }}>
             {chartRows.map((row) => (
-              <Stack key={row.label} alignItems="center" direction="row" spacing={0.75}>
+              <Stack key={row.label} alignItems="flex-start" direction="row" spacing={0.75}>
                 <Box sx={{ bgcolor: row.color, borderRadius: '50%', height: 8, width: 8 }} />
-                <Typography sx={{ color: '#475569', fontSize: 12 }}>
-                  {row.label}
-                </Typography>
+                <Box>
+                  <Typography sx={{ color: '#475569', fontSize: 12, lineHeight: 1.2 }}>
+                    {row.label}
+                  </Typography>
+                  <Typography sx={{ color: '#0f172a', fontSize: 11, fontWeight: 800, mt: 0.25 }}>
+                    {Number(row.totalQty ?? 0).toLocaleString('th-TH')} {legendValueLabel}
+                  </Typography>
+                </Box>
               </Stack>
             ))}
           </Stack>
@@ -1287,6 +1285,7 @@ function ReportsPage() {
           <Grid container spacing={2}>
             <Grid size={{ xs: 12, lg: 4 }}>
               <DonutChart
+                legendValueLabel="เบิก"
                 rows={rankingRows}
                 subtitle={rankingSubtitle}
                 title={rankingTitle}
@@ -1360,6 +1359,7 @@ function ReportsPage() {
           <Grid container spacing={2}>
             <Grid size={{ xs: 12, lg: 4 }}>
               <DonutChart
+                legendValueLabel="บาท"
                 rows={purchaseChartRows}
                 subtitle={`สัดส่วนยอดซื้อจากรายการรับเข้า ${purchasePeriodLabel}`}
                 title="สัดส่วนยอดซื้อแต่ละผู้ขาย"
@@ -1439,6 +1439,7 @@ function ReportsPage() {
           <Grid container spacing={2}>
             <Grid size={{ xs: 12, lg: 4 }}>
               <DonutChart
+                legendValueLabel="เบิก"
                 rows={productRows}
                 subtitle="จำนวนสินค้าที่ถูกเบิก แยกตามสินค้า"
                 title="สินค้าที่ถูกเบิกเยอะสุด"
@@ -1470,6 +1471,7 @@ function ReportsPage() {
                 defaultSortField="totalQty"
                 defaultSortDirection="desc"
                 isLoading={isLoading}
+                key={`product-ranking-${reportPeriod}-${selectedYear}`}
                 maxHeight={560}
                 noDataText="ไม่พบข้อมูลการเบิกในช่วงที่เลือก"
                 rowKey={(row) => `${row.productCode}-${row.label}`}
@@ -1480,38 +1482,7 @@ function ReportsPage() {
             </CardContent>
           </Card>
         </>
-      ) : (
-        <>
-          <Grid container spacing={2}>
-            {backlogSummaryItems.map((item) => (
-              <Grid key={item.label} size={{ xs: 12, sm: 6, lg: 3 }}>
-                <StatCard {...item} />
-              </Grid>
-            ))}
-          </Grid>
-
-          <Card elevation={0} sx={{ bgcolor: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 2 }}>
-            <CardContent sx={{ p: 2.5 }}>
-              <Stack spacing={2}>
-                <Typography sx={{ color: '#111827', fontSize: 16, fontWeight: 900 }}>
-                  รายละเอียดงานค้าง
-                </Typography>
-                <AppTable
-                  columns={backlogColumns}
-                  defaultSortField="requestDateName"
-                  defaultSortDirection="desc"
-                  isLoading={isLoading}
-                  maxHeight={560}
-                  noDataText="ไม่มีงานค้าง"
-                  rowKey={(row) => `${row.requestNo}-${row.detailId}`}
-                  rows={backlogRows}
-                  showGlobalSearch
-                />
-              </Stack>
-            </CardContent>
-          </Card>
-        </>
-      )}
+      ) : null}
     </Stack>
   )
 

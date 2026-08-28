@@ -1,5 +1,6 @@
 import { Button, Grid, MenuItem, TextField } from '@mui/material'
-import { FileSpreadsheet, Search } from 'lucide-react'
+import { FileBarChart, Search } from 'lucide-react'
+import DateInputField from '../../components/common/DateInputField'
 
 const reportTypes = [
   { label: 'ทั้งหมด', value: 'all' },
@@ -11,18 +12,12 @@ const reportTypes = [
 
 function DateFilterField({ label, onChange, value }) {
   return (
-    <TextField
+    <DateInputField
       fullWidth
       label={label}
       size="small"
-      type="date"
       value={value}
-      onChange={(event) => onChange(event.target.value)}
-      slotProps={{
-        inputLabel: {
-          shrink: true,
-        },
-      }}
+      onChange={onChange}
     />
   )
 }
@@ -30,7 +25,7 @@ function DateFilterField({ label, onChange, value }) {
 function ReportFilters({
   endDate,
   onEndDateChange,
-  onExport,
+  onOpenSummary,
   onReportTypeChange,
   onRunReport,
   onStartDateChange,
@@ -83,12 +78,12 @@ function ReportFilters({
       <Grid size={2.25}>
         <Button
           fullWidth
-          startIcon={<FileSpreadsheet size={18} />}
+          startIcon={<FileBarChart size={18} />}
           sx={{ fontWeight: 700, minHeight: 40 }}
           variant="outlined"
-          onClick={onExport}
+          onClick={onOpenSummary}
         >
-          ส่งออก Excel
+          สรุป
         </Button>
       </Grid>
     </Grid>

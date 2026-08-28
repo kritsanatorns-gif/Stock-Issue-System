@@ -12,11 +12,16 @@
   Divider,
   Grid,
   Stack,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableRow,
   TextField,
   Typography,
 } from '@mui/material'
 import dayjs from 'dayjs'
-import { FileDown, FileText, Printer, RotateCcw } from 'lucide-react'
+import { FileBarChart, FileDown, FileSpreadsheet, FileText, Printer, RotateCcw } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import Swal from 'sweetalert2'
@@ -143,6 +148,90 @@ function formatMoney(value) {
     maximumFractionDigits: 2,
     minimumFractionDigits: 2,
   })
+}
+
+function getReportTypeLabel(reportType) {
+  if (reportType === 'stockReceive') return 'รับเข้า'
+  if (reportType === 'stockIssue') return 'เบิกสินค้า'
+  if (reportType === 'stockAdjust') return 'ปรับสต็อก'
+  if (reportType === 'backlog') return 'งานค้าง'
+  return 'ทั้งหมด'
+}
+
+function printSummaryReport({ detailRows, endDate, reportType, startDate, summaryItems }) {
+  const printWindow = window.open('', '_blank')
+
+  if (!printWindow) return
+
+  const rows = summaryItems.map((item, index) => `
+    <tr>
+      <td>${index + 1}</td>
+      <td>${escapeHtml(item.label)}</td>
+      <td>${escapeHtml(item.value)}</td>
+    </tr>
+  `).join('')
+  const summarySection = reportType === 'all' ? `
+    <table>
+      <thead><tr><th>ลำดับ</th><th>รายการ</th><th>จำนวนเอกสาร</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+  ` : ''
+  const detailRowsHtml = detailRows.map((row, index) => `
+    <tr><td>${index + 1}</td><td>${escapeHtml(formatDisplayDateTime(row.createdAt))}</td><td>${escapeHtml(row.employeeName)}</td><td>${escapeHtml(row.productName)}</td><td>${escapeHtml(`${Number(row.quantity).toLocaleString('th-TH')} ${row.unit}`)}</td><td>${escapeHtml(row.reason || '-')}</td></tr>
+  `).join('')
+  const detailSection = reportType !== 'all' ? `
+    <h3>รายละเอียด${escapeHtml(getReportTypeLabel(reportType))}</h3>
+    <table class="detail-table"><thead><tr><th>ลำดับ</th><th>วันเวลา</th><th>ผู้ทำรายการ</th><th>สินค้า</th><th>จำนวน</th><th>รายละเอียด</th></tr></thead><tbody>${detailRowsHtml}</tbody></table>
+  ` : ''
+
+  printWindow.document.write(`<!doctype html>
+    <html lang="th">
+      <head>
+        <meta charset="utf-8" />
+        <title>รายงานสรุปการเคลื่อนไหวสต็อก</title>
+        <style>
+          @page { size: A4; margin: 8mm; }
+          body { font-family: Tahoma, Arial, sans-serif; color: #111827; font-size: 13px; }
+          .sheet { min-height: 276mm; padding: 4mm 0; box-sizing: border-box; }
+          h1 { font-size: 22px; margin: 0; text-align: center; }
+          h2 { font-size: 14px; font-weight: normal; margin: 4px 0 22px; text-align: center; }
+          .meta { display: flex; justify-content: space-between; margin-bottom: 18px; }
+          table { border-collapse: collapse; font-size: 11px; width: 100%; }
+          th, td { border: 1px solid #111; padding: 5px 6px; text-align: center; vertical-align: middle; }
+          th { background: #f1f5f9; text-align: center; }
+          thead { display: table-header-group; }
+          tr { break-inside: avoid; page-break-inside: avoid; }
+          td:first-child { text-align: center; width: 5%; }
+          td:last-child { text-align: center; width: 28%; font-weight: bold; }
+          .detail-table th:nth-child(1) { width: 5%; }
+          .detail-table th:nth-child(2) { width: 18%; }
+          .detail-table th:nth-child(3) { width: 12%; }
+          .detail-table th:nth-child(4) { width: 30%; }
+          .detail-table th:nth-child(5) { width: 9%; }
+          .detail-table td:nth-child(2) { white-space: nowrap; }
+          .footer { break-inside: avoid; display: flex; justify-content: space-between; margin-top: 24px; page-break-inside: avoid; text-align: center; }
+          .sign { min-width: 220px; border-top: 1px solid #111; padding-top: 8px; }
+        </style>
+      </head>
+      <body>
+        <section class="sheet">
+          <h1>รายงานสรุปการเคลื่อนไหวสต็อก</h1>
+          <h2>ระบบเบิกสินค้าสำนักงาน</h2>
+          <div class="meta">
+            <span>ช่วงวันที่ ${escapeHtml(dayjs(startDate).format('DD/MM/YYYY'))} ถึง ${escapeHtml(dayjs(endDate).format('DD/MM/YYYY'))}</span>
+            <span>ประเภท: ${escapeHtml(getReportTypeLabel(reportType))}</span>
+          </div>
+          ${summarySection}
+          ${detailSection}
+          <div class="footer">
+            <div class="sign">ผู้จัดทำรายงาน</div>
+            <div class="sign">ผู้ตรวจสอบ</div>
+          </div>
+        </section>
+        <script>window.onload = () => window.print()</script>
+      </body>
+    </html>`)
+  printWindow.document.close()
 }
 
 function escapeHtml(value) {
@@ -663,6 +752,7 @@ function ReportsPage() {
   const [isCancelLoading, setIsCancelLoading] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [isPdfLoading, setIsPdfLoading] = useState(false)
+  const [isSummaryOpen, setIsSummaryOpen] = useState(false)
 
   const selectedReport = useMemo(
     () => {
@@ -704,6 +794,35 @@ function ReportsPage() {
 
   const documentRows = useMemo(() => buildDocumentRows(filteredReports), [filteredReports])
   const backlogRows = useMemo(() => flattenBacklogRows(requisitions), [requisitions])
+  const reportDetailRows = useMemo(() => {
+    if (reportType === 'all') return []
+
+    if (reportType === 'backlog') {
+      return backlogRows.map((row) => ({
+        createdAt: row.requestedAt,
+        employeeName: row.requesterName,
+        productCode: row.productCode,
+        productName: row.productName,
+        quantity: row.backlogQty,
+        reason: row.hrRemark || 'รายการค้าง',
+        rowKey: `${row.requestNo}-${row.detailId}`,
+        unit: row.unit,
+      }))
+    }
+
+    return filteredReports.flatMap((report) => (report.items ?? []).map((item, index) => ({
+      createdAt: report.createdAt,
+      employeeName: report.employeeName ?? '-',
+      productCode: item.code ?? item.Code ?? '-',
+      productName: item.productName ?? item.ProductName ?? '-',
+      quantity: Number(item.quantity ?? item.Quantity ?? 0),
+      reason: report.documentType === 'ADJUST'
+        ? (report.department ?? report.Department ?? '-')
+        : (report.poInvoiceNo ?? report.PoInvoiceNo ?? report.department ?? report.Department ?? '-'),
+      rowKey: `${report.documentNo}-${item.detailId ?? item.DetailId ?? index}`,
+      unit: item.unit ?? item.Unit ?? '',
+    })))
+  }, [backlogRows, filteredReports, reportType])
 
   const summaryItems = useMemo(() => {
     if (reportType === 'backlog') {
@@ -720,26 +839,26 @@ function ReportsPage() {
       ]
     }
 
-    const documentCount = filteredReports.length
-    const receiveCount = filteredReports.filter(
+    const documentCount = documentRows.length
+    const receiveCount = documentRows.filter(
       (report) => report.documentType === 'RECEIVE' && !isReversedStatus(report.status),
     ).length
-    const issueCount = filteredReports.filter(
+    const issueCount = documentRows.filter(
       (report) => report.documentType === 'ISSUE' && !isReversedStatus(report.status),
     ).length
-    const adjustCount = filteredReports.filter(
+    const adjustCount = documentRows.filter(
       (report) => report.documentType === 'ADJUST' && !isReversedStatus(report.status),
     ).length
-    const reverseCount = filteredReports.filter((report) => isReversedStatus(report.status)).length
+    const reverseCount = documentRows.filter((report) => isReversedStatus(report.status)).length
 
     return [
-      { label: 'จำนวนเอกสารทั้งหมด', value: documentCount.toLocaleString('th-TH') },
-      { label: 'จำนวนรับเข้า', value: receiveCount.toLocaleString('th-TH') },
-      { label: 'จำนวนเบิก', value: issueCount.toLocaleString('th-TH') },
-      { label: 'ปรับสต๊อก', value: adjustCount.toLocaleString('th-TH') },
-      { label: 'ถอยยอด', value: reverseCount.toLocaleString('th-TH') },
+      { label: 'งานทั้งหมด', value: documentCount.toLocaleString('th-TH') },
+      { label: 'ใบเบิก', value: issueCount.toLocaleString('th-TH') },
+      { label: 'ใบรับเข้า', value: receiveCount.toLocaleString('th-TH') },
+      { label: 'ใบถอยยอด', value: reverseCount.toLocaleString('th-TH') },
+      { label: 'ใบปรับสต็อก', value: adjustCount.toLocaleString('th-TH') },
     ]
-  }, [backlogRows, filteredReports, reportType])
+  }, [backlogRows, documentRows, reportType])
 
   useEffect(() => {
     const documentNo = searchParams.get('documentNo')
@@ -892,21 +1011,74 @@ function ReportsPage() {
     }
   }
 
-  const handleExport = () => {
-    if (reportType === 'backlog') {
+  const handleExportSummary = () => {
+    const reportContext = {
+      period: `ช่วงวันที่ ${startDate ? dayjs(startDate).format('DD/MM/YYYY') : '-'} ถึง ${endDate ? dayjs(endDate).format('DD/MM/YYYY') : '-'}`,
+      type: `ประเภท: ${getReportTypeLabel(reportType)}`,
+    }
+
+    if (reportType === 'all') {
       exportRowsToExcel(
-        backlogRows,
-        backlogExportColumns,
-        `backlog-history-${dayjs().format('YYYYMMDD-HHmm')}.xlsx`,
+        documentRows,
+        [
+          { header: 'วันเวลา', value: (row) => row.date },
+          { header: 'ประเภท', value: (row) => row.documentTypeLabel },
+          { header: 'ผู้ทำรายการ', value: (row) => row.employeeName },
+          { header: 'เลขที่เอกสาร', value: (row) => row.documentNo },
+        ],
+        `stock-report-${dayjs().format('YYYYMMDD-HHmm')}.xlsx`,
+        { reportContext },
       )
       return
     }
 
     exportRowsToExcel(
-      documentRows,
-      exportColumns,
-      `stock-history-${dayjs().format('YYYYMMDD-HHmm')}.xlsx`,
+      reportDetailRows,
+      [
+        { header: 'วันเวลา', value: (row) => formatDisplayDateTime(row.createdAt) },
+        { header: 'ผู้ทำรายการ', value: (row) => row.employeeName },
+        { header: 'สินค้า', value: (row) => row.productName },
+        { header: 'จำนวน', value: (row) => `${row.quantity} ${row.unit}` },
+        { header: 'รายละเอียด', value: (row) => row.reason || '-' },
+      ],
+      `${reportType}-report-${dayjs().format('YYYYMMDD-HHmm')}.xlsx`,
+      { reportContext },
     )
+  }
+
+  const handleDownloadSummaryPdf = async () => {
+    const reportElement = document.getElementById('summary-report-sheet')
+
+    if (!reportElement) return
+
+    const [{ jsPDF }, html2canvasModule] = await Promise.all([
+      import('jspdf'),
+      import('html2canvas'),
+    ])
+    const html2canvas = html2canvasModule.default
+    const canvas = await html2canvas(reportElement, {
+      backgroundColor: '#ffffff',
+      scale: 2,
+      useCORS: true,
+    })
+    const pdf = new jsPDF('p', 'mm', 'a4')
+    const pdfWidth = pdf.internal.pageSize.getWidth()
+    const pdfHeight = pdf.internal.pageSize.getHeight()
+    const imageHeight = (canvas.height * pdfWidth) / canvas.width
+    const imageData = canvas.toDataURL('image/png')
+    let heightLeft = imageHeight
+    let position = 0
+
+    pdf.addImage(imageData, 'PNG', 0, position, pdfWidth, imageHeight)
+    heightLeft -= pdfHeight
+    while (heightLeft > 0) {
+      position = heightLeft - imageHeight
+      pdf.addPage()
+      pdf.addImage(imageData, 'PNG', 0, position, pdfWidth, imageHeight)
+      heightLeft -= pdfHeight
+    }
+
+    pdf.save(`stock-report-${dayjs().format('YYYYMMDD-HHmm')}.pdf`)
   }
 
   const handlePrint = () => {
@@ -966,7 +1138,7 @@ function ReportsPage() {
             reportType={reportType}
             startDate={startDate}
             onEndDateChange={setEndDate}
-            onExport={handleExport}
+            onOpenSummary={() => setIsSummaryOpen(true)}
             onReportTypeChange={setReportType}
             onRunReport={handleRunReport}
             onStartDateChange={setStartDate}
@@ -974,16 +1146,21 @@ function ReportsPage() {
         </CardContent>
       </Card>
 
-      <Grid container spacing={2}>
-        {summaryItems.map((item, index) => (
-          <Grid key={item.label} size={{ xs: 12, sm: 6, md: 2.4 }}>
-            <ReportSummaryCard
-              {...item}
-              color={['#2563eb', '#16a34a', '#7c3aed', '#f59e0b', '#ef4444'][index]}
-            />
-          </Grid>
-        ))}
-      </Grid>
+      <Box>
+        <Typography sx={{ color: '#334155', fontSize: 15, fontWeight: 900, mb: 1 }}>
+          สรุปจำนวนงานในช่วงวันที่และประเภทที่เลือก
+        </Typography>
+        <Grid container spacing={2}>
+          {summaryItems.map((item, index) => (
+            <Grid key={item.label} size={{ xs: 12, sm: 6, md: 2.4 }}>
+              <ReportSummaryCard
+                {...item}
+                color={['#2563eb', '#7c3aed', '#16a34a', '#ef4444', '#f59e0b'][index]}
+              />
+            </Grid>
+          ))}
+        </Grid>
+      </Box>
 
       <Card
         elevation={0}
@@ -1020,6 +1197,102 @@ function ReportsPage() {
           )}
         </CardContent>
       </Card>
+
+      <Dialog fullWidth maxWidth="lg" open={isSummaryOpen} onClose={() => setIsSummaryOpen(false)}>
+        <DialogTitle sx={{ alignItems: 'center', display: 'flex', gap: 1.25 }}>
+          <FileBarChart size={22} />
+          รายงานสรุปการเคลื่อนไหวสต็อก
+        </DialogTitle>
+        <DialogContent sx={{ bgcolor: '#e2e8f0', p: { xs: 1.5, sm: 3 } }}>
+          <Box
+            id="summary-report-sheet"
+            sx={{
+              bgcolor: '#ffffff',
+              boxShadow: '0 3px 12px rgba(15, 23, 42, 0.18)',
+              minHeight: 620,
+              mx: 'auto',
+              maxWidth: 794,
+              p: { xs: 2, sm: 4 },
+              width: '100%',
+            }}
+          >
+            <Typography align="center" sx={{ fontSize: 24, fontWeight: 900 }}>
+              รายงานสรุปการเคลื่อนไหวสต็อก
+            </Typography>
+            <Typography align="center" sx={{ fontSize: 14, mb: 3 }}>ระบบเบิกสินค้าสำนักงาน</Typography>
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5, justifyContent: 'space-between', mb: 2.5 }}>
+              <Typography sx={{ fontSize: 14 }}>
+                ช่วงวันที่ {startDate ? dayjs(startDate).format('DD/MM/YYYY') : '-'} ถึง {endDate ? dayjs(endDate).format('DD/MM/YYYY') : '-'}
+              </Typography>
+              <Typography sx={{ fontSize: 14 }}>ประเภท: {getReportTypeLabel(reportType)}</Typography>
+            </Box>
+            {reportType === 'all' ? (
+              <Table size="small" sx={{ border: '1px solid #0f172a', tableLayout: 'fixed', '& .MuiTableCell-root': { borderBottom: '1px solid #0f172a', borderRight: '1px solid #0f172a', textAlign: 'center' }, '& .MuiTableCell-root:last-child': { borderRight: 0 } }}>
+                <TableHead>
+                  <TableRow sx={{ bgcolor: '#f1f5f9' }}>
+                    <TableCell align="center" sx={{ fontWeight: 900, width: 80 }}>ลำดับ</TableCell>
+                    <TableCell align="center" sx={{ fontWeight: 900 }}>รายการ</TableCell>
+                    <TableCell align="center" sx={{ fontWeight: 900, width: 180 }}>จำนวนเอกสาร</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {summaryItems.map((item, index) => (
+                    <TableRow key={item.label}>
+                      <TableCell align="center">{index + 1}</TableCell>
+                      <TableCell>{item.label}</TableCell>
+                      <TableCell align="center" sx={{ fontWeight: 800 }}>{item.value}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            ) : (
+              <Box>
+                <Typography sx={{ fontSize: 16, fontWeight: 900, mb: 1 }}>รายละเอียด{getReportTypeLabel(reportType)}</Typography>
+                <Table size="small" sx={{ border: '1px solid #0f172a', tableLayout: 'fixed', '& .MuiTableCell-root': { borderBottom: '1px solid #0f172a', borderRight: '1px solid #0f172a', fontSize: 12, textAlign: 'center' }, '& .MuiTableCell-root:last-child': { borderRight: 0 } }}>
+                  <TableHead>
+                    <TableRow sx={{ bgcolor: '#f1f5f9' }}>
+                      <TableCell align="center" sx={{ fontWeight: 900, width: 128, whiteSpace: 'nowrap' }}>วันเวลา</TableCell>
+                      <TableCell align="center" sx={{ fontWeight: 900, width: 150 }}>ผู้ทำรายการ</TableCell>
+                      <TableCell align="center" sx={{ fontWeight: 900, width: 250 }}>สินค้า</TableCell>
+                      <TableCell align="center" sx={{ fontWeight: 900, width: 90 }}>จำนวน</TableCell>
+                      <TableCell align="center" sx={{ fontWeight: 900 }}>รายละเอียด</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {reportDetailRows.map((row) => (
+                      <TableRow key={row.rowKey}>
+                        <TableCell align="center" sx={{ fontSize: 11, whiteSpace: 'nowrap' }}>{formatDisplayDateTime(row.createdAt)}</TableCell>
+                        <TableCell align="center">{row.employeeName}</TableCell>
+                        <TableCell align="center">{row.productName}</TableCell>
+                        <TableCell align="center" sx={{ color: '#0f172a', fontWeight: 900 }}>
+                          {row.quantity.toLocaleString('th-TH')} {row.unit}
+                        </TableCell>
+                        <TableCell align="center">{row.reason || '-'}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </Box>
+            )}
+            <Box sx={{ display: 'flex', gap: 8, justifyContent: 'flex-end', mt: 12 }}>
+              <Box sx={{ borderTop: '1px solid #0f172a', pt: 1, textAlign: 'center', width: 190 }}>ผู้จัดทำรายงาน</Box>
+              <Box sx={{ borderTop: '1px solid #0f172a', pt: 1, textAlign: 'center', width: 190 }}>ผู้ตรวจสอบ</Box>
+            </Box>
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button startIcon={<FileSpreadsheet size={17} />} variant="outlined" onClick={handleExportSummary}>
+            ดาวน์โหลด Excel
+          </Button>
+          <Button startIcon={<FileDown size={17} />} variant="outlined" onClick={handleDownloadSummaryPdf}>
+            ดาวน์โหลด PDF
+          </Button>
+          <Button startIcon={<Printer size={17} />} variant="outlined" onClick={() => printSummaryReport({ detailRows: reportDetailRows, endDate, reportType, startDate, summaryItems })}>
+            พิมพ์รายงาน
+          </Button>
+          <Button onClick={() => setIsSummaryOpen(false)}>ปิด</Button>
+        </DialogActions>
+      </Dialog>
 
       <Dialog
         fullWidth

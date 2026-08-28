@@ -36,6 +36,7 @@ function normalizeRequisition(row) {
       lineNo: item.lineNo ?? item.LineNo ?? index + 1,
       productName: item.productName ?? item.ProductName ?? '',
       quantity,
+      remark: item.remark ?? item.Remark ?? '',
       unit: item.unit ?? item.Unit ?? '',
     }
   })
@@ -89,6 +90,7 @@ function getHistorySlipRows(row) {
       const backlogQty = getSlipQtyValue(item, 'backlogQty', Math.max(0, requestedQty - fulfilledQty))
       return {
         backlogQty,
+        barcode: item.barcode ?? item.Barcode ?? item.code ?? item.Code ?? '',
         category: item.category ?? item.Category ?? '',
         fulfilledQty,
         isCarryOverBacklog: Boolean(item.isCarryOverBacklog ?? item.IsCarryOverBacklog),
@@ -108,12 +110,12 @@ function getSlipModeConfig() {
     isPaidSlip: false,
     noteHeader: 'หมายเหตุ',
     qtyHeader: 'จำนวน',
-    showBacklog: true,
+    showBacklog: false,
     stampFallback: '',
   }
 }
 
-function getSlipRowsForMode(rows) {
+function getSlipRowsForMode(rows, isBacklogDocument = false) {
   return rows
     .map((item) => ({
       ...item,
@@ -193,20 +195,10 @@ function getRequestStatusMeta(row) {
   }
 }
 
-function getRequestSlipStamp(row, hasBacklog) {
+function getRequestSlipStamp(row) {
   const statusText = String(row.status ?? row.Status ?? '').replace(/\s/g, '')
   const isUrgent = Boolean(row.isUrgent ?? row.IsUrgent)
-  const items = row.items ?? row.Items ?? []
-  const hasCarryOverBacklog =
-    Boolean(row.hasCarryOverBacklog ?? row.HasCarryOverBacklog) ||
-    items.some((item) => Boolean(item.isCarryOverBacklog ?? item.IsCarryOverBacklog))
-  const hasNewItems = items.some((item) => {
-    const isCarryOver = Boolean(item.isCarryOverBacklog ?? item.IsCarryOverBacklog)
-    const quantity = Number(item.quantity ?? item.Quantity ?? 0)
-
-    return !isCarryOver && quantity > 0
-  })
-  const isBacklog = hasBacklog || statusText.includes('ค้าง')
+  const isBacklog = Number(row.statusId ?? row.StatusId ?? 0) === 8 || statusText.includes('ค้าง')
   const isComplete = statusText.includes('ได้ของครบ') || statusText.includes('ครบ') || statusText.includes('งานจบ')
   const parts = []
 
@@ -214,11 +206,7 @@ function getRequestSlipStamp(row, hasBacklog) {
     parts.push('ด่วน')
   }
 
-  if (hasCarryOverBacklog && hasNewItems) {
-    parts.push('เบิกใหม่')
-  }
-
-  if (isBacklog || hasCarryOverBacklog) {
+  if (isBacklog) {
     parts.push('ค้าง')
   } else if (isComplete) {
     parts.push('ได้ของครบ')
@@ -352,16 +340,20 @@ export function printHistorySlip(row) {
     time: requestTime,
     year: requestYear,
   } = getThailandDateParts(row.createdAt)
-  const { hasBacklog, rows: slipRows } = getHistorySlipRows(row)
+  const { rows: slipRows } = getHistorySlipRows(row)
   const modeConfig = getSlipModeConfig()
-  const displayRows = getSlipRowsForMode(slipRows)
+  const isBacklogDocument = Number(row.statusId ?? row.StatusId ?? 0) === 8
+    || String(row.status ?? row.Status ?? '').includes('ค้าง')
+  const displayRows = getSlipRowsForMode(slipRows, isBacklogDocument)
+  const showBacklogColumns = isBacklogDocument
+  const fixedRowCount = 20
 
   if (displayRows.length === 0) {
     window.alert('ไม่มีรายการสำหรับพิมพ์ใบนี้')
     return
   }
 
-  const slipStamp = getRequestSlipStamp(row, hasBacklog) || modeConfig.stampFallback
+  const slipStamp = getRequestSlipStamp(row) || modeConfig.stampFallback
   const slipStampColor = getRequestSlipStampColor(slipStamp)
   const rowsHtml = displayRows
     .map(
@@ -371,13 +363,19 @@ export function printHistorySlip(row) {
           <td class="center">${escapeHtml(item.category)}</td>
           <td>${escapeHtml(item.productName)}</td>
           <td class="center">${item.displayQty.toLocaleString('th-TH')}</td>
-          ${modeConfig.showBacklog ? `<td class="center">${item.backlogQty > 0 ? item.backlogQty.toLocaleString('th-TH') : '-'}</td>` : ''}
+          ${showBacklogColumns ? `<td class="center">${item.backlogQty.toLocaleString('th-TH')}</td>` : ''}
           <td class="center">${escapeHtml(item.unit)}</td>
-          <td>${escapeHtml(item.displayRemark || '')}</td>
+          <td>${escapeHtml(item.remark || '')}</td>
         </tr>
       `,
     )
     .join('')
+    + Array.from({ length: Math.max(0, fixedRowCount - displayRows.length) }, (_, index) => `
+      <tr>
+        <td class="center">${displayRows.length + index + 1}</td>
+        <td></td><td></td><td></td>${showBacklogColumns ? '<td></td>' : ''}<td></td><td></td>
+      </tr>
+    `).join('')
   const printWindow = window.open('', '_blank', 'width=900,height=900')
 
   if (!printWindow) {
@@ -394,7 +392,7 @@ export function printHistorySlip(row) {
           @page { size: A4 portrait; margin: 5mm; }
           * { box-sizing: border-box; }
           body { background: #fff; color: #000; font-family: Tahoma, Arial, sans-serif; font-size: 13px; margin: 0; }
-          .sheet { border: 2px solid #111; padding: 5mm 1mm; position: relative; width: 100%; }
+          .sheet { border: 2px solid #111; display: flex; flex-direction: column; justify-content: center; min-height: 287mm; padding: 5mm 1mm; position: relative; width: 100%; }
           .urgent-stamp {
             border: 2px solid ${slipStampColor};
             color: ${slipStampColor};
@@ -495,10 +493,10 @@ export function printHistorySlip(row) {
                 <th style="width: 58px;">ลำดับ</th>
                 <th style="width: 70px;">หมวด</th>
                 <th style="width: 135px;">รายการ</th>
-                <th style="width: 68px;">${modeConfig.qtyHeader}</th>
-                ${modeConfig.showBacklog ? '<th style="width: 58px;">ค้าง</th>' : ''}
+                <th style="width: 68px;">${showBacklogColumns ? 'จำนวนที่ขอ' : modeConfig.qtyHeader}</th>
+                ${showBacklogColumns ? '<th style="width: 58px;">ค้าง</th>' : ''}
                 <th style="width: 72px;">หน่วยนับ</th>
-                <th style="width: ${modeConfig.showBacklog ? 220 : 278}px;">${modeConfig.noteHeader}</th>
+                <th style="width: ${showBacklogColumns ? 220 : 278}px;">หมายเหตุ</th>
               </tr>
             </thead>
             <tbody>${rowsHtml}</tbody>
@@ -558,15 +556,18 @@ function buildRequestPdfHtml(row) {
     time: requestTime,
     year: requestYear,
   } = getThailandDateParts(row.createdAt)
-  const { hasBacklog, rows: slipRows } = getHistorySlipRows(row)
+  const { rows: slipRows } = getHistorySlipRows(row)
   const modeConfig = getSlipModeConfig()
-  const displayRows = getSlipRowsForMode(slipRows)
+  const isBacklogDocument = Number(row.statusId ?? row.StatusId ?? 0)
+    === 8 || String(row.status ?? row.Status ?? '').includes('ค้าง')
+  const displayRows = getSlipRowsForMode(slipRows, isBacklogDocument)
+  const showBacklogColumns = isBacklogDocument
 
   if (displayRows.length === 0) {
     return ''
   }
 
-  const slipStamp = getRequestSlipStamp(row, hasBacklog) || modeConfig.stampFallback
+  const slipStamp = getRequestSlipStamp(row) || modeConfig.stampFallback
   const slipStampColor = getRequestSlipStampColor(slipStamp)
   const rowsHtml = displayRows
     .map(
@@ -576,9 +577,9 @@ function buildRequestPdfHtml(row) {
           <td class="center">${escapeHtml(item.category)}</td>
           <td>${escapeHtml(item.productName)}</td>
           <td class="center">${item.displayQty.toLocaleString('th-TH')}</td>
-          ${modeConfig.showBacklog ? `<td class="center">${item.backlogQty > 0 ? item.backlogQty.toLocaleString('th-TH') : '-'}</td>` : ''}
+          ${showBacklogColumns ? `<td class="center">${item.backlogQty.toLocaleString('th-TH')}</td>` : ''}
           <td class="center">${escapeHtml(item.unit)}</td>
-          <td>${escapeHtml(item.displayRemark || '')}</td>
+          <td>${escapeHtml(item.remark || '')}</td>
         </tr>
       `,
     )
@@ -696,10 +697,10 @@ function buildRequestPdfHtml(row) {
             <th style="width: 58px;">ลำดับ</th>
             <th style="width: 70px;">หมวด</th>
             <th style="width: 135px;">รายการ</th>
-            <th style="width: 68px;">${modeConfig.qtyHeader}</th>
-            ${modeConfig.showBacklog ? '<th style="width: 58px;">ค้าง</th>' : ''}
+            <th style="width: 68px;">${showBacklogColumns ? 'จำนวนที่ขอ' : modeConfig.qtyHeader}</th>
+            ${showBacklogColumns ? '<th style="width: 58px;">ค้าง</th>' : ''}
             <th style="width: 72px;">หน่วยนับ</th>
-            <th style="width: ${modeConfig.showBacklog ? 220 : 278}px;">${modeConfig.noteHeader}</th>
+            <th style="width: ${showBacklogColumns ? 220 : 278}px;">หมายเหตุ</th>
           </tr>
         </thead>
         <tbody>${rowsHtml}</tbody>
@@ -990,6 +991,7 @@ function RequestHistoryPage() {
             columns={columns}
             defaultSortField="createdAt"
             defaultSortDirection="desc"
+            prioritySortValue={(row) => Number(row.isUrgent && Number(row.statusId) !== 7)}
             fitToWidth
             maxHeight="calc(100vh - 390px)"
             noDataText="ยังไม่มีประวัติคำขอเบิก"
@@ -1068,7 +1070,7 @@ function RequestHistoryPage() {
           <Button
             startIcon={<Printer size={18} />}
             variant="outlined"
-            onClick={() => printHistorySlip(buildPrintableRowWithBacklog(selectedRow, rows))}
+            onClick={() => printHistorySlip(selectedRow)}
           >
             พิมพ์ใบคำขอ
           </Button>
