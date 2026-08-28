@@ -21,7 +21,23 @@ import RequestPage from '../request/pages/RequestPage'
 import RequestHistoryPage from '../request/pages/RequestHistoryPage'
 import RequestLayout from '../request/layouts/RequestLayout'
 
+function PortalHome() {
+  const isRequestPortal = window.location.port === '9500'
+
+  return isRequestPortal ? <RequestLoginPage /> : <LoginPage />
+}
+
+function HrLoginRoute() {
+  return window.location.port === '9500'
+    ? <RequestLoginPage />
+    : <LoginPage />
+}
+
 export const router = createBrowserRouter([
+  {
+    path: '/',
+    element: <PortalHome />,
+  },
   {
     path: '/request-login',
     element: <RequestLoginPage />,
@@ -31,7 +47,7 @@ export const router = createBrowserRouter([
     children: [
       {
         path: '/login',
-        element: <LoginPage />,
+        element: <HrLoginRoute />,
       },
     ],
   },

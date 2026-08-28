@@ -4,6 +4,10 @@ import { ClipboardCheck, PackageCheck, ShieldCheck } from 'lucide-react'
 import './LoginLayout.css'
 
 function LoginLayout() {
+  if (window.location.port === '9500') {
+    return <Outlet />
+  }
+
   return (
     <Box className="login-layout">
       <Paper className="login-layout__card" elevation={0}>

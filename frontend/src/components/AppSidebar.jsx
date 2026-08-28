@@ -52,13 +52,17 @@ function AppSidebar({ collapsed }) {
 
     loadPendingRequests()
 
-    const intervalId = window.setInterval(loadPendingRequests, 60000)
-    window.addEventListener('focus', loadPendingRequests)
+    const handleRequisitionCreated = () => {
+      if (isMounted) {
+        setPendingRequestCount((current) => current + 1)
+      }
+    }
+
+    window.addEventListener('stock-issue:requisition-created', handleRequisitionCreated)
 
     return () => {
       isMounted = false
-      window.clearInterval(intervalId)
-      window.removeEventListener('focus', loadPendingRequests)
+      window.removeEventListener('stock-issue:requisition-created', handleRequisitionCreated)
     }
   }, [])
 

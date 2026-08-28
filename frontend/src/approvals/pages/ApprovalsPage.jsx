@@ -43,6 +43,7 @@ function normalizeItem(item) {
     fulfilledQty,
     lineNo: item.lineNo ?? item.LineNo ?? '',
     productName: item.productName ?? item.ProductName ?? '',
+    remark: item.remark ?? item.Remark ?? '',
     quantity,
     unit: item.unit ?? item.Unit ?? '',
   }
@@ -136,7 +137,7 @@ function ApprovalsPage() {
   const [rows, setRows] = useState([])
   const [loadError, setLoadError] = useState('')
   const [selectedRow, setSelectedRow] = useState(null)
-  const [remark, setRemark] = useState('')
+  const [itemRemarks, setItemRemarks] = useState({})
   const [fulfillmentDraft, setFulfillmentDraft] = useState({})
   const employeeId = getEmployeeId(employee)
 
@@ -203,7 +204,9 @@ function ApprovalsPage() {
     })
 
     setFulfillmentDraft(draft)
-    setRemark('')
+    setItemRemarks(Object.fromEntries(row.items
+      .filter((item) => item.remark)
+      .map((item) => [item.detailId, item.remark])))
     setSelectedRow(row)
   }
 
@@ -241,6 +244,10 @@ function ApprovalsPage() {
     }))
   }
 
+  const handleItemRemarkChange = (detailId, value) => {
+    setItemRemarks((current) => ({ ...current, [detailId]: value }))
+  }
+
   const handleApprove = async () => {
     if (!selectedRow) {
       return
@@ -250,6 +257,7 @@ function ApprovalsPage() {
       .map((item) => ({
         detailId: item.detailId,
         quantity: Number(fulfillmentDraft[item.detailId] ?? 0),
+        remark: itemRemarks[item.detailId]?.trim() ?? '',
       }))
       .filter((item) => item.quantity > 0)
 
@@ -293,12 +301,11 @@ function ApprovalsPage() {
       await approveRequisition(selectedRow.headerId, {
         employeeId,
         items,
-        remark,
       })
 
       setSelectedRow(null)
-      setRemark('')
       setFulfillmentDraft({})
+      setItemRemarks({})
       await loadRows()
       Swal.fire('สำเร็จ', willBacklog ? 'บันทึกจ่ายบางส่วนและเก็บยอดค้างแล้ว' : 'บันทึกจ่ายครบแล้ว', 'success')
     } catch (error) {
@@ -330,12 +337,11 @@ function ApprovalsPage() {
     try {
       await keepRequisitionBacklog(selectedRow.headerId, {
         employeeId,
-        remark,
       })
 
       setSelectedRow(null)
-      setRemark('')
       setFulfillmentDraft({})
+      setItemRemarks({})
       await loadRows()
       Swal.fire('สำเร็จ', 'บันทึกเป็นรายการค้างแล้ว', 'success')
     } catch (error) {
@@ -368,12 +374,11 @@ function ApprovalsPage() {
     try {
       await denyRequisition(selectedRow.headerId, {
         employeeId,
-        remark,
       })
 
       setSelectedRow(null)
-      setRemark('')
       setFulfillmentDraft({})
+      setItemRemarks({})
       await loadRows()
       Swal.fire({
         customClass: {
@@ -484,9 +489,19 @@ function ApprovalsPage() {
     { key: 'productName', label: 'ชื่อสินค้า', width: 220 },
     { key: 'category', label: 'หมวดหมู่', width: 100 },
     { key: 'quantity', label: 'ขอเบิก', width: 85, align: 'center' },
-    { key: 'fulfilledQty', label: 'จ่ายแล้ว', width: 85, align: 'center' },
     { key: 'backlogQty', label: 'ยังค้าง', width: 85, align: 'center' },
-    { key: 'availableQty', label: 'คงเหลือ', width: 90, align: 'center' },
+    {
+      key: 'projectedStockQty',
+      label: 'คงเหลือหลังจ่าย',
+      width: 120,
+      align: 'center',
+      searchable: false,
+      value: (row) => row.availableQty - row.backlogQty,
+      render: (row) => {
+        const projectedQty = row.availableQty - row.backlogQty
+        return <Box sx={{ color: projectedQty < 0 ? '#dc2626' : '#15803d', fontWeight: 800 }}>{projectedQty.toLocaleString('th-TH')}</Box>
+      },
+    },
     {
       key: 'issueNow',
       label: 'จ่ายครั้งนี้',
@@ -510,6 +525,22 @@ function ApprovalsPage() {
       ),
     },
     { key: 'unit', label: 'หน่วย', width: 80 },
+    {
+      key: 'itemRemark',
+      label: 'หมายเหตุรายการ',
+      width: 210,
+      searchable: false,
+      sortable: false,
+      render: (row) => (
+        <TextField
+          fullWidth
+          placeholder="เช่น ของหมด รอสั่งซื้อ"
+          size="small"
+          value={itemRemarks[row.detailId] ?? ''}
+          onChange={(event) => handleItemRemarkChange(row.detailId, event.target.value)}
+        />
+      ),
+    },
   ]
 
   return (
@@ -580,6 +611,7 @@ function ApprovalsPage() {
             columns={columns}
             defaultSortField="createdAt"
             defaultSortDirection="desc"
+            prioritySortValue={(row) => Number(row.isUrgent)}
             fitToWidth
             maxHeight="calc(100vh - 380px)"
             noDataText="ไม่มีรายการรอจัดหรือรายการค้าง"
@@ -589,7 +621,13 @@ function ApprovalsPage() {
         </CardContent>
       </Card>
 
-      <Dialog fullWidth maxWidth="lg" open={Boolean(selectedRow)} onClose={() => setSelectedRow(null)}>
+      <Dialog
+        fullWidth
+        maxWidth={false}
+        open={Boolean(selectedRow)}
+        PaperProps={{ sx: { maxWidth: 'calc(100vw - 48px)', width: 'calc(100vw - 48px)' } }}
+        onClose={() => setSelectedRow(null)}
+      >
         <DialogTitle
           sx={{
             alignItems: 'center',
@@ -675,14 +713,6 @@ function ApprovalsPage() {
                 rows={selectedRow.items}
                 rowKey="detailId"
                 showGlobalSearch={false}
-              />
-              <TextField
-                fullWidth
-                label="หมายเหตุการจ่ายสินค้า / รายการค้าง"
-                multiline
-                minRows={3}
-                value={remark}
-                onChange={(event) => setRemark(event.target.value)}
               />
             </Stack>
           ) : null}

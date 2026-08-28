@@ -23,6 +23,9 @@ public sealed class StockDetail
     [MaxLength(200)]
     public string ProductName { get; set; } = string.Empty;
 
+    [MaxLength(500)]
+    public string Remark { get; set; } = string.Empty;
+
     public int Qty { get; set; }
 
     public int? FulfilledQty { get; set; }

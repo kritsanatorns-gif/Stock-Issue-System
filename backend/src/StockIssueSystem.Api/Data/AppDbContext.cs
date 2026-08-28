@@ -202,7 +202,6 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
             entity.Property(header => header.TransactionDate).HasDefaultValueSql("GETDATE()");
             entity.Property(header => header.Department).HasMaxLength(50).HasDefaultValue("");
             entity.Property(header => header.RequesterName).HasMaxLength(100).HasDefaultValue("");
-            entity.Property(header => header.HrRemark).HasMaxLength(500).HasDefaultValue("");
             entity.Property(header => header.IsUrgent).HasDefaultValue(false);
             entity.Property(header => header.UrgentRemark).HasMaxLength(500).HasDefaultValue("");
             entity.Property(header => header.Remark).HasMaxLength(255);
@@ -223,6 +222,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
             entity.Property(detail => detail.CostLot).HasMaxLength(50);
             entity.Property(detail => detail.ProductId).HasMaxLength(50).IsRequired();
             entity.Property(detail => detail.ProductName).HasMaxLength(200);
+            entity.Property(detail => detail.Remark).HasMaxLength(500).HasDefaultValue(string.Empty);
             entity.Property(detail => detail.FulfilledQty);
             entity.Property(detail => detail.SourceRequisitionDetailId);
             entity.Property(detail => detail.ReceiveQty).HasColumnType("decimal(18, 2)");

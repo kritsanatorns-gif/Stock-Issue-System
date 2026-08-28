@@ -53,6 +53,7 @@ import {
 } from '../../api/api'
 import { apiOrigin } from '../../api/apiConfig'
 import AppTable from '../../components/common/AppTable'
+import DateInputField from '../../components/common/DateInputField'
 import { saveIssueReport } from '../../reports/services/issueReportStorage'
 import { useAuthStore } from '../../store/authStore'
 import { useInventoryDraftStore } from '../../store/inventoryDraftStore'
@@ -81,6 +82,18 @@ const defaultProductForm = {
 }
 
 const departmentSearchOptionValue = '__department_search__'
+
+const getThailandTodayInputValue = () => {
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    day: '2-digit',
+    month: '2-digit',
+    timeZone: 'Asia/Bangkok',
+    year: 'numeric',
+  }).formatToParts(new Date())
+  const value = (type) => parts.find((part) => part.type === type)?.value ?? ''
+
+  return `${value('year')}-${value('month')}-${value('day')}`
+}
 
 function normalizeDepartmentRow(row) {
   return {
@@ -272,6 +285,8 @@ function InventoryWorkspace({ mode }) {
   const [suppliers, setSuppliers] = useState([])
   const [allSuppliers, setAllSuppliers] = useState([])
   const [poInvoiceNo, setPoInvoiceNo] = useState('')
+  const [receiveDate, setReceiveDate] = useState(getThailandTodayInputValue)
+  const [receiveSupplierId, setReceiveSupplierId] = useState('')
   const [isSupplierDialogOpen, setIsSupplierDialogOpen] = useState(false)
   const [isSupplierManagementOpen, setIsSupplierManagementOpen] = useState(false)
   const [supplierName, setSupplierName] = useState('')
@@ -564,7 +579,7 @@ function InventoryWorkspace({ mode }) {
       return
     }
 
-    if (!receiveDraftItem.supplierId) {
+    if (!receiveSupplierId) {
       toast.error('กรุณาเลือกผู้ขายก่อนเพิ่มรายการรับเข้า')
       return
     }
@@ -572,6 +587,7 @@ function InventoryWorkspace({ mode }) {
     setSelectedItems((current) => [
       {
         ...receiveDraftItem,
+        supplierId: Number(receiveSupplierId),
       },
       ...current.filter((item) => item.id !== receiveDraftItem.id),
     ])
@@ -777,7 +793,8 @@ function InventoryWorkspace({ mode }) {
   const canSubmit =
     selectedItems.length > 0
     && (mode !== 'issue' || issueDepartment.trim())
-    && (mode !== 'receive' || selectedItems.every((item) => Boolean(item.supplierId)))
+    && (mode !== 'receive' || Boolean(receiveSupplierId))
+    && (mode !== 'receive' || Boolean(receiveDate))
     && (mode === 'issue'
       || selectedItems.every(
         (item) =>
@@ -1077,7 +1094,7 @@ function InventoryWorkspace({ mode }) {
     poInvoiceNo: mode === 'receive' ? poInvoiceNo.trim() : '',
     employeeId,
     employeeName,
-    supplierId: null,
+    supplierId: mode === 'receive' && receiveSupplierId ? Number(receiveSupplierId) : null,
     items: selectedItems.map((item, index) => ({
       barcode: item.barcode ?? '',
       category: String(item.category ?? '').trim() || 'General',
@@ -1097,7 +1114,7 @@ function InventoryWorkspace({ mode }) {
       quantity: mode === 'receive' ? getReceiveStockQty(item) : toPositiveNumber(item.requestQty),
       receiveQuantity: mode === 'receive' ? toPositiveNumber(item.requestQty) : null,
       receiveUnit: mode === 'receive' ? (item.unit ?? '') : '',
-      supplierId: mode === 'receive' && item.supplierId ? Number(item.supplierId) : null,
+      supplierId: mode === 'receive' && receiveSupplierId ? Number(receiveSupplierId) : null,
       stockQty: toPositiveNumber(item.stockQty),
       unit: mode === 'receive' ? (item.issueUnit ?? '') : (item.unit ?? ''),
     })),
@@ -1119,8 +1136,11 @@ function InventoryWorkspace({ mode }) {
       (total, item) => total + (mode === 'receive' ? getReceiveStockQty(item) : toPositiveNumber(item.requestQty)),
       0,
     )
+    const transactionDate = mode === 'receive'
+      ? new Date(`${receiveDate}T12:00:00`)
+      : now
     const transactionPayload = {
-      ...createTransactionPayload(documentNo, now),
+      ...createTransactionPayload(documentNo, transactionDate),
       status: 'สำเร็จ',
       totalItems: selectedItems.length,
       totalQty,
@@ -1131,6 +1151,8 @@ function InventoryWorkspace({ mode }) {
         await createStockReceive(transactionPayload)
         setSelectedItems([])
         setPoInvoiceNo('')
+        setReceiveDate(getThailandTodayInputValue())
+        setReceiveSupplierId('')
         await loadInventoryItems()
         toast.dismiss()
         await Swal.fire({
@@ -1585,15 +1607,49 @@ function InventoryWorkspace({ mode }) {
                   </Stack>
 
                   {mode === 'receive' ? (
-                    <TextField
-                      fullWidth
-                      label={config.documentLabel}
-                      size="small"
-                      value={poInvoiceNo}
-                      onChange={(event) => setPoInvoiceNo(event.target.value)}
-                      inputProps={{ maxLength: 100 }}
-                      helperText="เลขที่เอกสารรับเข้า ใช้กับรายการรับเข้าชุดนี้"
-                    />
+                    <Grid container spacing={1.25}>
+                      <Grid size={{ xs: 12, sm: 4 }}>
+                        <TextField
+                          fullWidth
+                          label={config.documentLabel}
+                          size="small"
+                          value={poInvoiceNo}
+                          onChange={(event) => setPoInvoiceNo(event.target.value)}
+                          inputProps={{ maxLength: 100 }}
+                          helperText="เลขที่เอกสารรับเข้า ใช้กับรายการรับเข้าชุดนี้"
+                        />
+                      </Grid>
+                      <Grid size={{ xs: 12, sm: 4 }}>
+                        <TextField
+                          fullWidth
+                          required
+                          select
+                          label="ผู้ขายของรายการนำเข้า"
+                          size="small"
+                          value={receiveSupplierId}
+                          onChange={(event) => setReceiveSupplierId(event.target.value)}
+                          helperText="เลือกครั้งเดียว ใช้กับสินค้าทุกรายการในชุดนี้"
+                        >
+                          <MenuItem value="">เลือกผู้ขาย</MenuItem>
+                          {suppliers.map((supplier) => (
+                            <MenuItem key={supplier.supplierId} value={String(supplier.supplierId)}>
+                              {supplier.supplierName}
+                            </MenuItem>
+                          ))}
+                        </TextField>
+                      </Grid>
+                      <Grid size={{ xs: 12, sm: 4 }}>
+                        <DateInputField
+                          fullWidth
+                          required
+                          label="วันที่รับเข้า"
+                          size="small"
+                          value={receiveDate}
+                          onChange={setReceiveDate}
+                          helperText="ใช้แสดงในรายงานและประวัติรับเข้า"
+                        />
+                      </Grid>
+                    </Grid>
                   ) : null}
 
 
@@ -1668,12 +1724,6 @@ function InventoryWorkspace({ mode }) {
                                         : Number(item.conversionQty ?? 1)
                                       ).toLocaleString('th-TH')
                                     } {item.issueUnit}
-                                  </Typography>
-                                </Grid>
-                                <Grid size={{ xs: 12, sm: 6 }}>
-                                  <Typography sx={{ color: '#64748b', fontSize: 11 }}>ผู้ขาย</Typography>
-                                  <Typography sx={{ color: '#0f172a', fontSize: 13, fontWeight: 800 }}>
-                                    {suppliers.find((supplier) => String(supplier.supplierId) === String(item.supplierId))?.supplierName || '-'}
                                   </Typography>
                                 </Grid>
                               </Grid>
@@ -1975,23 +2025,6 @@ function InventoryWorkspace({ mode }) {
               <Grid size={{ xs: 12, sm: 4 }}>
                 <TextField
                   fullWidth
-                  helperText="ผู้ขายของรายการรับเข้านี้"
-                  label="ผู้ขายที่ซื้อจาก *"
-                  select
-                  value={receiveDraftItem.supplierId ?? ''}
-                  onChange={(event) => handleReceiveDraftChange('supplierId', event.target.value)}
-                >
-                  <MenuItem value="">เลือกผู้ขาย</MenuItem>
-                  {suppliers.map((supplier) => (
-                    <MenuItem key={supplier.supplierId} value={String(supplier.supplierId)}>
-                      {supplier.supplierName}
-                    </MenuItem>
-                  ))}
-                </TextField>
-              </Grid>
-              <Grid size={{ xs: 12, sm: 4 }}>
-                <TextField
-                  fullWidth
                   label="ราคาซื้อครั้งนี้"
                   type="number"
                   value={receiveDraftItem.unitCost ?? ''}
@@ -2009,7 +2042,6 @@ function InventoryWorkspace({ mode }) {
         <Button
           disabled={
             !receiveDraftItem
-            || !receiveDraftItem.supplierId
             || toPositiveNumber(receiveDraftItem.requestQty) <= 0
             || toPositiveNumber(receiveDraftItem.conversionQty) <= 0
             || receiveDraftItem.unitCost === ''
@@ -2308,9 +2340,9 @@ function InventoryWorkspace({ mode }) {
             <Grid size={{ xs: 12, sm: 6 }}>
               <TextField
                 fullWidth
-                {...getProductFieldErrorProps('minQty', `ถ้าเหลือไม่เกินจำนวนนี้ ระบบจะแจ้งใกล้หมด (${productForm.issueUnit || 'หน่วยเบิก'})`)}
+                {...getProductFieldErrorProps('minQty', `จำนวนคงเหลือขั้นต่ำที่ใช้แจ้งเตือน (${productForm.issueUnit || 'หน่วยเบิก'})`)}
                 required
-                label="เตือนเมื่อเหลือไม่เกิน"
+                label="Min Stock"
                 type="number"
                 value={productForm.minQty}
                 onChange={(event) => handleProductFormChange('minQty', event.target.value)}

@@ -277,7 +277,7 @@ function StockAdjustPage() {
         </Button>
       ),
     },
-    { key: 'productId', label: 'รหัสสินค้า', width: 130 },
+    { key: 'productId', label: 'รหัสสินค้า', width: 180 },
     { key: 'barcode', label: 'Barcode', width: 145 },
     { key: 'productName', label: 'ชื่อสินค้า', width: 215, wrap: true },
     { key: 'categoryName', label: 'หมวดหมู่', width: 110 },
@@ -338,7 +338,7 @@ function StockAdjustPage() {
         />
       ),
     },
-    { key: 'productId', label: 'รหัสสินค้า', width: 120 },
+    { key: 'productId', label: 'รหัสสินค้า', width: 180 },
     { key: 'productName', label: 'ชื่อสินค้า', width: 190, wrap: true },
     {
       key: 'currentQty',

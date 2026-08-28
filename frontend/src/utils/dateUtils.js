@@ -16,14 +16,14 @@ export function toThailandDate(value) {
     return null
   }
 
-  // Transaction timestamps are persisted by SQL Server without a timezone.
-  // The client submits them as UTC, so values returned without an offset must
-  // be restored from UTC before displaying them in Bangkok time.
+  // SQL Server stores transaction timestamps without an offset. Those values
+  // are already the time entered by the user, so do not add Bangkok's offset
+  // again when rendering them.
   const date = value instanceof Date
     ? dayjs(value).tz(THAILAND_TIMEZONE)
     : hasExplicitTimeZone(value)
       ? dayjs.utc(value).tz(THAILAND_TIMEZONE)
-      : dayjs.utc(value).tz(THAILAND_TIMEZONE)
+      : dayjs(value)
 
   return date.isValid() ? date : null
 }

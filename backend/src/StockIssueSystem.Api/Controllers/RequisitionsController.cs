@@ -1,8 +1,10 @@
 using System.Data;
 using System.Globalization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using StockIssueSystem.Api.Data;
+using StockIssueSystem.Api.Hubs;
 using StockIssueSystem.Api.Models;
 using StockIssueSystem.Api.Models.DTOs;
 using StockIssueSystem.Api.Services;
@@ -11,7 +13,10 @@ namespace StockIssueSystem.Api.Controllers;
 
 [ApiController]
 [Route("api/requisitions")]
-public sealed class RequisitionsController(AppDbContext dbContext, FifoCostService fifoCostService) : ControllerBase
+public sealed class RequisitionsController(
+    AppDbContext dbContext,
+    FifoCostService fifoCostService,
+    IHubContext<NotificationHub> notificationHub) : ControllerBase
 {
     private const string RequisitionDocType = "REQUISITION";
     private const string IssueDocType = "ISSUE";
@@ -109,7 +114,6 @@ public sealed class RequisitionsController(AppDbContext dbContext, FifoCostServi
             Department = request.Department.Trim(),
             DocType = RequisitionDocType,
             EmployeeId = requester,
-            HrRemark = string.Empty,
             IsUrgent = request.IsUrgent,
             Remark = BuildRemark(request.Department, request.Remark, request.RequesterName),
             RequesterName = request.RequesterName.Trim(),
@@ -138,6 +142,15 @@ public sealed class RequisitionsController(AppDbContext dbContext, FifoCostServi
         dbContext.StockHeaders.Add(header);
         await dbContext.SaveChangesAsync();
         var requestSequence = await GetDailyRequestSequence(header);
+
+        await notificationHub.Clients.Group(NotificationHub.HrGroup).SendAsync("RequisitionCreated", new
+        {
+            header.HeaderId,
+            RequestNo = FormatRequestNo(header, requestSequence),
+            EmployeeId = request.EmployeeId,
+            EmployeeName = header.RequesterName,
+            Department = header.Department,
+        });
 
         return CreatedAtAction(nameof(GetRequisition), new { headerId = header.HeaderId }, new
         {
@@ -177,6 +190,9 @@ public sealed class RequisitionsController(AppDbContext dbContext, FifoCostServi
         }
 
         var issueQuantities = BuildIssueQuantities(request.Items);
+        var itemRemarks = request.Items
+            .GroupBy(item => item.DetailId)
+            .ToDictionary(group => group.Key, group => group.Last().Remark?.Trim() ?? string.Empty);
 
         if (issueQuantities.Count == 0 || issueQuantities.Values.Sum() <= 0)
         {
@@ -227,10 +243,12 @@ public sealed class RequisitionsController(AppDbContext dbContext, FifoCostServi
                 ProductId = detail.ProductId,
                 ProductName = detail.ProductName,
                 Qty = issuedQty,
+                Remark = itemRemarks.GetValueOrDefault(detail.DetailId, string.Empty),
                 SourceRequisitionDetailId = detail.DetailId,
                 Unit = detail.Unit,
             });
 
+            detail.Remark = itemRemarks.GetValueOrDefault(detail.DetailId, detail.Remark);
             RequisitionProgress.RecordIssue(detail, issuedQty);
         }
 
@@ -246,12 +264,6 @@ public sealed class RequisitionsController(AppDbContext dbContext, FifoCostServi
         await UpdateStockBalances(issueHeader.Details);
 
         RequisitionProgress.SyncStatus(requisition);
-        var isCompleted = requisition.Status == RequisitionStatuses.Approved;
-        requisition.HrRemark = AppendHrRemark(
-            requisition.HrRemark,
-            isCompleted ? $"Completed by {request.EmployeeId}" : $"Partial issue by {request.EmployeeId}",
-            request.Remark);
-
         await dbContext.SaveChangesAsync();
         var fifoError = await fifoCostService.AllocateAsync(
             issueHeader.Details.Select(detail => new FifoIssueLine(detail, detail.Qty)));
@@ -263,6 +275,7 @@ public sealed class RequisitionsController(AppDbContext dbContext, FifoCostServi
 
         await dbContext.SaveChangesAsync();
         await transaction.CommitAsync();
+        await PublishRequesterStatusChanged(requisition);
 
         return Ok(new
         {
@@ -300,8 +313,8 @@ public sealed class RequisitionsController(AppDbContext dbContext, FifoCostServi
         }
 
         requisition.Status = RequisitionStatuses.Backlog;
-        requisition.HrRemark = AppendHrRemark(requisition.HrRemark, $"Backlog by {request.EmployeeId}", request.Remark);
         await dbContext.SaveChangesAsync();
+        await PublishRequesterStatusChanged(requisition);
 
         return Ok(new
         {
@@ -332,8 +345,8 @@ public sealed class RequisitionsController(AppDbContext dbContext, FifoCostServi
         }
 
         requisition.Status = RequisitionStatuses.Rejected;
-        requisition.HrRemark = AppendHrRemark(requisition.HrRemark, $"Denied by {request.EmployeeId}", request.Remark);
         await dbContext.SaveChangesAsync();
+        await PublishRequesterStatusChanged(requisition);
 
         return Ok(new
         {
@@ -506,7 +519,6 @@ public sealed class RequisitionsController(AppDbContext dbContext, FifoCostServi
         employees.TryGetValue(employeeId, out var employee);
         var department = GetRequisitionDepartment(header);
         var requesterName = GetRequisitionRequester(header);
-        var hrRemark = GetHrRemark(header);
         var userRemark = ExtractUserRemark(header.Remark);
 
         return new
@@ -517,9 +529,7 @@ public sealed class RequisitionsController(AppDbContext dbContext, FifoCostServi
             Department = department,
             EmployeeId = employeeId,
             EmployeeName = employee?.EmployeeName ?? requesterName ?? header.EmployeeId,
-            HrRemark = hrRemark,
             IsUrgent = header.IsUrgent,
-            Remark = hrRemark,
             Status = RequisitionStatuses.GetName(header.Status),
             StatusId = header.Status,
             TotalItems = header.Details.Count,
@@ -536,6 +546,7 @@ public sealed class RequisitionsController(AppDbContext dbContext, FifoCostServi
                 Code = detail.ProductId,
                 detail.Barcode,
                 detail.ProductName,
+                detail.Remark,
                 detail.Category,
                 Quantity = detail.Qty,
                 FulfilledQty = RequisitionProgress.GetFulfilledQty(detail),
@@ -544,6 +555,24 @@ public sealed class RequisitionsController(AppDbContext dbContext, FifoCostServi
                 Unit = detail.Unit,
             }),
         };
+    }
+
+    private async Task PublishRequesterStatusChanged(StockHeader requisition)
+    {
+        if (!int.TryParse(requisition.EmployeeId, out var employeeId) || employeeId <= 0)
+        {
+            return;
+        }
+
+        var requestSequence = await GetDailyRequestSequence(requisition);
+        await notificationHub.Clients
+            .Group(NotificationHub.RequesterGroup(employeeId))
+            .SendAsync("RequisitionStatusChanged", new
+            {
+                requisition.HeaderId,
+                RequestNo = FormatRequestNo(requisition, requestSequence),
+                StatusId = requisition.Status,
+            });
     }
 
     private async Task<Dictionary<int, int>> GetDailyRequestSequences(IReadOnlyCollection<StockHeader> headers)
@@ -707,33 +736,4 @@ public sealed class RequisitionsController(AppDbContext dbContext, FifoCostServi
             : header.RequesterName.Trim();
     }
 
-    private static string GetHrRemark(StockHeader header)
-    {
-        return string.IsNullOrWhiteSpace(header.HrRemark)
-            ? ExtractDisplayRemark(header.Remark)
-            : ExtractDisplayRemark(header.HrRemark);
-    }
-
-    private static string AppendHrRemark(string currentRemark, string action, string remark)
-    {
-        if (string.IsNullOrWhiteSpace(remark))
-        {
-            return currentRemark;
-        }
-
-        var label = action switch
-        {
-            var value when value.StartsWith("Completed by", StringComparison.OrdinalIgnoreCase) => "ได้ของครบ",
-            var value when value.StartsWith("Partial issue by", StringComparison.OrdinalIgnoreCase) => "จ่ายบางส่วน",
-            var value when value.StartsWith("Backlog by", StringComparison.OrdinalIgnoreCase) => "ค้าง",
-            var value when value.StartsWith("Denied by", StringComparison.OrdinalIgnoreCase) => "ไม่ให้เบิก",
-            _ => action,
-        };
-        var entry = remark.Trim();
-        var nextRemark = string.IsNullOrWhiteSpace(currentRemark)
-            ? entry
-            : $"{currentRemark} | {entry}";
-
-        return nextRemark.Length <= 500 ? nextRemark : nextRemark[..500];
-    }
 }
