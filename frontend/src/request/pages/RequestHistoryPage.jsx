@@ -13,12 +13,12 @@
   Stack,
   Typography,
 } from '@mui/material'
-import { ClipboardList, FileDown, Printer, RefreshCw } from 'lucide-react'
+import { ClipboardList, FileDown, Printer, RefreshCw, Zap } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import { getRequisitions } from '../../api/api'
 import AppTable from '../../components/common/AppTable'
 import { useRequestAuthStore } from '../../store/requestAuthStore'
-import { formatDisplayDateTime, getThailandDateParts } from '../../utils/dateUtils'
+import { formatDisplayDateTime, getElapsedDuration, getThailandDateParts } from '../../utils/dateUtils'
 
 function normalizeRequisition(row) {
   const items = (row.items ?? row.Items ?? []).map((item, index) => {
@@ -376,20 +376,21 @@ export function printHistorySlip(row) {
             top: 5mm;
           }
           .document-no { position: absolute; right: 5mm; text-align: right; top: 5mm; }
-          .title { font-size: 28px; font-weight: 900; line-height: 1.1; margin-top: 30px; text-align: center; }
+          .title { font-size: 28px; font-weight: 900; line-height: 1.1; margin-top: 20px; text-align: center; }
           .subtitle { margin-bottom: 4px; text-align: center; }
           .line { border-bottom: 1px solid #111; display: inline-block; min-height: 17px; padding: 0 5px 1px; vertical-align: bottom; }
           .line-xs { min-width: 36px; }
           .line-sm { min-width: 62px; }
           .line-md { min-width: 88px; }
+          .line-lg { min-width: 260px; }
           .line-xl { min-width: 270px; }
-          .top-section { display: grid; gap: 10px; grid-template-columns: minmax(0, 1fr) 280px; margin-top: 4px; }
+          .top-section { display: grid; gap: 10px; grid-template-columns: minmax(0, 1fr) 310px; margin-top: 4px; }
           .field-row { margin-bottom: 4px; white-space: nowrap; }
           .approval-box { border: 1px solid #111; display: grid; grid-template-columns: 1fr 1fr; }
-          .approval-cell { min-height: 66px; padding: 3px 6px; text-align: center; }
+          .approval-cell { min-height: 96px; padding: 3px 6px; text-align: center; }
           .approval-cell + .approval-cell { border-left: 1px solid #111; }
-          .approval-title { border-bottom: 1px solid #111; font-size: 11px; font-weight: 700; margin: -3px -6px 27px; padding: 3px 2px; white-space: nowrap; }
-          .approval-sign-line { border-bottom: 1px solid #111; margin: 0 auto 6px; width: 82%; }
+          .approval-title { border-bottom: 1px solid #111; font-size: 11px; font-weight: 700; margin: -3px -6px 38px; padding: 3px 2px; white-space: nowrap; }
+          .approval-sign-line { border-bottom: 1px solid #111; margin: 0 auto 9px; width: 82%; }
           .approval-date-line { font-size: 11px; line-height: 1; white-space: nowrap; }
           table { border-collapse: collapse; margin-top: 8px; page-break-inside: auto; width: 100%; }
           thead { display: table-header-group; }
@@ -397,12 +398,17 @@ export function printHistorySlip(row) {
           th, td { border: 1px solid #111; font-size: 12px; height: 28px; padding: 1px 3px; text-align: center; vertical-align: middle; word-break: break-word; }
           th { font-weight: 800; text-align: center; }
           .center { text-align: center; }
-          .receive-section { display: grid; gap: 10px; grid-template-columns: minmax(0, 1fr) 310px; margin-top: auto; padding-top: 8px; }
+          .receive-section { display: grid; gap: 10px; grid-template-columns: minmax(0, 1fr) 310px; margin-top: 8px; padding-top: 8px; }
           .receiver-fields { padding-top: 8px; }
-          .bottom-sign-box { border: 1px solid #111; display: grid; grid-template-columns: 1fr 1fr; min-height: 78px; }
+          .receiver-fields .field-row { margin-bottom: 10px; }
+          .receiver-fields .field-row:last-child { margin-bottom: 0; }
+          .remark-extra-line { margin-left: 0; margin-top: 6px; }
+          .remark-extra-line .remark-line { max-width: 365px; width: 365px; }
+          .bottom-sign-box { border: 1px solid #111; display: grid; grid-template-columns: 1fr 1fr; min-height: 90px; }
+          .bottom-sign-box .approval-sign-line { margin-bottom: 9px; }
           .bottom-sign-cell { padding: 0 8px 6px; text-align: center; }
           .bottom-sign-cell + .bottom-sign-cell { border-left: 1px solid #111; }
-          .bottom-sign-title { align-items: center; border-bottom: 1px solid #111; box-sizing: border-box; display: flex; font-size: 11px; font-weight: 700; height: 22px; justify-content: center; margin: 0 -8px 31px; padding: 4px 2px; white-space: nowrap; }
+          .bottom-sign-title { align-items: center; border-bottom: 1px solid #111; box-sizing: border-box; display: flex; font-size: 11px; font-weight: 700; height: 22px; justify-content: center; margin: 0 -8px 38px; padding: 4px 2px; white-space: nowrap; }
           .remark-line { display: inline-block; margin-left: 6px; max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; width: 300px; }
           .print-value { font-weight: 700; }
           @media print {
@@ -484,8 +490,9 @@ export function printHistorySlip(row) {
                 <span class="line line-sm"></span>
                 น.
               </div>
-              <div class="field-row">ชื่อ-สกุล ผู้รับของ <span class="line line-xl"></span></div>
+              <div class="field-row">ชื่อ-สกุล ผู้รับของ <span class="line line-lg"></span></div>
               <div class="field-row">หมายเหตุ <span class="line remark-line">${escapeHtml(requestRemark)}</span></div>
+              <div class="remark-extra-line"><span class="line remark-line"></span></div>
             </div>
 
             <div class="bottom-sign-box">
@@ -592,7 +599,7 @@ function buildRequestPdfHtml(row) {
         top: 19px;
       }
       .request-pdf-docno { position: absolute; right: 19px; text-align: right; top: 19px; }
-      .request-pdf-title { font-size: 28px; font-weight: 900; line-height: 1.1; margin-top: 30px; text-align: center; }
+      .request-pdf-title { font-size: 28px; font-weight: 900; line-height: 1.1; margin-top: 20px; text-align: center; }
       .request-pdf-subtitle { margin-bottom: 4px; text-align: center; }
       .request-pdf-line {
         border-bottom: 1px solid #111;
@@ -601,29 +608,42 @@ function buildRequestPdfHtml(row) {
         padding: 0 5px 1px;
         vertical-align: bottom;
       }
+        .request-pdf-line01 {
+        border-bottom: 1px solid #111;
+        display: inline-block;
+        min-height: 10px;
+        padding: 0 5px 1px;
+        vertical-align: bottom;
+      }
       .request-pdf-xs { min-width: 36px; }
       .request-pdf-sm { min-width: 62px; }
       .request-pdf-md { min-width: 88px; }
+      .request-pdf-lg { min-width: 260px; }
       .request-pdf-xl { min-width: 270px; }
-      .request-pdf-top { display: grid; gap: 10px; grid-template-columns: minmax(0, 1fr) 280px; margin-top: 4px; }
+      .request-pdf-top { display: grid; gap: 10px; grid-template-columns: minmax(0, 1fr) 310px; margin-top: 4px; }
       .request-pdf-row { margin-bottom: 4px; white-space: nowrap; }
       .request-pdf-approval { border: 1px solid #111; display: grid; grid-template-columns: 1fr 1fr; }
-      .request-pdf-approval-cell { min-height: 66px; padding: 3px 6px; text-align: center; }
+      .request-pdf-approval-cell { min-height: 96px; padding: 3px 6px; text-align: center; }
       .request-pdf-approval-cell + .request-pdf-approval-cell { border-left: 1px solid #111; }
-      .request-pdf-approval-title { border-bottom: 1px solid #111; font-size: 11px; font-weight: 700; margin: -3px -6px 27px; padding: 3px 2px; white-space: nowrap; }
-      .request-pdf-sign-line { border-bottom: 1px solid #111; margin: 0 auto 6px; width: 82%; }
+      .request-pdf-approval-title { border-bottom: 1px solid #111; font-size: 11px; font-weight: 700; margin: -3px -6px 38px; padding: 3px 2px; white-space: nowrap; }
+      .request-pdf-sign-line { border-bottom: 1px solid #111; margin: 0 auto 9px; width: 82%; }
       .request-pdf-date-line { font-size: 11px; line-height: 1; white-space: nowrap; }
       .request-pdf-table { border-collapse: collapse; margin-top: 8px; width: 100%; }
       .request-pdf-table th,
       .request-pdf-table td { border: 1px solid #111; font-size: 12px; height: 28px; padding: 1px 3px; text-align: center; vertical-align: middle; word-break: break-word; }
       .request-pdf-table th { font-weight: 800; text-align: center; }
       .center { text-align: center; }
-      .request-pdf-receive { display: grid; gap: 10px; grid-template-columns: minmax(0, 1fr) 310px; margin-top: auto; padding-top: 8px; }
+      .request-pdf-receive { display: grid; gap: 10px; grid-template-columns: minmax(0, 1fr) 310px; margin-top: 8px; padding-top: 8px; }
       .request-pdf-receiver-fields { padding-top: 8px; }
-      .request-pdf-bottom-box { border: 1px solid #111; display: grid; grid-template-columns: 1fr 1fr; min-height: 78px; }
+      .request-pdf-receiver-fields .request-pdf-row { margin-bottom: 10px; }
+      .request-pdf-receiver-fields .request-pdf-row:last-child { margin-bottom: 0; }
+      .request-pdf-remark-extra { margin-left: 0; margin-top: 6px; }
+      .request-pdf-remark-extra .request-pdf-remark { max-width: 365px; width: 365px; }
+      .request-pdf-bottom-box { border: 1px solid #111; display: grid; grid-template-columns: 1fr 1fr; min-height: 90px; }
+      .request-pdf-bottom-box .request-pdf-sign-line { margin-bottom: 9px; }
       .request-pdf-bottom-cell { padding: 0 8px 6px; text-align: center; }
       .request-pdf-bottom-cell + .request-pdf-bottom-cell { border-left: 1px solid #111; }
-      .request-pdf-bottom-title { border-bottom: 1px solid #111; font-size: 11px; font-weight: 700; margin: 0 -8px 31px; padding: 4px 2px; white-space: nowrap; }
+      .request-pdf-bottom-title { align-items: center; border-bottom: 1px solid #111; box-sizing: border-box; display: flex; font-size: 11px; font-weight: 700; height: 22px; justify-content: center; margin: 0 -8px 38px; padding: 4px 2px; white-space: nowrap; }
       .request-pdf-remark { display: inline-block; margin-left: 6px; max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; width: 300px; }
       .request-pdf-value { font-weight: 700; }
     </style>
@@ -699,8 +719,9 @@ function buildRequestPdfHtml(row) {
             <span class="request-pdf-line request-pdf-sm"></span>
             น.
           </div>
-          <div class="request-pdf-row">ชื่อ-สกุล ผู้รับของ <span class="request-pdf-line request-pdf-xl"></span></div>
+          <div class="request-pdf-row">ชื่อ-สกุล ผู้รับของ <span class="request-pdf-line request-pdf-lg"></span></div>
           <div class="request-pdf-row">หมายเหตุ <span class="request-pdf-line request-pdf-remark">${escapeHtml(requestRemark)}</span></div>
+          <div class="request-pdf-remark-extra"><span class="request-pdf-line request-pdf-remark"></span></div>
         </div>
         <div class="request-pdf-bottom-box">
           <div class="request-pdf-bottom-cell">
@@ -866,7 +887,7 @@ function RequestHistoryPage() {
       value: (row) => (row.isUrgent ? 'เบิกด่วน' : ''),
       render: (row) => (
         row.isUrgent ? (
-          <Chip color="error" label="ด่วน" size="small" sx={{ fontWeight: 900 }} />
+          <Chip color="error" icon={<Zap size={14} />} label="ด่วน" size="small" sx={{ fontWeight: 900 }} />
         ) : (
           <Typography sx={{ color: '#94a3b8', fontSize: 13 }}>-</Typography>
         )
@@ -891,6 +912,20 @@ function RequestHistoryPage() {
           />
         )
       },
+    },
+    {
+      key: 'waitingDuration',
+      label: 'ระยะเวลารอ',
+      width: 125,
+      align: 'center',
+      value: (row) => ([6, 8].includes(row.statusId) ? getElapsedDuration(row.createdAt).label : '-'),
+      sortValue: (row) => {
+        if (![6, 8].includes(row.statusId)) return -1
+
+        const elapsed = getElapsedDuration(row.createdAt)
+        return elapsed.days * 24 + elapsed.hours
+      },
+      render: (row) => ([6, 8].includes(row.statusId) ? getElapsedDuration(row.createdAt).label : '-'),
     },
     { key: 'totalItems', label: 'จำนวนรายการ', width: 130, align: 'center' },
     { key: 'totalQty', label: 'จำนวนรวม', width: 130, align: 'center' },
@@ -1104,4 +1139,3 @@ function RequestHistoryPage() {
 }
 
 export default RequestHistoryPage
-

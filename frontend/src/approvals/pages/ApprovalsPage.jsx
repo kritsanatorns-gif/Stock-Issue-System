@@ -701,6 +701,7 @@ function ApprovalsPage() {
               <AppTable
                 columns={detailColumns}
                 fitToWidth
+                initialRowsPerPage={25}
                 maxHeight={380}
                 noDataText="ไม่มีรายการสินค้า"
                 rows={selectedRow.items}

@@ -473,12 +473,46 @@ function RequestLoginPage() {
                   </InputAdornment>
                 }
               >
+                <MenuItem
+                  disableRipple
+                  value={departmentSearchOptionValue}
+                  onClick={(event) => event.stopPropagation()}
+                  onKeyDown={(event) => event.stopPropagation()}
+                  sx={{
+                    cursor: 'default',
+                    p: 1,
+                    '&.Mui-focusVisible': { bgcolor: 'transparent' },
+                    '&:hover': { bgcolor: 'transparent' },
+                  }}
+                >
+                  <TextField
+                    autoFocus
+                    fullWidth
+                    placeholder="ค้นหาแผนก"
+                    size="small"
+                    value={departmentSearchText}
+                    onChange={(event) => setDepartmentSearchText(event.target.value)}
+                    onClick={(event) => event.stopPropagation()}
+                    onKeyDown={(event) => event.stopPropagation()}
+                    InputProps={{
+                      startAdornment: (
+                        <InputAdornment position="start">
+                          <Search color="#64748b" size={16} />
+                        </InputAdornment>
+                      ),
+                    }}
+                  />
+                </MenuItem>
                 <MenuItem value="">เลือกแผนก</MenuItem>
-                {activeDepartmentOptions.map((departmentRow) => (
-                  <MenuItem key={departmentRow.id || departmentRow.code} value={departmentRow.code}>
-                    {departmentRow.name}
-                  </MenuItem>
-                ))}
+                {filteredDepartmentOptions.length ? (
+                  filteredDepartmentOptions.map((departmentRow) => (
+                    <MenuItem key={departmentRow.id || departmentRow.code} value={departmentRow.code}>
+                      {departmentRow.name}
+                    </MenuItem>
+                  ))
+                ) : (
+                  <MenuItem disabled>ไม่พบแผนก</MenuItem>
+                )}
               </Select>
             </FormControl>
 

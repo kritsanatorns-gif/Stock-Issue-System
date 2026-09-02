@@ -365,7 +365,7 @@ function printRequestSlip({ department, isUrgent = false, items, remark, request
             font-size: 28px;
             font-weight: 900;
             line-height: 1.1;
-            margin-top: 30px;
+            margin-top: 20px;
             text-align: center;
           }
 
@@ -395,7 +395,7 @@ function printRequestSlip({ department, isUrgent = false, items, remark, request
           }
 
           .line-lg {
-            min-width: 265px;
+            min-width: 260px;
           }
 
           .line-xl {
@@ -405,7 +405,7 @@ function printRequestSlip({ department, isUrgent = false, items, remark, request
           .top-section {
             display: grid;
             gap: 10px;
-            grid-template-columns: minmax(0, 1fr) 280px;
+            grid-template-columns: minmax(0, 1fr) 310px;
             margin-top: 4px;
           }
 
@@ -416,7 +416,7 @@ function printRequestSlip({ department, isUrgent = false, items, remark, request
           }
 
           .approval-cell {
-            min-height: 66px;
+            min-height: 96px;
             padding: 3px 6px;
             text-align: center;
           }
@@ -429,14 +429,14 @@ function printRequestSlip({ department, isUrgent = false, items, remark, request
             border-bottom: 1px solid #111;
             font-size: 11px;
             font-weight: 700;
-            margin: -3px -6px 27px;
+            margin: -3px -6px 38px;
             padding: 3px 2px;
             white-space: nowrap;
           }
 
           .approval-sign-line {
             border-bottom: 1px solid #111;
-            margin: 0 auto 6px;
+            margin: 0 auto 9px;
             width: 82%;
           }
 
@@ -491,7 +491,7 @@ function printRequestSlip({ department, isUrgent = false, items, remark, request
             display: grid;
             gap: 10px;
             grid-template-columns: minmax(0, 1fr) 310px;
-            margin-top: auto;
+            margin-top: 8px;
             padding-top: 8px;
           }
 
@@ -499,12 +499,20 @@ function printRequestSlip({ department, isUrgent = false, items, remark, request
             padding-top: 8px;
           }
 
+          .receiver-fields .field-row { margin-bottom: 10px; }
+          .receiver-fields .field-row:last-child { margin-bottom: 0; }
+
+          .remark-extra-line { margin-left: 0; margin-top: 6px; }
+          .remark-extra-line .remark-line { max-width: 365px; width: 365px; }
+
           .bottom-sign-box {
             border: 1px solid #111;
             display: grid;
             grid-template-columns: 1fr 1fr;
-            min-height: 78px;
+            min-height: 90px;
           }
+
+          .bottom-sign-box .approval-sign-line { margin-bottom: 9px; }
 
           .bottom-sign-cell {
             padding: 0 8px 6px;
@@ -524,15 +532,19 @@ function printRequestSlip({ department, isUrgent = false, items, remark, request
             font-weight: 700;
             height: 22px;
             justify-content: center;
-            margin: 0 -8px 31px;
+            margin: 0 -8px 38px;
             padding: 4px;
             white-space: nowrap;
           }
 
           .remark-line {
-            display: block;
-            margin-top: 8px;
-            width: 100%;
+            display: inline-block;
+            margin-left: 6px;
+            max-width: 300px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            width: 300px;
           }
 
           .print-value {
@@ -625,12 +637,9 @@ function printRequestSlip({ department, isUrgent = false, items, remark, request
                 <span class="line line-sm"></span>
                 น.
               </div>
-              <div class="field-row">ชื่อ-สกุล ผู้รับของ <span class="line line-xl"></span></div>
-              <div class="field-row">
-                หมายเหตุ
-                <span class="line remark-line">${escapeHtml(remark?.trim() || '')}</span>
-                <span class="line remark-line"></span>
-              </div>
+              <div class="field-row">ชื่อ-สกุล ผู้รับของ <span class="line line-lg"></span></div>
+              <div class="field-row">หมายเหตุ <span class="line remark-line">${escapeHtml(remark?.trim() || '')}</span></div>
+              <div class="remark-extra-line"><span class="line remark-line"></span></div>
             </div>
 
             <div class="bottom-sign-box">
