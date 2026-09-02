@@ -10,6 +10,8 @@ import { ColorModeContext } from '../theme/ColorModeContext'
 import UserMenu from './UserMenu'
 import './AppShell.css'
 
+const maxRequestNotifications = 5
+
 function AppHeader({ onToggleSidebar, sidebarCollapsed }) {
   const { mode, toggleColorMode } = useContext(ColorModeContext)
   const navigate = useNavigate()
@@ -32,7 +34,10 @@ function AppHeader({ onToggleSidebar, sidebarCollapsed }) {
       return undefined
     }
 
-    setNotifications(JSON.parse(localStorage.getItem(notificationStorageKey) || '[]'))
+    const savedNotifications = JSON.parse(localStorage.getItem(notificationStorageKey) || '[]')
+      .slice(0, maxRequestNotifications)
+    setNotifications(savedNotifications)
+    localStorage.setItem(notificationStorageKey, JSON.stringify(savedNotifications))
     const checkNewRequisitions = async () => {
       try {
         const requests = await getRequisitions()
@@ -66,7 +71,7 @@ function AppHeader({ onToggleSidebar, sidebarCollapsed }) {
               read: false,
             })
           })
-          const limitedNotifications = nextNotifications.slice(0, 30)
+          const limitedNotifications = nextNotifications.slice(0, maxRequestNotifications)
           localStorage.setItem(notificationStorageKey, JSON.stringify(limitedNotifications))
           return limitedNotifications
         })
@@ -113,7 +118,7 @@ function AppHeader({ onToggleSidebar, sidebarCollapsed }) {
               requester: request.employeeName ?? request.EmployeeName ?? '-',
               label: 'มีคำขอเบิกสินค้าใหม่จากผู้ใช้',
               read: false,
-            }, ...current].slice(0, 30)
+            }, ...current].slice(0, maxRequestNotifications)
             localStorage.setItem(notificationStorageKey, JSON.stringify(nextNotifications))
             window.dispatchEvent(new CustomEvent('stock-issue:requisition-created'))
             return nextNotifications

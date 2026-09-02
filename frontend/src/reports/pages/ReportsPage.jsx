@@ -505,7 +505,7 @@ function StatCard({ color, helper, icon: Icon, label, value }) {
   )
 }
 
-function DonutChart({ action, legendValueLabel = 'เบิก', rows, subtitle, title, totalLabel = 'สินค้าที่ถูกเบิก' }) {
+function DonutChart({ action, legendValueLabel = 'เบิก', roundValues = false, rows, subtitle, title, totalLabel = 'สินค้าที่ถูกเบิก' }) {
   const topRows = [...rows]
     .sort((first, second) => Number(second.totalQty ?? 0) - Number(first.totalQty ?? 0))
     .slice(0, 5)
@@ -585,7 +585,7 @@ function DonutChart({ action, legendValueLabel = 'เบิก', rows, subtitle,
               }}
             >
               <Typography sx={{ color: '#0f172a', fontSize: 24, fontWeight: 900 }}>
-                {totalQty.toLocaleString('th-TH')}
+                {(roundValues ? Math.round(totalQty) : totalQty).toLocaleString('th-TH')}
               </Typography>
               <Typography sx={{ color: '#64748b', fontSize: 12 }}>
                 {totalLabel}
@@ -602,7 +602,7 @@ function DonutChart({ action, legendValueLabel = 'เบิก', rows, subtitle,
                     {row.label}
                   </Typography>
                   <Typography sx={{ color: '#0f172a', fontSize: 11, fontWeight: 800, mt: 0.25 }}>
-                    {Number(row.totalQty ?? 0).toLocaleString('th-TH')} {legendValueLabel}
+                    {(roundValues ? Math.round(Number(row.totalQty ?? 0)) : Number(row.totalQty ?? 0)).toLocaleString('th-TH')} {legendValueLabel}
                   </Typography>
                 </Box>
               </Stack>
@@ -1347,6 +1347,7 @@ function ReportsPage() {
             <Grid size={{ xs: 12, lg: 4 }}>
               <DonutChart
                 legendValueLabel="บาท"
+                roundValues
                 rows={purchaseChartRows}
                 subtitle={`สัดส่วนยอดซื้อจากรายการรับเข้า ${purchasePeriodLabel}`}
                 title="สัดส่วนยอดซื้อแต่ละผู้ขาย"
