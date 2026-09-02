@@ -146,7 +146,7 @@ function StockAdjustPage() {
     }
 
     if (!remark.trim()) {
-      return 'กรุณาระบุเหตุผลการปรับสต๊อก'
+      return 'กรุณาระบุหมายเหตุ'
     }
 
     const invalidItem = selectedItems.find(
@@ -196,7 +196,7 @@ function StockAdjustPage() {
       title: 'ยืนยันการปรับสต๊อก',
       html: `
         <div style="text-align:left;line-height:1.7">
-          <div style="margin-bottom:8px"><b>เหตุผล:</b> ${remark.trim()}</div>
+          <div style="margin-bottom:8px"><b>หมายเหตุ:</b> ${remark.trim()}</div>
           ${html}
         </div>
       `,
@@ -425,7 +425,7 @@ function StockAdjustPage() {
                     รายการปรับสต๊อก
                   </Typography>
                   <Typography sx={{ color: '#64748b', fontSize: 13, mt: 0.25 }}>
-                    ใส่ยอดคงเหลือจริงหลังนับสินค้า และระบุเหตุผลทุกครั้ง
+                    ใส่ยอดคงเหลือจริงหลังนับสินค้า และระบุหมายเหตุทุกครั้ง
                   </Typography>
                 </Box>
 
@@ -434,7 +434,7 @@ function StockAdjustPage() {
                   multiline
                   required
                   minRows={2}
-                  label="เหตุผลการปรับสต๊อก"
+                  label="หมายเหตุ"
                   placeholder="เช่น นับสต๊อกสิ้นเดือน / พบของชำรุด / ยอดจริงไม่ตรงกับระบบ"
                   value={remark}
                   onChange={(event) => setRemark(event.target.value)}

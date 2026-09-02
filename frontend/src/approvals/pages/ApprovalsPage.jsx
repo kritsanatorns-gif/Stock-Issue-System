@@ -84,44 +84,8 @@ function getEmployeeId(employee) {
   return Number(employee?.id ?? employee?.employeeId ?? employee?.EmployeeId ?? 0)
 }
 
-function buildPrintableRowWithBacklog(row, requestRows) {
-  if (!row) {
-    return row
-  }
-
-  const currentRequestNo = String(row.requestNo ?? '')
-  const currentDepartment = String(row.department ?? '').trim().toLowerCase()
-  const currentItems = row.items ?? []
-  const carryOverItems = (requestRows ?? [])
-    .filter((request) => {
-      const requestNo = String(request.requestNo ?? '')
-      const department = String(request.department ?? '').trim().toLowerCase()
-
-      return requestNo !== currentRequestNo && department === currentDepartment && request.statusId === 8
-    })
-    .flatMap((request) => (request.items ?? [])
-      .filter((item) => Number(item.backlogQty ?? 0) > 0)
-      .map((item, index) => ({
-        ...item,
-        detailId: `carry-${request.requestNo}-${item.detailId || index}`,
-        fulfilledQty: Number(item.fulfilledQty ?? 0),
-        isCarryOverBacklog: true,
-        lineNo: `${request.requestNo}-${index + 1}`,
-        quantity: Number(item.backlogQty ?? 0),
-        remark: `ค้างจาก ${request.requestNo}`,
-      })))
-
-  if (carryOverItems.length === 0) {
-    return row
-  }
-
-  return {
-    ...row,
-    hasCarryOverBacklog: true,
-    items: [...currentItems, ...carryOverItems],
-    totalItems: currentItems.length + carryOverItems.length,
-    totalQty: [...currentItems, ...carryOverItems].reduce((sum, item) => sum + Number(item.quantity ?? 0), 0),
-  }
+function buildPrintableRowWithBacklog(row) {
+  return row
 }
 
 function getStatusColor(statusId) {
@@ -235,8 +199,15 @@ function ApprovalsPage() {
   }
 
   const handleFulfillmentChange = (detailId, value, backlogQty, availableQty) => {
-    const maxQty = Math.max(0, Math.min(backlogQty, availableQty))
-    const numericValue = Math.max(0, Math.min(maxQty, Number(value || 0)))
+    if (value === '') {
+      setFulfillmentDraft((current) => ({
+        ...current,
+        [detailId]: '',
+      }))
+      return
+    }
+
+    const numericValue = Math.max(0, Number(value || 0))
 
     setFulfillmentDraft((current) => ({
       ...current,
@@ -250,6 +221,21 @@ function ApprovalsPage() {
 
   const handleApprove = async () => {
     if (!selectedRow) {
+      return
+    }
+
+    const overRequestedItem = selectedRow.items.find(
+      (item) => Number(fulfillmentDraft[item.detailId] ?? 0) > Number(item.backlogQty ?? 0),
+    )
+
+    if (overRequestedItem) {
+      await Swal.fire({
+        confirmButtonText: 'ตกลง',
+        customClass: { container: 'stock-swal-container' },
+        icon: 'warning',
+        text: `สินค้า ${overRequestedItem.productName} จ่ายได้ไม่เกิน ${Number(overRequestedItem.backlogQty).toLocaleString('th-TH')} ${overRequestedItem.unit}`,
+        title: 'จำนวนจ่ายเกินจำนวนที่ขอเบิก',
+      })
       return
     }
 
@@ -508,9 +494,15 @@ function ApprovalsPage() {
       width: 120,
       searchable: false,
       sortable: false,
-      render: (row) => (
-        <TextField
+      render: (row) => {
+        const issueQty = Number(fulfillmentDraft[row.detailId] ?? 0)
+        const isOverRequested = issueQty > Number(row.backlogQty ?? 0)
+
+        return (
+          <TextField
           disabled={row.backlogQty <= 0 || row.availableQty <= 0}
+          error={isOverRequested}
+          helperText={isOverRequested ? `ห้ามใส่เกินจำนวนที่ขอเบิก (${Number(row.backlogQty).toLocaleString('th-TH')})` : ''}
           inputProps={{ min: 0, max: Math.min(row.backlogQty, row.availableQty) }}
           size="small"
           type="number"
@@ -521,8 +513,9 @@ function ApprovalsPage() {
             row.backlogQty,
             row.availableQty,
           )}
-        />
-      ),
+          />
+        )
+      },
     },
     { key: 'unit', label: 'หน่วย', width: 80 },
     {

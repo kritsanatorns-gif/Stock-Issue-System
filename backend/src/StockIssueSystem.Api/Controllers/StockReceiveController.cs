@@ -1,4 +1,5 @@
 using System.Data;
+using System.Globalization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using StockIssueSystem.Api.Data;
@@ -98,12 +99,13 @@ public sealed class StockReceiveController(AppDbContext dbContext) : ControllerB
             Remark = request.Department.Trim(),
             SupplierId = supplierIds.Count == 1 ? supplierIds[0] : null,
             Status = StockHeaderStatuses.Completed,
-            TransactionDate = request.CreatedAt ?? DateTime.Now,
+            TransactionDate = ThailandDateTime.FromClient(request.CreatedAt),
         };
 
         dbContext.StockHeaders.Add(stockHeader);
         await UpdateStockBalances(request);
         await dbContext.SaveChangesAsync();
+        stockHeader.ReceiveNo = FormatReceiveNo(stockHeader, await GetDailyReceiveSequence(stockHeader));
         AddCostLots(stockHeader, request, suppliersById);
         await dbContext.SaveChangesAsync();
         await transaction.CommitAsync();
@@ -112,7 +114,8 @@ public sealed class StockReceiveController(AppDbContext dbContext) : ControllerB
 
         return Ok(new
         {
-            DocumentNo = stockHeader.HeaderId.ToString(),
+            HeaderId = stockHeader.HeaderId,
+            DocumentNo = stockHeader.ReceiveNo,
             PoInvoiceNo = stockHeader.PoInvoiceNo,
             CreatedAt = stockHeader.TransactionDate,
             EmployeeId = request.EmployeeId,
@@ -167,6 +170,7 @@ public sealed class StockReceiveController(AppDbContext dbContext) : ControllerB
 
         report.Status = StockHeaderStatuses.Cancelled;
         report.Remark = AppendCancelRemark(report.Remark, request.Remark);
+        report.CancelNo = FormatCancelNo(DateTime.Now, await GetDailyCancelSequence(DateTime.Now));
 
         await dbContext.SaveChangesAsync();
         await transaction.CommitAsync();
@@ -432,9 +436,7 @@ public sealed class StockReceiveController(AppDbContext dbContext) : ControllerB
             return currentRemark;
         }
 
-        var nextRemark = string.IsNullOrWhiteSpace(currentRemark)
-            ? $"Cancel: {cancelRemark.Trim()}"
-            : $"{currentRemark} | Cancel: {cancelRemark.Trim()}";
+        var nextRemark = cancelRemark.Trim();
 
         return nextRemark.Length <= 255 ? nextRemark : nextRemark[..255];
     }
@@ -629,9 +631,11 @@ public sealed class StockReceiveController(AppDbContext dbContext) : ControllerB
 
         return new StockIssueDto
         {
+            HeaderId = report.HeaderId,
             CreatedAt = report.TransactionDate,
             Department = report.Remark,
-            DocumentNo = report.HeaderId.ToString(),
+            DocumentNo = string.IsNullOrWhiteSpace(report.ReceiveNo) ? report.HeaderId.ToString() : report.ReceiveNo,
+            CancelNo = report.CancelNo,
             PoInvoiceNo = report.PoInvoiceNo,
             EmployeeId = parsedEmployeeId,
             EmployeeDepartment = employee?.Department ?? "HR",
@@ -641,5 +645,35 @@ public sealed class StockReceiveController(AppDbContext dbContext) : ControllerB
             TotalItems = details.Count,
             TotalQty = details.Sum(detail => detail.Quantity),
         };
+    }
+
+    private async Task<int> GetDailyReceiveSequence(StockHeader header)
+    {
+        var documentDate = header.TransactionDate.Date;
+        var nextDate = documentDate.AddDays(1);
+
+        return await dbContext.StockHeaders
+            .AsNoTracking()
+            .Where(item => item.DocType == ReceiveDocType
+                && item.TransactionDate >= documentDate
+                && item.TransactionDate < nextDate
+                && item.HeaderId <= header.HeaderId)
+            .CountAsync();
+    }
+
+    private static string FormatReceiveNo(StockHeader header, int sequence)
+    {
+        return $"RC-{header.TransactionDate:yyMMdd}-{sequence.ToString("0000", CultureInfo.InvariantCulture)}";
+    }
+
+    private async Task<int> GetDailyCancelSequence(DateTime cancelledAt)
+    {
+        var prefix = $"CN-{cancelledAt:yyMMdd}-";
+        return await dbContext.StockHeaders.CountAsync(item => item.CancelNo.StartsWith(prefix)) + 1;
+    }
+
+    private static string FormatCancelNo(DateTime cancelledAt, int sequence)
+    {
+        return $"CN-{cancelledAt:yyMMdd}-{sequence.ToString("0000", CultureInfo.InvariantCulture)}";
     }
 }

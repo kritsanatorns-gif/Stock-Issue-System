@@ -23,11 +23,6 @@ import { exportTableToPdf } from '../../utils/pdfUtils'
 const shortMonthNames = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.']
 const palette = ['#2563eb', '#22b8cf', '#f97316', '#8b5cf6', '#ef4444', '#14b8a6', '#64748b', '#f59e0b']
 
-const periodModes = [
-  { label: 'รายเดือน', value: 'monthly' },
-  { label: 'รายวัน', value: 'daily' },
-]
-
 const reportModes = [
   { label: 'รายงานการเบิก', value: 'issue' },
   { label: 'รายงานสินค้า', value: 'product' },
@@ -250,7 +245,7 @@ function flattenBacklogRows(requisitions) {
           productName: item.productName,
           requestDateName: formatDisplayDateTime(requestedAt),
           requestedAt,
-          requesterName: requisition.employeeName ?? requisition.requesterName ?? '-',
+          requesterName: requisition.requesterName ?? requisition.employeeName ?? '-',
           requestNo: requisition.requestNo,
           requestQty: Number(item.quantity ?? 0),
           unit: item.unit ?? '',
@@ -460,17 +455,10 @@ function buildTimeTrendRows(rows, reportPeriod, selectedYear) {
   return trendRows
 }
 
-function isRowInPeriod(row, reportPeriod, selectedYear) {
+function isRowInPeriod(row, selectedYear, selectedMonth) {
   const date = dayjs(row.createdAt)
 
-  if (reportPeriod === 'daily') {
-    const startDate = dayjs().subtract(6, 'day').startOf('day')
-    const endDate = dayjs().endOf('day')
-
-    return date.isAfter(startDate.subtract(1, 'millisecond')) && date.isBefore(endDate.add(1, 'millisecond'))
-  }
-
-  return date.year() === selectedYear
+  return date.year() === selectedYear && date.month() === selectedMonth - 1
 }
 
 function StatCard({ color, helper, icon: Icon, label, value }) {
@@ -893,22 +881,21 @@ function ReportsPage() {
   const [expandedSupplier, setExpandedSupplier] = useState('')
   const [supplierPurchaseItems, setSupplierPurchaseItems] = useState({})
   const [reportMode, setReportMode] = useState('issue')
-  const [reportPeriod, setReportPeriod] = useState('monthly')
   const [selectedYear, setSelectedYear] = useState(dayjs().year())
+  const [selectedMonth, setSelectedMonth] = useState(dayjs().month() + 1)
+  const reportPeriod = 'monthly'
 
   const dateRange = useMemo(() => {
-    if (reportPeriod === 'daily') {
-      return {
-        endDate: dayjs().format('YYYY-MM-DD'),
-        startDate: dayjs().subtract(6, 'day').format('YYYY-MM-DD'),
-      }
-    }
-
     return {
-      endDate: `${selectedYear}-12-31`,
-      startDate: `${selectedYear}-01-01`,
+      endDate: dayjs(`${selectedYear}-${String(selectedMonth).padStart(2, '0')}-01`).endOf('month').format('YYYY-MM-DD'),
+      startDate: `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-01`,
     }
-  }, [reportPeriod, selectedYear])
+  }, [selectedMonth, selectedYear])
+
+  const yearlyDateRange = useMemo(() => ({
+    endDate: `${selectedYear}-12-31`,
+    startDate: `${selectedYear}-01-01`,
+  }), [selectedYear])
 
   useEffect(() => {
     let isMounted = true
@@ -919,10 +906,10 @@ function ReportsPage() {
 
       try {
         const [issueData, requisitionData, purchaseData, purchaseTrendData] = await Promise.all([
-          getStockIssues(dateRange),
+          getStockIssues(yearlyDateRange),
           getRequisitions(),
           getPurchasesBySupplier(dateRange),
-          getPurchaseTrend({ ...dateRange, period: reportPeriod }),
+          getPurchaseTrend({ ...yearlyDateRange, period: reportPeriod }),
         ])
 
         if (isMounted) {
@@ -953,7 +940,7 @@ function ReportsPage() {
     return () => {
       isMounted = false
     }
-  }, [dateRange, reportPeriod])
+  }, [dateRange, reportPeriod, yearlyDateRange])
 
   const issueRows = useMemo(() => flattenIssueRows(reports), [reports])
   const backlogRows = useMemo(() => flattenBacklogRows(requisitions), [requisitions])
@@ -977,8 +964,8 @@ function ReportsPage() {
   const backlogDepartmentRows = useMemo(() => buildBacklogDepartmentRows(backlogRows), [backlogRows])
 
   const periodRows = useMemo(
-    () => issueRows.filter((row) => isRowInPeriod(row, reportPeriod, selectedYear)),
-    [issueRows, reportPeriod, selectedYear],
+    () => issueRows.filter((row) => isRowInPeriod(row, selectedYear, selectedMonth)),
+    [issueRows, selectedMonth, selectedYear],
   )
 
   const filteredRows = periodRows
@@ -989,8 +976,8 @@ function ReportsPage() {
   )
 
   const trendRows = useMemo(
-    () => buildTimeTrendRows(filteredRows, reportPeriod, selectedYear),
-    [filteredRows, reportPeriod, selectedYear],
+    () => buildTimeTrendRows(issueRows, reportPeriod, selectedYear),
+    [issueRows, reportPeriod, selectedYear],
   )
 
   const departmentRows = useMemo(
@@ -1033,7 +1020,7 @@ function ReportsPage() {
   const rankingRows = departmentRows
   const rankingTitle = 'แผนกที่เบิกเยอะสุด'
   const rankingSubtitle = 'จำนวนสินค้าที่ถูกเบิก แยกตามแผนก'
-  const periodLabel = reportPeriod === 'daily' ? '7 วันล่าสุด' : `ปี ${selectedYear}`
+  const periodLabel = `${shortMonthNames[selectedMonth - 1]} ${selectedYear}`
 
   const totalQty = filteredRows.reduce((total, row) => total + row.quantity, 0)
   const totalIssueCost = filteredRows.reduce((total, row) => total + row.totalCost, 0)
@@ -1111,7 +1098,7 @@ function ReportsPage() {
   const purchaseItemCount = purchaseRows.reduce((total, row) => total + Number(row.itemCount ?? 0), 0)
   const purchaseQty = purchaseRows.reduce((total, row) => total + Number(row.totalQty ?? 0), 0)
   const topSupplier = purchaseRows[0]
-  const purchasePeriodLabel = reportPeriod === 'daily' ? '7 วันล่าสุด' : `ปี ${selectedYear}`
+  const purchasePeriodLabel = `${shortMonthNames[selectedMonth - 1]} ${selectedYear}`
   const purchaseSummaryItems = [
     { color: '#60a5fa', helper: purchasePeriodLabel, icon: Building2, label: 'จำนวนผู้ขาย', value: purchaseRows.length.toLocaleString('th-TH') },
     { color: '#a78bfa', helper: 'เอกสารรับเข้าที่บันทึกแล้ว', icon: FileText, label: 'จำนวนเอกสารรับเข้า', value: purchaseDocumentCount.toLocaleString('th-TH') },
@@ -1174,7 +1161,7 @@ function ReportsPage() {
       await exportTableToPdf({
         columns,
         fileName: `${filePrefix}-${reportPeriod}-${selectedYear}-${dayjs().format('YYYYMMDD-HHmm')}.pdf`,
-        periodLabel: reportPeriod === 'daily' ? 'ช่วงเวลา: 7 วันล่าสุด' : `ช่วงเวลา: ปี ${selectedYear}`,
+        periodLabel: `ช่วงเวลา: ${periodLabel}`,
         rows,
         title,
       })
@@ -1224,20 +1211,20 @@ function ReportsPage() {
           </TextField>
           {reportMode === 'issue' || reportMode === 'product' ? (
             <>
-              <TextField select label="ช่วง" size="small" value={reportPeriod} onChange={(event) => setReportPeriod(event.target.value)} sx={{ width: 125 }}>
-                {periodModes.map((mode) => <MenuItem key={mode.value} value={mode.value}>{mode.label}</MenuItem>)}
+              <TextField select label="เดือน" size="small" value={selectedMonth} onChange={(event) => setSelectedMonth(Number(event.target.value))} sx={{ width: 125 }}>
+                {shortMonthNames.map((month, index) => <MenuItem key={month} value={index + 1}>{month}</MenuItem>)}
               </TextField>
-              <TextField disabled={reportPeriod === 'daily'} select label="ปี" size="small" value={selectedYear} onChange={(event) => setSelectedYear(Number(event.target.value))} sx={{ width: 105 }}>
+              <TextField select label="ปี" size="small" value={selectedYear} onChange={(event) => setSelectedYear(Number(event.target.value))} sx={{ width: 105 }}>
                 {[dayjs().year() - 1, dayjs().year(), dayjs().year() + 1].map((year) => <MenuItem key={year} value={year}>{year}</MenuItem>)}
               </TextField>
             </>
           ) : null}
           {reportMode === 'purchase' ? (
             <>
-              <TextField select label="ช่วง" size="small" value={reportPeriod} onChange={(event) => setReportPeriod(event.target.value)} sx={{ width: 125 }}>
-                {periodModes.map((mode) => <MenuItem key={mode.value} value={mode.value}>{mode.label}</MenuItem>)}
+              <TextField select label="เดือน" size="small" value={selectedMonth} onChange={(event) => setSelectedMonth(Number(event.target.value))} sx={{ width: 125 }}>
+                {shortMonthNames.map((month, index) => <MenuItem key={month} value={index + 1}>{month}</MenuItem>)}
               </TextField>
-              <TextField disabled={reportPeriod === 'daily'} select label="ปี" size="small" value={selectedYear} onChange={(event) => setSelectedYear(Number(event.target.value))} sx={{ width: 105 }}>
+              <TextField select label="ปี" size="small" value={selectedYear} onChange={(event) => setSelectedYear(Number(event.target.value))} sx={{ width: 105 }}>
                 {[dayjs().year() - 1, dayjs().year(), dayjs().year() + 1].map((year) => <MenuItem key={year} value={year}>{year}</MenuItem>)}
               </TextField>
             </>

@@ -22,6 +22,29 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
     public DbSet<StockDetail> StockDetails => Set<StockDetail>();
     public DbSet<StockIssueCost> StockIssueCosts => Set<StockIssueCost>();
 
+    public override int SaveChanges(bool acceptAllChangesOnSuccess)
+    {
+        TrimOuterWhitespaceBeforeSave();
+        return base.SaveChanges(acceptAllChangesOnSuccess);
+    }
+
+    public override Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
+    {
+        TrimOuterWhitespaceBeforeSave();
+        return base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+    }
+
+    private void TrimOuterWhitespaceBeforeSave()
+    {
+        foreach (var entry in ChangeTracker.Entries().Where(entry => entry.State is EntityState.Added or EntityState.Modified))
+        {
+            foreach (var property in entry.Properties.Where(property => property.Metadata.ClrType == typeof(string) && property.CurrentValue is string))
+            {
+                property.CurrentValue = ((string)property.CurrentValue!).Trim();
+            }
+        }
+    }
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
@@ -198,6 +221,10 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
             entity.HasKey(header => header.HeaderId);
             entity.Property(header => header.DocType).HasMaxLength(20).IsRequired();
             entity.Property(header => header.PoInvoiceNo).HasMaxLength(100).HasDefaultValue("");
+            entity.Property(header => header.RequestNo).HasMaxLength(30).HasDefaultValue("");
+            entity.Property(header => header.ReceiveNo).HasMaxLength(30).HasDefaultValue("");
+            entity.Property(header => header.CancelNo).HasMaxLength(30).HasDefaultValue("");
+            entity.Property(header => header.AdjustNo).HasMaxLength(30).HasDefaultValue("");
             entity.Property(header => header.EmployeeId).HasMaxLength(20).IsRequired();
             entity.Property(header => header.TransactionDate).HasDefaultValueSql("GETDATE()");
             entity.Property(header => header.Department).HasMaxLength(50).HasDefaultValue("");
@@ -211,6 +238,18 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
             entity.Property(header => header.CreateDate).HasDefaultValueSql("GETDATE()");
             entity.HasIndex(header => header.SourceRequisitionId);
             entity.HasIndex(header => header.SupplierId);
+            entity.HasIndex(header => header.RequestNo)
+                .HasFilter("[RequestNo] <> N''")
+                .IsUnique();
+            entity.HasIndex(header => header.ReceiveNo)
+                .HasFilter("[ReceiveNo] <> N''")
+                .IsUnique();
+            entity.HasIndex(header => header.CancelNo)
+                .HasFilter("[CancelNo] <> N''")
+                .IsUnique();
+            entity.HasIndex(header => header.AdjustNo)
+                .HasFilter("[AdjustNo] <> N''")
+                .IsUnique();
         });
 
         modelBuilder.Entity<StockDetail>(entity =>

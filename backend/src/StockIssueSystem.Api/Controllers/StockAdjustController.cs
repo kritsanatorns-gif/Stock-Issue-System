@@ -1,4 +1,5 @@
 using System.Data;
+using System.Globalization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using StockIssueSystem.Api.Data;
@@ -142,11 +143,12 @@ public sealed class StockAdjustController(AppDbContext dbContext, FifoCostServic
             EmployeeId = request.EmployeeId.ToString(),
             Remark = request.Remark.Trim(),
             Status = StockHeaderStatuses.Completed,
-            TransactionDate = request.CreatedAt ?? DateTime.Now,
+            TransactionDate = ThailandDateTime.FromClient(request.CreatedAt),
         };
 
         dbContext.StockHeaders.Add(report);
         await dbContext.SaveChangesAsync();
+        report.AdjustNo = FormatAdjustNo(report, await GetDailyAdjustSequence(report));
 
         var fifoError = await fifoCostService.AllocateAsync(
             report.Details.Where(detail => detail.Qty < 0)
@@ -313,9 +315,10 @@ public sealed class StockAdjustController(AppDbContext dbContext, FifoCostServic
 
         return new StockIssueDto
         {
+            HeaderId = report.HeaderId,
             CreatedAt = report.TransactionDate,
             Department = report.Remark,
-            DocumentNo = report.HeaderId.ToString(),
+            DocumentNo = string.IsNullOrWhiteSpace(report.AdjustNo) ? report.HeaderId.ToString() : report.AdjustNo,
             EmployeeId = parsedEmployeeId,
             EmployeeDepartment = employee?.Department ?? "HR",
             EmployeeName = employee?.Name ?? report.EmployeeId,
@@ -324,5 +327,21 @@ public sealed class StockAdjustController(AppDbContext dbContext, FifoCostServic
             TotalItems = details.Count,
             TotalQty = details.Sum(detail => detail.Quantity),
         };
+    }
+
+    private async Task<int> GetDailyAdjustSequence(StockHeader header)
+    {
+        var documentDate = header.TransactionDate.Date;
+        var nextDate = documentDate.AddDays(1);
+
+        return await dbContext.StockHeaders.CountAsync(item => item.DocType == AdjustDocType
+            && item.TransactionDate >= documentDate
+            && item.TransactionDate < nextDate
+            && item.HeaderId <= header.HeaderId);
+    }
+
+    private static string FormatAdjustNo(StockHeader header, int sequence)
+    {
+        return $"AD-{header.TransactionDate:yyMMdd}-{sequence.ToString("0000", CultureInfo.InvariantCulture)}";
     }
 }

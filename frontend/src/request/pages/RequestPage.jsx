@@ -99,7 +99,7 @@ const stockStatusOptions = [
   { label: 'ของหมด', value: 'out' },
 ]
 
-const MAX_ITEMS_PER_REQUEST = 20
+const MAX_ITEMS_PER_REQUEST = 25
 
 function printRequestSlipOld({ department, items, remark, requesterName, requestNo = 'รอเลขคำขอ' }) {
   const printedAt = formatDisplayDateTime(new Date())
@@ -277,7 +277,7 @@ function printRequestSlip({ department, isUrgent = false, items, remark, request
     year: requestYear,
   } = getThailandDateParts(new Date())
   const printItems = items
-  const fixedRowCount = 20
+  const fixedRowCount = 25
   const stampText = isUrgent ? 'ด่วน' : ''
   const rows = printItems
     .map(
@@ -325,7 +325,7 @@ function printRequestSlip({ department, isUrgent = false, items, remark, request
             background: #fff;
             color: #000;
             font-family: Tahoma, Arial, sans-serif;
-            font-size: 13px;
+            font-size: 15px;
             margin: 0;
           }
 
@@ -335,7 +335,7 @@ function printRequestSlip({ department, isUrgent = false, items, remark, request
             flex-direction: column;
             justify-content: center;
             min-height: 287mm;
-            padding: 5mm 1mm;
+            padding: 3mm 1mm;
             position: relative;
             width: 100%;
           }
@@ -355,19 +355,22 @@ function printRequestSlip({ department, isUrgent = false, items, remark, request
           }
 
           .document-no {
+            position: absolute;
+            right: 5mm;
             text-align: right;
-            margin-bottom: 2px;
+            top: 5mm;
           }
 
           .title {
-            font-size: 30px;
+            font-size: 28px;
             font-weight: 900;
             line-height: 1.1;
+            margin-top: 30px;
             text-align: center;
           }
 
           .subtitle {
-            margin-bottom: 8px;
+            margin-bottom: 4px;
             text-align: center;
           }
 
@@ -403,7 +406,7 @@ function printRequestSlip({ department, isUrgent = false, items, remark, request
             display: grid;
             gap: 10px;
             grid-template-columns: minmax(0, 1fr) 280px;
-            margin-top: 8px;
+            margin-top: 4px;
           }
 
           .approval-box {
@@ -413,7 +416,7 @@ function printRequestSlip({ department, isUrgent = false, items, remark, request
           }
 
           .approval-cell {
-            min-height: 82px;
+            min-height: 66px;
             padding: 3px 6px;
             text-align: center;
           }
@@ -426,7 +429,7 @@ function printRequestSlip({ department, isUrgent = false, items, remark, request
             border-bottom: 1px solid #111;
             font-size: 11px;
             font-weight: 700;
-            margin: -3px -6px 36px;
+            margin: -3px -6px 27px;
             padding: 3px 2px;
             white-space: nowrap;
           }
@@ -444,13 +447,13 @@ function printRequestSlip({ department, isUrgent = false, items, remark, request
           }
 
           .field-row {
-            margin-bottom: 8px;
+            margin-bottom: 4px;
             white-space: nowrap;
           }
 
           table {
             border-collapse: collapse;
-            margin-top: 16px;
+            margin-top: 8px;
             page-break-inside: auto;
             width: 100%;
           }
@@ -468,8 +471,9 @@ function printRequestSlip({ department, isUrgent = false, items, remark, request
           td {
             border: 1px solid #111;
             font-size: 12px;
-            height: 29px;
-            padding: 3px 5px;
+            height: 28px;
+            padding: 1px 3px;
+            text-align: center;
             vertical-align: middle;
             word-break: break-word;
           }
@@ -486,19 +490,20 @@ function printRequestSlip({ department, isUrgent = false, items, remark, request
           .receive-section {
             display: grid;
             gap: 10px;
-            grid-template-columns: minmax(0, 1fr) 280px;
-            margin-top: 20px;
+            grid-template-columns: minmax(0, 1fr) 310px;
+            margin-top: auto;
+            padding-top: 8px;
           }
 
           .receiver-fields {
-            padding-top: 18px;
+            padding-top: 8px;
           }
 
           .bottom-sign-box {
             border: 1px solid #111;
             display: grid;
             grid-template-columns: 1fr 1fr;
-            min-height: 104px;
+            min-height: 78px;
           }
 
           .bottom-sign-cell {
@@ -517,9 +522,9 @@ function printRequestSlip({ department, isUrgent = false, items, remark, request
             display: flex;
             font-size: 11px;
             font-weight: 700;
-            height: 28px;
+            height: 22px;
             justify-content: center;
-            margin: 0 -8px 42px;
+            margin: 0 -8px 31px;
             padding: 4px;
             white-space: nowrap;
           }
@@ -595,11 +600,11 @@ function printRequestSlip({ department, isUrgent = false, items, remark, request
             <thead>
               <tr>
                 <th style="width: 58px;">ลำดับ</th>
-                <th style="width: 70px;">หมวด</th>
-                <th style="width: 135px;">รายการ</th>
+                <th style="width: 130px;">หมวด</th>
+                <th style="width: 175px;">รายการ</th>
                 <th style="width: 68px;">จำนวน</th>
                 <th style="width: 72px;">หน่วยนับ</th>
-                <th style="width: 278px;">หมายเหตุ</th>
+                <th style="width: 180px;">หมายเหตุ</th>
               </tr>
             </thead>
             <tbody>
@@ -768,6 +773,10 @@ function RequestPage() {
   const handleRemoveItem = (productId) => {
     setSelectedItems((current) => current.filter((item) => item.productId !== productId))
   }
+
+  const hasInvalidRequestQuantity = selectedItems.some(
+    (item) => !String(item.quantity ?? '').trim() || Number(item.quantity) <= 0,
+  )
 
   const handleSubmit = async () => {
     if (selectedItems.length === 0) {
@@ -1116,12 +1125,20 @@ function RequestPage() {
                     <Grid container spacing={1.5} sx={{ mt: 1 }}>
                       <Grid size={{ xs: 7 }}>
                         <TextField
+                          error={!String(item.quantity ?? '').trim() || Number(item.quantity) <= 0}
                           fullWidth
+                          helperText={!String(item.quantity ?? '').trim() || Number(item.quantity) <= 0 ? 'กรอกจำนวนมากกว่า 0' : ''}
                           label="จำนวนที่ขอเบิก"
                           size="small"
                           type="number"
                           value={item.quantity}
                           onChange={(event) => handleQtyChange(item.productId, event.target.value)}
+                          slotProps={{
+                            htmlInput: {
+                              min: 1,
+                              step: 1,
+                            },
+                          }}
                         />
                       </Grid>
                       <Grid size={{ xs: 5 }}>
@@ -1180,6 +1197,7 @@ function RequestPage() {
                 ) : null}
               </Box>
               <Button
+                disabled={selectedItems.length === 0 || hasInvalidRequestQuantity}
                 fullWidth
                 size="large"
                 startIcon={<Send size={18} />}

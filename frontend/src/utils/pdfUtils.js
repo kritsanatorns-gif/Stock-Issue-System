@@ -21,17 +21,16 @@ export async function exportTableToPdf({ columns, fileName, periodLabel, rows, t
     `<tr>${columns.map((column) => `<td>${escapeHtml(column.value(row))}</td>`).join('')}</tr>`
   )).join('') || `<tr><td colspan="${columns.length}" class="empty">ไม่พบข้อมูล</td></tr>`
 
-  container.style.cssText = 'background:#fff;color:#0f172a;font-family:"IBM Plex Sans Thai",Tahoma,sans-serif;left:-10000px;position:fixed;top:0;width:1120px;padding:32px;z-index:-1;'
+  container.style.cssText = 'background:#fff;color:#000;font-family:"IBM Plex Sans Thai",Tahoma,sans-serif;left:-10000px;position:fixed;top:0;width:1120px;padding:32px;z-index:-1;'
   container.innerHTML = `
     <style>
       .report-pdf__title { font-size:25px; font-weight:700; margin:0; }
-      .report-pdf__period { color:#475569; font-size:14px; margin:6px 0 24px; }
-      .report-pdf__generated { color:#64748b; font-size:12px; margin-bottom:16px; }
+      .report-pdf__period { color:#000; font-size:14px; margin:6px 0 24px; }
+      .report-pdf__generated { color:#000; font-size:12px; margin-bottom:16px; }
       .report-pdf__table { border-collapse:collapse; font-size:12px; width:100%; }
-      .report-pdf__table th { background:#eaf1ff; color:#1e3a8a; font-weight:700; }
-      .report-pdf__table th, .report-pdf__table td { border:1px solid #cbd5e1; padding:8px 9px; text-align:left; vertical-align:top; }
-      .report-pdf__table tr:nth-child(even) td { background:#f8fafc; }
-      .report-pdf__table .empty { color:#64748b; text-align:center; }
+      .report-pdf__table th { background:#fff; color:#000; font-weight:700; }
+      .report-pdf__table th, .report-pdf__table td { background:#fff; border:1px solid #000; color:#000; padding:8px 9px; text-align:center; vertical-align:middle; }
+      .report-pdf__table .empty { color:#000; text-align:center; }
     </style>
     <h1 class="report-pdf__title">${escapeHtml(title)}</h1>
     <p class="report-pdf__period">${escapeHtml(periodLabel)}</p>

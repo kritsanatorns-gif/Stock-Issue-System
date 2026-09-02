@@ -61,9 +61,7 @@ public sealed class RequisitionsController(
             .Where(balance => productIds.Contains(balance.ProductId) && balance.LocationId == MainLocationId)
             .ToDictionaryAsync(balance => balance.ProductId);
 
-        var requestNumbers = await GetDailyRequestSequences(reports);
-
-        return Ok(reports.Select(header => ToRequisitionDto(header, employees, balances, requestNumbers[header.HeaderId])));
+        return Ok(reports.Select(header => ToRequisitionDto(header, employees, balances)));
     }
 
     [HttpGet("{headerId:int}")]
@@ -90,9 +88,7 @@ public sealed class RequisitionsController(
             .Where(balance => productIds.Contains(balance.ProductId) && balance.LocationId == MainLocationId)
             .ToDictionaryAsync(balance => balance.ProductId);
 
-        var requestSequence = await GetDailyRequestSequence(report);
-
-        return Ok(ToRequisitionDto(report, employees, balances, requestSequence));
+        return Ok(ToRequisitionDto(report, employees, balances));
     }
 
     [HttpPost]
@@ -142,11 +138,13 @@ public sealed class RequisitionsController(
         dbContext.StockHeaders.Add(header);
         await dbContext.SaveChangesAsync();
         var requestSequence = await GetDailyRequestSequence(header);
+        header.RequestNo = FormatRequestNo(header, requestSequence);
+        await dbContext.SaveChangesAsync();
 
         await notificationHub.Clients.Group(NotificationHub.HrGroup).SendAsync("RequisitionCreated", new
         {
             header.HeaderId,
-            RequestNo = FormatRequestNo(header, requestSequence),
+            RequestNo = header.RequestNo,
             EmployeeId = request.EmployeeId,
             EmployeeName = header.RequesterName,
             Department = header.Department,
@@ -155,7 +153,7 @@ public sealed class RequisitionsController(
         return CreatedAtAction(nameof(GetRequisition), new { headerId = header.HeaderId }, new
         {
             header.HeaderId,
-            RequestNo = FormatRequestNo(header, requestSequence),
+            RequestNo = header.RequestNo,
             Status = RequisitionStatuses.GetName(header.Status),
         });
     }
@@ -512,8 +510,7 @@ public sealed class RequisitionsController(
     private static object ToRequisitionDto(
         StockHeader header,
         IReadOnlyDictionary<int, Employee> employees,
-        IReadOnlyDictionary<string, StockBalance> balances,
-        int requestSequence)
+        IReadOnlyDictionary<string, StockBalance> balances)
     {
         var employeeId = int.TryParse(header.EmployeeId, out var parsedEmployeeId) ? parsedEmployeeId : 0;
         employees.TryGetValue(employeeId, out var employee);
@@ -524,11 +521,13 @@ public sealed class RequisitionsController(
         return new
         {
             header.HeaderId,
-            RequestNo = FormatRequestNo(header, requestSequence),
+            header.RequestNo,
             CreatedAt = header.TransactionDate,
             Department = department,
             EmployeeId = employeeId,
-            EmployeeName = employee?.EmployeeName ?? requesterName ?? header.EmployeeId,
+            // ชื่อที่กรอกในใบคำขอคือผู้ขอเบิกจริง จึงต้องมีลำดับสูงกว่าข้อมูลพนักงานเดิม
+            EmployeeName = requesterName ?? employee?.EmployeeName ?? header.EmployeeId,
+            RequesterName = requesterName ?? employee?.EmployeeName ?? header.EmployeeId,
             IsUrgent = header.IsUrgent,
             Status = RequisitionStatuses.GetName(header.Status),
             StatusId = header.Status,
@@ -564,45 +563,14 @@ public sealed class RequisitionsController(
             return;
         }
 
-        var requestSequence = await GetDailyRequestSequence(requisition);
         await notificationHub.Clients
             .Group(NotificationHub.RequesterGroup(employeeId))
             .SendAsync("RequisitionStatusChanged", new
             {
                 requisition.HeaderId,
-                RequestNo = FormatRequestNo(requisition, requestSequence),
+                RequestNo = requisition.RequestNo,
                 StatusId = requisition.Status,
             });
-    }
-
-    private async Task<Dictionary<int, int>> GetDailyRequestSequences(IReadOnlyCollection<StockHeader> headers)
-    {
-        if (headers.Count == 0)
-        {
-            return [];
-        }
-
-        var firstDate = headers.Min(header => header.TransactionDate.Date);
-        var lastDateExclusive = headers.Max(header => header.TransactionDate.Date).AddDays(1);
-        var dailyHeaders = await dbContext.StockHeaders
-            .AsNoTracking()
-            .Where(header =>
-                header.DocType == RequisitionDocType
-                && header.TransactionDate >= firstDate
-                && header.TransactionDate < lastDateExclusive)
-            .Select(header => new { header.HeaderId, header.TransactionDate })
-            .ToListAsync();
-
-        var sequences = dailyHeaders
-            .GroupBy(header => header.TransactionDate.Date)
-            .SelectMany(group => group
-                .OrderBy(header => header.HeaderId)
-                .Select((header, index) => new { header.HeaderId, Sequence = index + 1 }))
-            .ToDictionary(item => item.HeaderId, item => item.Sequence);
-
-        return headers.ToDictionary(
-            header => header.HeaderId,
-            header => sequences.TryGetValue(header.HeaderId, out var sequence) ? sequence : 1);
     }
 
     private async Task<int> GetDailyRequestSequence(StockHeader header)
