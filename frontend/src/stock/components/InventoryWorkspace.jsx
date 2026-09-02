@@ -38,11 +38,13 @@ import toast from 'react-hot-toast'
 import { useNavigate } from 'react-router-dom'
 import Swal from 'sweetalert2'
 import {
-  createStockIssue,
+  createDepartment,
+  createRequisition,
   createStockReceive,
   createSupplier,
   getCategories,
   getDepartments,
+  getHrEmployee,
   getProductFavorites,
   getProducts,
   getSuppliers,
@@ -54,12 +56,12 @@ import {
 import { apiOrigin } from '../../api/apiConfig'
 import AppTable from '../../components/common/AppTable'
 import DateInputField from '../../components/common/DateInputField'
-import { saveIssueReport } from '../../reports/services/issueReportStorage'
 import { useAuthStore } from '../../store/authStore'
 import { useInventoryDraftStore } from '../../store/inventoryDraftStore'
 import {
   normalizeBarcodeInput,
   normalizeDecimalNumberInput,
+  normalizeEmployeeNumericId,
   normalizePlainName,
   normalizeWholeNumberInput,
 } from '../../utils/inputGuards'
@@ -82,6 +84,7 @@ const defaultProductForm = {
 }
 
 const departmentSearchOptionValue = '__department_search__'
+const MAX_ISSUE_ITEMS_PER_REQUEST = 25
 
 const getThailandTodayInputValue = () => {
   const parts = new Intl.DateTimeFormat('en-GB', {
@@ -116,6 +119,7 @@ function normalizeProductRow(row) {
     code,
     conversionQty: Number(row.conversionQty ?? row.ConversionQty ?? row.convertQty ?? row.ConvertQty ?? 1),
     costLot: row.costLot ?? row.CostLot ?? '',
+    currentUnitCost: Number(row.currentUnitCost ?? row.CurrentUnitCost ?? 0),
     imageName: row.imageName ?? row.ImageName ?? '',
     issueUnit: row.issueUnit ?? row.IssueUnit ?? unit,
     minQty: Number(row.minQty ?? row.MinQty ?? 10),
@@ -149,10 +153,6 @@ function getIssueAvailableQty(item) {
   return toPositiveNumber(item.stockQty)
 }
 
-function getIssueBacklogQty(item) {
-  return Math.max(toPositiveNumber(item.requestQty) - getIssueAvailableQty(item), 0)
-}
-
 function shouldUseSameUnitConversion(receiveUnit, issueUnit) {
   return String(receiveUnit ?? '').trim() && String(receiveUnit ?? '').trim() === String(issueUnit ?? '').trim()
 }
@@ -173,30 +173,6 @@ function getConversionHelperText(item) {
   }
 
   return `${receiveQty} ${receiveUnit} x ${getDisplayConversionQty(item).toLocaleString('th-TH')}`
-}
-
-function mergeIssueReportWithPayload(apiReport, payload) {
-  const payloadItemsByCode = new Map(
-    (payload.items ?? []).map((item) => [
-      String(item.code ?? '').trim(),
-      item,
-    ]),
-  )
-
-  return {
-    ...payload,
-    ...apiReport,
-    items: (apiReport.items ?? payload.items ?? []).map((item, index) => {
-      const payloadItem = payloadItemsByCode.get(String(item.code ?? '').trim())
-
-      return {
-        ...payloadItem,
-        ...item,
-        category: String(item.category ?? payloadItem?.category ?? '').trim() || 'General',
-        lineNo: item.lineNo ?? payloadItem?.lineNo ?? index + 1,
-      }
-    }),
-  }
 }
 
 function getImageUrl(imageName) {
@@ -229,14 +205,14 @@ function getImageUrl(imageName) {
 
 const pageConfig = {
   issue: {
-    actionLabel: 'บันทึกเบิกสินค้า',
+    actionLabel: 'ส่งคำขอเบิกแทนผู้ใช้',
     documentLabel: 'แผนก / เลขที่เอกสาร',
     emptyText: 'ยังไม่มีรายการเบิก',
     icon: PackageCheck,
     scanPlaceholder: 'สแกนหรือพิมพ์รหัสสินค้า / บาร์โค้ด',
     sideTitle: 'รายการเบิก',
     subtitle: 'เลือกสินค้า ค้นหาตามหมวดหมู่ และตัดสต๊อกตามล็อตราคาจริง',
-    title: 'เบิกสินค้า',
+    title: 'เบิกสินค้าแทนผู้ใช้',
   },
   receive: {
     actionLabel: 'บันทึกรับเข้า',
@@ -307,9 +283,15 @@ function InventoryWorkspace({ mode }) {
   const [receiveDraftItem, setReceiveDraftItem] = useState(null)
   const [departmentCodeText, setDepartmentCodeText] = useState('')
   const [departmentOptions, setDepartmentOptions] = useState([])
+  const [pendingDepartmentToCreate, setPendingDepartmentToCreate] = useState('')
+  const [requesterEmployeeId, setRequesterEmployeeId] = useState('')
+  const [requesterName, setRequesterName] = useState('')
   const [departmentSearchText, setDepartmentSearchText] = useState('')
   const [issueDepartment, setIssueDepartment] = useState('')
   const [issueDepartmentCode, setIssueDepartmentCode] = useState('')
+  const [isIssueUrgent, setIsIssueUrgent] = useState(false)
+  const [issueUrgentRemark, setIssueUrgentRemark] = useState('')
+  const [issueUrgentTouched, setIssueUrgentTouched] = useState(false)
   const [isDepartmentSelectOpen, setIsDepartmentSelectOpen] = useState(false)
   const [scanText, setScanText] = useState('')
   const [searchText, setSearchText] = useState('')
@@ -444,6 +426,87 @@ function InventoryWorkspace({ mode }) {
     setIssueDepartmentCode(department.code)
   }
 
+  const selectRequesterDepartment = async (departmentName) => {
+    const normalizedDepartment = String(departmentName ?? '').trim()
+    if (!normalizedDepartment) {
+      clearIssueDepartment()
+      return
+    }
+
+    const department = departmentOptions.find(
+      (item) => item.code === normalizedDepartment || item.name === normalizedDepartment,
+    )
+
+    if (department) {
+      setPendingDepartmentToCreate('')
+      selectIssueDepartment(department)
+      return
+    }
+
+    await Swal.fire({
+      title: 'พบแผนกใหม่',
+      text: `ไม่พบแผนก “${normalizedDepartment}” ในระบบ ระบบจะบันทึกแผนกนี้เมื่อส่งคำขอเบิก`,
+      icon: 'info',
+      confirmButtonText: 'ตกลง',
+      customClass: {
+        container: 'stock-swal-container',
+      },
+    })
+    setDepartmentCodeText('')
+    setIssueDepartmentCode('')
+    setIssueDepartment(normalizedDepartment)
+    setPendingDepartmentToCreate(normalizedDepartment)
+  }
+
+  const savePendingDepartment = async () => {
+    if (!pendingDepartmentToCreate) {
+      return
+    }
+
+    const scannedDepartmentCode = normalizeBarcodeInput(departmentCodeText).trim()
+    const existingDepartment = departmentOptions.find(
+      (item) => item.name === pendingDepartmentToCreate
+        || (scannedDepartmentCode && item.code === scannedDepartmentCode),
+    )
+
+    if (existingDepartment) {
+      if (existingDepartment.name !== pendingDepartmentToCreate) {
+        throw new Error('Department QR code already belongs to another department.')
+      }
+
+      setPendingDepartmentToCreate('')
+      return
+    }
+
+    const createdDepartment = await createDepartment({
+      departmentCode: scannedDepartmentCode || pendingDepartmentToCreate,
+      departmentName: pendingDepartmentToCreate,
+      departmentStatus: 1,
+    })
+    const normalizedCreatedDepartment = normalizeDepartmentRow(createdDepartment)
+
+    setDepartmentOptions((current) => [...current, normalizedCreatedDepartment])
+    setPendingDepartmentToCreate('')
+    toast.success(`บันทึกแผนก ${pendingDepartmentToCreate} ลงระบบแล้ว`)
+  }
+
+  const handleRequesterEmployeeIdBlur = async () => {
+    const normalizedEmployeeId = requesterEmployeeId.trim()
+
+    if (!normalizedEmployeeId) {
+      return
+    }
+
+    try {
+      const requester = await getHrEmployee(normalizedEmployeeId)
+      await selectRequesterDepartment(requester.department ?? requester.Department ?? '')
+      setRequesterName(String(requester.name ?? requester.Name ?? '').trim())
+    } catch {
+      setRequesterName('')
+      toast.error('ไม่พบข้อมูลพนักงานจากระบบ Login User')
+    }
+  }
+
   const clearIssueDepartment = () => {
     setDepartmentCodeText('')
     setDepartmentSearchText('')
@@ -463,6 +526,11 @@ function InventoryWorkspace({ mode }) {
     )
 
     if (!department) {
+      if (pendingDepartmentToCreate) {
+        toast.success(`จะบันทึก QR ${code} พร้อมแผนก ${pendingDepartmentToCreate} ตอนส่งคำขอ`)
+        return
+      }
+
       setIssueDepartment('')
       setIssueDepartmentCode('')
       toast.error('ไม่พบรหัสแผนกนี้')
@@ -501,8 +569,10 @@ function InventoryWorkspace({ mode }) {
   }
 
   const handleSelectedItemChange = useCallback((itemId, field, value) => {
+    const normalizedQuantity = field === 'requestQty' ? normalizeWholeNumberInput(value) : ''
+
     const nextValue = field === 'requestQty'
-      ? normalizeWholeNumberInput(value)
+      ? normalizedQuantity
       : field === 'unit'
         ? normalizePlainName(value)
         : value
@@ -579,15 +649,10 @@ function InventoryWorkspace({ mode }) {
       return
     }
 
-    if (!receiveSupplierId) {
-      toast.error('กรุณาเลือกผู้ขายก่อนเพิ่มรายการรับเข้า')
-      return
-    }
-
     setSelectedItems((current) => [
       {
         ...receiveDraftItem,
-        supplierId: Number(receiveSupplierId),
+        supplierId: receiveSupplierId ? Number(receiveSupplierId) : null,
       },
       ...current.filter((item) => item.id !== receiveDraftItem.id),
     ])
@@ -624,16 +689,28 @@ function InventoryWorkspace({ mode }) {
         label: mode === 'receive' ? 'จำนวนรับเข้า' : 'จำนวน',
         width: 110,
         sortable: false,
-        render: (row) => (
-          <TextField
-            fullWidth
-            size="small"
-            type="number"
-            value={row.requestQty}
-            onChange={(event) => handleSelectedItemChange(row.id, 'requestQty', event.target.value)}
-            sx={numberInputSx}
-          />
-        ),
+        render: (row) => {
+          const isInvalidQuantity = !String(row.requestQty ?? '').trim() || Number(row.requestQty) <= 0
+
+          return (
+            <TextField
+              error={isInvalidQuantity}
+              fullWidth
+              helperText={isInvalidQuantity ? 'กรอกจำนวนมากกว่า 0' : ''}
+              size="small"
+              type="number"
+              value={row.requestQty}
+              onChange={(event) => handleSelectedItemChange(row.id, 'requestQty', event.target.value)}
+              sx={numberInputSx}
+              slotProps={{
+                htmlInput: {
+                  min: 1,
+                  step: 1,
+                },
+              }}
+            />
+          )
+        },
       },
       {
         key: 'unit',
@@ -712,7 +789,26 @@ function InventoryWorkspace({ mode }) {
     }
 
     return [
+      {
+        key: 'actions',
+        label: 'ลบ',
+        width: 70,
+        align: 'center',
+        searchable: false,
+        sortable: false,
+        render: (row) => (
+          <IconButton
+            aria-label={`ลบ ${row.name}`}
+            color="error"
+            size="small"
+            onClick={(event) => handleRemoveSelectedItem(event, row.id)}
+          >
+            <Trash2 size={17} />
+          </IconButton>
+        ),
+      },
       ...quantityColumns,
+      baseColumns[1],
       {
         key: 'availableQty',
         label: 'คงเหลือ',
@@ -721,23 +817,19 @@ function InventoryWorkspace({ mode }) {
         sortable: false,
         render: (row) => `${getIssueAvailableQty(row).toLocaleString('th-TH')} ${row.unit ?? ''}`,
       },
+      baseColumns[0],
+      baseColumns[2],
       {
-        key: 'backlogQty',
-        label: 'ค้าง',
-        width: 110,
+        key: 'currentUnitCost',
+        label: 'ต้นทุน/ชิ้น',
+        width: 120,
         align: 'center',
         sortable: false,
-        render: (row) => {
-          const backlogQty = getIssueBacklogQty(row)
-
-          return backlogQty > 0 ? (
-            <Chip color="warning" label={`${backlogQty.toLocaleString('th-TH')} ${row.unit ?? ''}`} size="small" />
-          ) : (
-            '-'
-          )
-        },
+        render: (row) => `${Number(row.currentUnitCost ?? 0).toLocaleString('th-TH', {
+          maximumFractionDigits: 2,
+          minimumFractionDigits: 2,
+        })} บาท`,
       },
-      ...baseColumns,
     ]
   }, [handleRemoveSelectedItem, handleSelectedItemChange, mode])
 
@@ -792,7 +884,12 @@ function InventoryWorkspace({ mode }) {
 
   const canSubmit =
     selectedItems.length > 0
+    && (mode !== 'issue' || selectedItems.length <= MAX_ISSUE_ITEMS_PER_REQUEST)
+    && selectedItems.every((item) => toPositiveNumber(item.requestQty) > 0)
     && (mode !== 'issue' || issueDepartment.trim())
+    && (mode !== 'issue' || requesterEmployeeId.trim())
+    && (mode !== 'issue' || requesterName.trim())
+    && (mode !== 'issue' || !isIssueUrgent || issueUrgentRemark.trim())
     && (mode !== 'receive' || Boolean(receiveSupplierId))
     && (mode !== 'receive' || Boolean(receiveDate))
     && (mode === 'issue'
@@ -811,10 +908,24 @@ function InventoryWorkspace({ mode }) {
       return
     }
 
+    const isAlreadySelected = selectedItems.some((selected) => selected.id === item.id)
+    if (!isAlreadySelected && selectedItems.length >= MAX_ISSUE_ITEMS_PER_REQUEST) {
+      Swal.fire(
+        'ครบจำนวนรายการแล้ว',
+        `ใบเบิกหนึ่งใบเลือกได้ไม่เกิน ${MAX_ISSUE_ITEMS_PER_REQUEST} รายการสินค้า`,
+        'warning',
+      )
+      return
+    }
+
     setSelectedItems((current) =>
-      current.some((selected) => selected.id === item.id)
-        ? current.filter((selected) => selected.id !== item.id)
-        : [...current, createSelectedItem(item)],
+      {
+        if (current.some((selected) => selected.id === item.id)) {
+          return current.filter((selected) => selected.id !== item.id)
+        }
+
+        return [...current, createSelectedItem(item)]
+      },
     )
   }
 
@@ -834,6 +945,17 @@ function InventoryWorkspace({ mode }) {
     if (matchedItem) {
       if (mode === 'receive') {
         handleOpenReceiveDialog(matchedItem)
+        setScanText('')
+        return
+      }
+
+      const isAlreadySelected = selectedItems.some((item) => item.id === matchedItem.id)
+      if (!isAlreadySelected && selectedItems.length >= MAX_ISSUE_ITEMS_PER_REQUEST) {
+        Swal.fire(
+          'ครบจำนวนรายการแล้ว',
+          `ใบเบิกหนึ่งใบเลือกได้ไม่เกิน ${MAX_ISSUE_ITEMS_PER_REQUEST} รายการสินค้า`,
+          'warning',
+        )
         setScanText('')
         return
       }
@@ -1180,31 +1302,59 @@ function InventoryWorkspace({ mode }) {
     }
 
     try {
-      const savedStockIssue = await createStockIssue(transactionPayload)
-      const issueReport = mergeIssueReportWithPayload(savedStockIssue, transactionPayload)
+      const safeRequesterName = requesterName.trim()
 
-      saveIssueReport(issueReport)
+      if (!safeRequesterName) {
+        toast.error('กรุณากรอกชื่อผู้ขอเบิก')
+        return
+      }
+
+      await savePendingDepartment()
+
+      const savedRequest = await createRequisition({
+        department: issueDepartment.trim(),
+        employeeId: Number(requesterEmployeeId),
+        isUrgent: isIssueUrgent,
+        requesterName: safeRequesterName,
+        remark: '',
+        urgentRemark: isIssueUrgent ? issueUrgentRemark.trim() : '',
+        items: transactionPayload.items.map((item) => ({
+          barcode: item.barcode,
+          category: item.category,
+          code: item.code,
+          lineNo: item.lineNo,
+          productName: item.productName,
+          quantity: item.quantity,
+          unit: item.unit,
+        })),
+      })
+
       setSelectedItems([])
       setDepartmentCodeText('')
       setIssueDepartment('')
       setIssueDepartmentCode('')
+      setRequesterName('')
+      setRequesterEmployeeId('')
+      setPendingDepartmentToCreate('')
+      setIsIssueUrgent(false)
+      setIssueUrgentRemark('')
+      setIssueUrgentTouched(false)
       await loadInventoryItems()
       toast.dismiss()
       await Swal.fire({
         title: 'สำเร็จ',
-        text: 'บันทึกเบิกสินค้าสำเร็จ',
+        text: `ส่งคำขอเบิก ${savedRequest.requestNo ?? ''} เรียบร้อยแล้ว`,
         icon: 'success',
         customClass: {
           container: 'stock-swal-container',
         },
         confirmButtonText: 'ตกลง',
       })
-      navigate(`/history?documentNo=${encodeURIComponent(issueReport.documentNo)}`)
+      navigate('/approvals')
     } catch {
-      saveIssueReport(transactionPayload)
       await Swal.fire({
         title: 'ไม่สำเร็จ',
-        text: 'บันทึกลงฐานข้อมูลไม่สำเร็จ ระบบเก็บรายการไว้ในเครื่องชั่วคราว',
+        text: 'ส่งคำขอเบิกไม่สำเร็จ กรุณาตรวจสอบ Backend API',
         icon: 'error',
         customClass: {
           container: 'stock-swal-container',
@@ -1603,7 +1753,7 @@ function InventoryWorkspace({ mode }) {
                     <Typography sx={{ color: '#111827', fontSize: 15, fontWeight: 800 }}>
                       {config.sideTitle}
                     </Typography>
-                    <Chip label={`${selectedItems.length} รายการ`} size="small" />
+                    <Chip label={mode === 'issue' ? `${selectedItems.length}/${MAX_ISSUE_ITEMS_PER_REQUEST} รายการ` : `${selectedItems.length} รายการ`} size="small" />
                   </Stack>
 
                   {mode === 'receive' ? (
@@ -1735,16 +1885,43 @@ function InventoryWorkspace({ mode }) {
                   ) : (
                     <AppTable
                       columns={selectedTableColumns}
+                      initialRowsPerPage={25}
                       maxHeight={420}
                       noDataText={config.emptyText}
                       rowKey="id"
                       rows={selectedItems}
+                      rowsPerPageOptions={[10, 25]}
                       showColumnFilters={false}
                     />
                   )}
 
                   {mode === 'receive' ? null : (
                     <Stack spacing={1.25}>
+                      <Grid container spacing={1.25}>
+                        <Grid size={{ xs: 12, sm: 5 }}>
+                          <TextField
+                            fullWidth
+                            required
+                            helperText="กรอกรหัสแล้วตรวจชื่อจากฐานข้อมูล Login User"
+                            label="รหัสพนักงาน"
+                            size="small"
+                            value={requesterEmployeeId}
+                            onBlur={handleRequesterEmployeeIdBlur}
+                            onChange={(event) => setRequesterEmployeeId(normalizeEmployeeNumericId(event.target.value))}
+                          />
+                        </Grid>
+                        <Grid size={{ xs: 12, sm: 7 }}>
+                          <TextField
+                            fullWidth
+                            required
+                            helperText="ตัดช่องว่างเฉพาะต้น–ท้ายก่อนบันทึก"
+                            disabled
+                            label="ผู้ขอเบิก"
+                            size="small"
+                            value={requesterName}
+                          />
+                        </Grid>
+                      </Grid>
                       <Grid container spacing={1.25}>
                         <Grid size={{ xs: 12, sm: 6 }}>
                           <TextField
@@ -1776,6 +1953,9 @@ function InventoryWorkspace({ mode }) {
                             value={issueDepartmentCode}
                             onChange={(event) => handleDepartmentSelect(event.target.value)}
                             slotProps={{
+                              inputLabel: {
+                                shrink: true,
+                              },
                               select: {
                                 displayEmpty: true,
                                 open: isDepartmentSelectOpen,
@@ -1786,7 +1966,7 @@ function InventoryWorkspace({ mode }) {
                                 onOpen: () => setIsDepartmentSelectOpen(true),
                                 renderValue: (selected) => {
                                   if (!selected) {
-                                    return 'เลือกแผนก'
+                                    return <Box component="span" sx={{ color: '#94a3b8' }}>เลือกแผนก</Box>
                                   }
 
                                   const department = departmentOptions.find((item) => item.code === selected)
@@ -1835,6 +2015,7 @@ function InventoryWorkspace({ mode }) {
                         </Grid>
                       </Grid>
                       <TextField
+                        disabled
                         fullWidth
                         required
                         helperText={issueDepartment ? `Code: ${issueDepartmentCode}` : 'ยิง QR หรือเลือกจากรายชื่อก่อนเบิก'}
@@ -1847,6 +2028,50 @@ function InventoryWorkspace({ mode }) {
                           },
                         }}
                       />
+                      <Box
+                        sx={{
+                          bgcolor: isIssueUrgent ? '#fff7ed' : '#ffffff',
+                          border: `1px solid ${isIssueUrgent ? '#fed7aa' : '#e2e8f0'}`,
+                          borderRadius: 2,
+                          p: 1.25,
+                        }}
+                      >
+                        <FormControlLabel
+                          control={(
+                            <Checkbox
+                              checked={isIssueUrgent}
+                              color="error"
+                              onChange={(event) => {
+                                setIsIssueUrgent(event.target.checked)
+                                setIssueUrgentTouched(false)
+                                if (!event.target.checked) {
+                                  setIssueUrgentRemark('')
+                                }
+                              }}
+                            />
+                          )}
+                          label="เบิกด่วน"
+                          sx={{ fontWeight: 800, m: 0 }}
+                        />
+                        {isIssueUrgent ? (
+                          <TextField
+                            error={issueUrgentTouched && !issueUrgentRemark.trim()}
+                            fullWidth
+                            helperText={
+                              issueUrgentTouched && !issueUrgentRemark.trim()
+                                ? 'กรุณาระบุเหตุผลเบิกด่วน'
+                                : 'เหตุผลนี้จะแสดงให้ HR เห็นในรายการคำขอ'
+                            }
+                            label="เหตุผลเบิกด่วน *"
+                            minRows={2}
+                            multiline
+                            size="small"
+                            value={issueUrgentRemark}
+                            onBlur={() => setIssueUrgentTouched(true)}
+                            onChange={(event) => setIssueUrgentRemark(event.target.value)}
+                          />
+                        ) : null}
+                      </Box>
                     </Stack>
                   )}
 
@@ -1886,15 +2111,22 @@ function InventoryWorkspace({ mode }) {
       <DialogContent>
         <Stack spacing={1.5} sx={{ pt: 1 }}>
           <Alert severity="info">
-            ต้องการ{mode === 'receive' ? 'บันทึกรับเข้าสินค้า' : 'บันทึกเบิกสินค้า'}ใช่หรือไม่
+            ต้องการ{mode === 'receive' ? 'บันทึกรับเข้าสินค้า' : 'ส่งคำขอเบิกแทนผู้ใช้'}ใช่หรือไม่
           </Alert>
           <Typography sx={{ color: '#475569', fontSize: 14 }}>
             จำนวนรายการทั้งหมด <strong>{selectedItems.length.toLocaleString('th-TH')}</strong> รายการ
           </Typography>
           {mode === 'issue' ? (
-            <Typography sx={{ color: '#475569', fontSize: 14 }}>
-              แผนกที่เบิก <strong>{issueDepartment || '-'}</strong>
-            </Typography>
+            <Stack spacing={0.5}>
+              <Typography sx={{ color: '#475569', fontSize: 14 }}>
+                ผู้ขอเบิก <strong>{requesterName.trim() || '-'}</strong>
+              </Typography>
+              {isIssueUrgent ? (
+                <Typography sx={{ color: '#dc2626', fontSize: 14, fontWeight: 800 }}>
+                  เบิกด่วน: {issueUrgentRemark.trim() || '-'}
+                </Typography>
+              ) : null}
+            </Stack>
           ) : null}
         </Stack>
       </DialogContent>
@@ -1960,12 +2192,23 @@ function InventoryWorkspace({ mode }) {
               </Grid>
               <Grid size={{ xs: 12, sm: 2.4 }}>
                 <TextField
+                  error={!String(receiveDraftItem.requestQty ?? '').trim() || toPositiveNumber(receiveDraftItem.requestQty) <= 0}
                   fullWidth
-                  helperText={`จำนวนที่รับเข้าจริง เช่น 10 ${receiveDraftItem.unit || 'หน่วย'}`}
+                  helperText={
+                    !String(receiveDraftItem.requestQty ?? '').trim() || toPositiveNumber(receiveDraftItem.requestQty) <= 0
+                      ? 'กรอกจำนวนรับเข้ามากกว่า 0'
+                      : `จำนวนที่รับเข้าจริง เช่น 10 ${receiveDraftItem.unit || 'หน่วย'}`
+                  }
                   label="จำนวนรับเข้า"
                   type="number"
                   value={receiveDraftItem.requestQty}
                   onChange={(event) => handleReceiveDraftChange('requestQty', event.target.value)}
+                  slotProps={{
+                    htmlInput: {
+                      min: 1,
+                      step: 1,
+                    },
+                  }}
                 />
               </Grid>
               <Grid
@@ -1993,10 +2236,16 @@ function InventoryWorkspace({ mode }) {
               <Grid size={{ xs: 12, sm: 4.4 }}>
                 <TextField
                   disabled={shouldUseSameUnitConversion(receiveDraftItem.unit, receiveDraftItem.issueUnit)}
+                  error={
+                    !shouldUseSameUnitConversion(receiveDraftItem.unit, receiveDraftItem.issueUnit)
+                    && (!String(receiveDraftItem.conversionQty ?? '').trim() || toPositiveNumber(receiveDraftItem.conversionQty) <= 0)
+                  }
                   fullWidth
                   helperText={
                     shouldUseSameUnitConversion(receiveDraftItem.unit, receiveDraftItem.issueUnit)
                       ? 'หน่วยรับเข้าและหน่วยเบิกเหมือนกัน ช่องนี้จะถูกปิด และระบบแปลง 1 ต่อ 1 ให้อัตโนมัติ'
+                      : !String(receiveDraftItem.conversionQty ?? '').trim() || toPositiveNumber(receiveDraftItem.conversionQty) <= 0
+                        ? 'กรอกจำนวนแปลงมากกว่า 0'
                       : `กรอกจำนวน ${receiveDraftItem.issueUnit || 'หน่วยเบิก'} ต่อ 1 ${receiveDraftItem.unit || 'หน่วยรับเข้า'} เช่น 1 แพ็ค = 100 ชิ้น`
                   }
                   label={
@@ -2011,6 +2260,12 @@ function InventoryWorkspace({ mode }) {
                       : receiveDraftItem.conversionQty ?? 1
                   }
                   onChange={(event) => handleReceiveDraftChange('conversionQty', event.target.value)}
+                  slotProps={{
+                    htmlInput: {
+                      min: 1,
+                      step: 1,
+                    },
+                  }}
                 />
               </Grid>
               <Grid size={{ xs: 12, sm: 4 }}>

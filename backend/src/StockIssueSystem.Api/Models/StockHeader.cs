@@ -12,6 +12,18 @@ public sealed class StockHeader
     [MaxLength(100)]
     public string PoInvoiceNo { get; set; } = string.Empty;
 
+    [MaxLength(30)]
+    public string RequestNo { get; set; } = string.Empty;
+
+    [MaxLength(30)]
+    public string ReceiveNo { get; set; } = string.Empty;
+
+    [MaxLength(30)]
+    public string CancelNo { get; set; } = string.Empty;
+
+    [MaxLength(30)]
+    public string AdjustNo { get; set; } = string.Empty;
+
     [MaxLength(20)]
     public string EmployeeId { get; set; } = string.Empty;
 

@@ -243,6 +243,8 @@ function ProductDataTable({
   onToggleMovements,
   onViewCostLots,
   onViewRemark,
+  statusFilter,
+  onStatusFilterChange,
 }) {
   const columns = [
     {
@@ -294,6 +296,14 @@ function ProductDataTable({
       width: 125,
       align: 'center',
       searchable: false,
+      sortValue: (row) => {
+        const stockQty = Number(row.stockQty ?? 0)
+        const minQty = Number(row.minQty ?? 10)
+
+        if (stockQty > minQty) return 1
+        if (stockQty > 0) return 2
+        return 3
+      },
       render: (row) => {
         const stockQty = Number(row.stockQty ?? 0)
         const minQty = Number(row.minQty ?? 10)
@@ -399,7 +409,8 @@ function ProductDataTable({
   return (
     <AppTable
       columns={columns}
-      defaultSortField="productId"
+      defaultSortDirection="asc"
+      defaultSortField="stockStatus"
       expandable
       isLoading={isLoading}
       isRowExpanded={(row) => expandedProductId === row.productId}
@@ -415,6 +426,21 @@ function ProductDataTable({
       rowKey="productId"
       rows={data}
       showGlobalSearch
+      toolbarContent={
+        <TextField
+          select
+          label="สถานะสต็อก"
+          size="small"
+          sx={{ minWidth: 160 }}
+          value={statusFilter}
+          onChange={(event) => onStatusFilterChange(event.target.value)}
+        >
+          <MenuItem value="all">ทั้งหมด</MenuItem>
+          <MenuItem value="ready">พร้อมเบิก</MenuItem>
+          <MenuItem value="low">ใกล้หมด</MenuItem>
+          <MenuItem value="out">หมด</MenuItem>
+        </TextField>
+      }
     />
   )
 }

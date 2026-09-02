@@ -124,39 +124,8 @@ function getSlipRowsForMode(rows, isBacklogDocument = false) {
     }))
 }
 
-export function buildPrintableRowWithBacklog(row, requestRows) {
-  if (!row) {
-    return row
-  }
-
-  const currentRequestNo = String(row.requestNo ?? '')
-  const currentItems = row.items ?? []
-  const carryOverItems = (requestRows ?? [])
-    .filter((request) => String(request.requestNo ?? '') !== currentRequestNo)
-    .filter((request) => request.statusId === 8)
-    .flatMap((request) => (request.items ?? [])
-      .filter((item) => Number(item.backlogQty ?? 0) > 0)
-      .map((item, index) => ({
-        ...item,
-        detailId: `carry-${request.requestNo}-${item.detailId || index}`,
-        fulfilledQty: Number(item.fulfilledQty ?? 0),
-        isCarryOverBacklog: true,
-        lineNo: `${request.requestNo}-${index + 1}`,
-        quantity: Number(item.backlogQty ?? 0),
-        remark: `ค้างจาก ${request.requestNo}`,
-      })))
-
-  if (carryOverItems.length === 0) {
-    return row
-  }
-
-  return {
-    ...row,
-    hasCarryOverBacklog: true,
-    items: [...currentItems, ...carryOverItems],
-    totalItems: currentItems.length + carryOverItems.length,
-    totalQty: [...currentItems, ...carryOverItems].reduce((sum, item) => sum + Number(item.quantity ?? 0), 0),
-  }
+export function buildPrintableRowWithBacklog(row) {
+  return row
 }
 
 const REQUEST_STATUS_META = {
@@ -346,7 +315,7 @@ export function printHistorySlip(row) {
     || String(row.status ?? row.Status ?? '').includes('ค้าง')
   const displayRows = getSlipRowsForMode(slipRows, isBacklogDocument)
   const showBacklogColumns = isBacklogDocument
-  const fixedRowCount = 20
+  const fixedRowCount = 25
 
   if (displayRows.length === 0) {
     window.alert('ไม่มีรายการสำหรับพิมพ์ใบนี้')
@@ -391,8 +360,8 @@ export function printHistorySlip(row) {
         <style>
           @page { size: A4 portrait; margin: 5mm; }
           * { box-sizing: border-box; }
-          body { background: #fff; color: #000; font-family: Tahoma, Arial, sans-serif; font-size: 13px; margin: 0; }
-          .sheet { border: 2px solid #111; display: flex; flex-direction: column; justify-content: center; min-height: 287mm; padding: 5mm 1mm; position: relative; width: 100%; }
+          body { background: #fff; color: #000; font-family: Tahoma, Arial, sans-serif; font-size: 15px; margin: 0; }
+          .sheet { border: 2px solid #111; display: flex; flex-direction: column; justify-content: center; min-height: 287mm; padding: 3mm 1mm; position: relative; width: 100%; }
           .urgent-stamp {
             border: 2px solid ${slipStampColor};
             color: ${slipStampColor};
@@ -406,34 +375,34 @@ export function printHistorySlip(row) {
             position: absolute;
             top: 5mm;
           }
-          .document-no { margin-bottom: 2px; text-align: right; }
-          .title { font-size: 30px; font-weight: 900; line-height: 1.1; text-align: center; }
-          .subtitle { margin-bottom: 8px; text-align: center; }
+          .document-no { position: absolute; right: 5mm; text-align: right; top: 5mm; }
+          .title { font-size: 28px; font-weight: 900; line-height: 1.1; margin-top: 30px; text-align: center; }
+          .subtitle { margin-bottom: 4px; text-align: center; }
           .line { border-bottom: 1px solid #111; display: inline-block; min-height: 17px; padding: 0 5px 1px; vertical-align: bottom; }
           .line-xs { min-width: 36px; }
           .line-sm { min-width: 62px; }
           .line-md { min-width: 88px; }
           .line-xl { min-width: 270px; }
-          .top-section { display: grid; gap: 10px; grid-template-columns: minmax(0, 1fr) 280px; margin-top: 8px; }
-          .field-row { margin-bottom: 8px; white-space: nowrap; }
+          .top-section { display: grid; gap: 10px; grid-template-columns: minmax(0, 1fr) 280px; margin-top: 4px; }
+          .field-row { margin-bottom: 4px; white-space: nowrap; }
           .approval-box { border: 1px solid #111; display: grid; grid-template-columns: 1fr 1fr; }
-          .approval-cell { min-height: 82px; padding: 3px 6px; text-align: center; }
+          .approval-cell { min-height: 66px; padding: 3px 6px; text-align: center; }
           .approval-cell + .approval-cell { border-left: 1px solid #111; }
-          .approval-title { border-bottom: 1px solid #111; font-size: 11px; font-weight: 700; margin: -3px -6px 36px; padding: 3px 2px; white-space: nowrap; }
+          .approval-title { border-bottom: 1px solid #111; font-size: 11px; font-weight: 700; margin: -3px -6px 27px; padding: 3px 2px; white-space: nowrap; }
           .approval-sign-line { border-bottom: 1px solid #111; margin: 0 auto 6px; width: 82%; }
           .approval-date-line { font-size: 11px; line-height: 1; white-space: nowrap; }
-          table { border-collapse: collapse; margin-top: 16px; page-break-inside: auto; width: 100%; }
+          table { border-collapse: collapse; margin-top: 8px; page-break-inside: auto; width: 100%; }
           thead { display: table-header-group; }
           tr { page-break-after: auto; page-break-inside: avoid; }
-          th, td { border: 1px solid #111; font-size: 12px; height: 29px; padding: 3px 5px; vertical-align: middle; word-break: break-word; }
+          th, td { border: 1px solid #111; font-size: 12px; height: 28px; padding: 1px 3px; text-align: center; vertical-align: middle; word-break: break-word; }
           th { font-weight: 800; text-align: center; }
           .center { text-align: center; }
-          .receive-section { display: grid; gap: 10px; grid-template-columns: minmax(0, 1fr) 280px; margin-top: 20px; }
-          .receiver-fields { padding-top: 18px; }
-          .bottom-sign-box { border: 1px solid #111; display: grid; grid-template-columns: 1fr 1fr; min-height: 104px; }
+          .receive-section { display: grid; gap: 10px; grid-template-columns: minmax(0, 1fr) 310px; margin-top: auto; padding-top: 8px; }
+          .receiver-fields { padding-top: 8px; }
+          .bottom-sign-box { border: 1px solid #111; display: grid; grid-template-columns: 1fr 1fr; min-height: 78px; }
           .bottom-sign-cell { padding: 0 8px 6px; text-align: center; }
           .bottom-sign-cell + .bottom-sign-cell { border-left: 1px solid #111; }
-          .bottom-sign-title { align-items: center; border-bottom: 1px solid #111; box-sizing: border-box; display: flex; font-size: 11px; font-weight: 700; height: 28px; justify-content: center; margin: 0 -8px 42px; padding: 4px 2px; white-space: nowrap; }
+          .bottom-sign-title { align-items: center; border-bottom: 1px solid #111; box-sizing: border-box; display: flex; font-size: 11px; font-weight: 700; height: 22px; justify-content: center; margin: 0 -8px 31px; padding: 4px 2px; white-space: nowrap; }
           .remark-line { display: inline-block; margin-left: 6px; max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; width: 300px; }
           .print-value { font-weight: 700; }
           @media print {
@@ -491,12 +460,12 @@ export function printHistorySlip(row) {
             <thead>
               <tr>
                 <th style="width: 58px;">ลำดับ</th>
-                <th style="width: 70px;">หมวด</th>
-                <th style="width: 135px;">รายการ</th>
+                <th style="width: ${showBacklogColumns ? 120 : 130}px;">หมวด</th>
+                <th style="width: ${showBacklogColumns ? 155 : 175}px;">รายการ</th>
                 <th style="width: 68px;">${showBacklogColumns ? 'จำนวนที่ขอ' : modeConfig.qtyHeader}</th>
                 ${showBacklogColumns ? '<th style="width: 58px;">ค้าง</th>' : ''}
                 <th style="width: 72px;">หน่วยนับ</th>
-                <th style="width: ${showBacklogColumns ? 220 : 278}px;">หมายเหตุ</th>
+                <th style="width: ${showBacklogColumns ? 150 : 180}px;">หมายเหตุ</th>
               </tr>
             </thead>
             <tbody>${rowsHtml}</tbody>
@@ -584,6 +553,12 @@ function buildRequestPdfHtml(row) {
       `,
     )
     .join('')
+    + Array.from({ length: Math.max(0, 25 - displayRows.length) }, (_, index) => `
+      <tr>
+        <td class="center">${displayRows.length + index + 1}</td>
+        <td></td><td></td><td></td>${showBacklogColumns ? '<td></td>' : ''}<td></td><td></td>
+      </tr>
+    `).join('')
 
   return `
     <style>
@@ -592,9 +567,14 @@ function buildRequestPdfHtml(row) {
         border: 2px solid #111;
         box-sizing: border-box;
         color: #000;
+        display: flex;
+        flex-direction: column;
+        margin: 0 auto;
         font-family: Tahoma, Arial, sans-serif;
-        font-size: 13px;
-        padding: 22px 4px;
+        font-size: 15px;
+        justify-content: center;
+        min-height: 1138px;
+        padding: 11px 4px;
         position: relative;
         width: 794px;
       }
@@ -609,11 +589,11 @@ function buildRequestPdfHtml(row) {
         line-height: 1;
         padding: 6px 14px;
         position: absolute;
-        top: 22px;
+        top: 19px;
       }
-      .request-pdf-docno { margin-bottom: 2px; text-align: right; }
-      .request-pdf-title { font-size: 30px; font-weight: 900; line-height: 1.1; text-align: center; }
-      .request-pdf-subtitle { margin-bottom: 8px; text-align: center; }
+      .request-pdf-docno { position: absolute; right: 19px; text-align: right; top: 19px; }
+      .request-pdf-title { font-size: 28px; font-weight: 900; line-height: 1.1; margin-top: 30px; text-align: center; }
+      .request-pdf-subtitle { margin-bottom: 4px; text-align: center; }
       .request-pdf-line {
         border-bottom: 1px solid #111;
         display: inline-block;
@@ -625,25 +605,25 @@ function buildRequestPdfHtml(row) {
       .request-pdf-sm { min-width: 62px; }
       .request-pdf-md { min-width: 88px; }
       .request-pdf-xl { min-width: 270px; }
-      .request-pdf-top { display: grid; gap: 10px; grid-template-columns: minmax(0, 1fr) 280px; margin-top: 8px; }
-      .request-pdf-row { margin-bottom: 8px; white-space: nowrap; }
+      .request-pdf-top { display: grid; gap: 10px; grid-template-columns: minmax(0, 1fr) 280px; margin-top: 4px; }
+      .request-pdf-row { margin-bottom: 4px; white-space: nowrap; }
       .request-pdf-approval { border: 1px solid #111; display: grid; grid-template-columns: 1fr 1fr; }
-      .request-pdf-approval-cell { min-height: 82px; padding: 3px 6px; text-align: center; }
+      .request-pdf-approval-cell { min-height: 66px; padding: 3px 6px; text-align: center; }
       .request-pdf-approval-cell + .request-pdf-approval-cell { border-left: 1px solid #111; }
-      .request-pdf-approval-title { border-bottom: 1px solid #111; font-size: 11px; font-weight: 700; margin: -3px -6px 36px; padding: 3px 2px; white-space: nowrap; }
+      .request-pdf-approval-title { border-bottom: 1px solid #111; font-size: 11px; font-weight: 700; margin: -3px -6px 27px; padding: 3px 2px; white-space: nowrap; }
       .request-pdf-sign-line { border-bottom: 1px solid #111; margin: 0 auto 6px; width: 82%; }
       .request-pdf-date-line { font-size: 11px; line-height: 1; white-space: nowrap; }
-      .request-pdf-table { border-collapse: collapse; margin-top: 16px; width: 100%; }
+      .request-pdf-table { border-collapse: collapse; margin-top: 8px; width: 100%; }
       .request-pdf-table th,
-      .request-pdf-table td { border: 1px solid #111; font-size: 12px; height: 29px; padding: 3px 5px; vertical-align: middle; word-break: break-word; }
+      .request-pdf-table td { border: 1px solid #111; font-size: 12px; height: 28px; padding: 1px 3px; text-align: center; vertical-align: middle; word-break: break-word; }
       .request-pdf-table th { font-weight: 800; text-align: center; }
       .center { text-align: center; }
-      .request-pdf-receive { display: grid; gap: 10px; grid-template-columns: minmax(0, 1fr) 280px; margin-top: 20px; }
-      .request-pdf-receiver-fields { padding-top: 18px; }
-      .request-pdf-bottom-box { border: 1px solid #111; display: grid; grid-template-columns: 1fr 1fr; min-height: 104px; }
+      .request-pdf-receive { display: grid; gap: 10px; grid-template-columns: minmax(0, 1fr) 310px; margin-top: auto; padding-top: 8px; }
+      .request-pdf-receiver-fields { padding-top: 8px; }
+      .request-pdf-bottom-box { border: 1px solid #111; display: grid; grid-template-columns: 1fr 1fr; min-height: 78px; }
       .request-pdf-bottom-cell { padding: 0 8px 6px; text-align: center; }
       .request-pdf-bottom-cell + .request-pdf-bottom-cell { border-left: 1px solid #111; }
-      .request-pdf-bottom-title { border-bottom: 1px solid #111; font-size: 11px; font-weight: 700; margin: 0 -8px 42px; padding: 4px 2px; white-space: nowrap; }
+      .request-pdf-bottom-title { border-bottom: 1px solid #111; font-size: 11px; font-weight: 700; margin: 0 -8px 31px; padding: 4px 2px; white-space: nowrap; }
       .request-pdf-remark { display: inline-block; margin-left: 6px; max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; width: 300px; }
       .request-pdf-value { font-weight: 700; }
     </style>
@@ -695,12 +675,12 @@ function buildRequestPdfHtml(row) {
         <thead>
           <tr>
             <th style="width: 58px;">ลำดับ</th>
-            <th style="width: 70px;">หมวด</th>
-            <th style="width: 135px;">รายการ</th>
+            <th style="width: ${showBacklogColumns ? 120 : 130}px;">หมวด</th>
+            <th style="width: ${showBacklogColumns ? 155 : 175}px;">รายการ</th>
             <th style="width: 68px;">${showBacklogColumns ? 'จำนวนที่ขอ' : modeConfig.qtyHeader}</th>
             ${showBacklogColumns ? '<th style="width: 58px;">ค้าง</th>' : ''}
             <th style="width: 72px;">หน่วยนับ</th>
-            <th style="width: ${showBacklogColumns ? 220 : 278}px;">หมายเหตุ</th>
+            <th style="width: ${showBacklogColumns ? 150 : 180}px;">หมายเหตุ</th>
           </tr>
         </thead>
         <tbody>${rowsHtml}</tbody>
@@ -776,8 +756,8 @@ export async function downloadHistorySlipPdf(row) {
     const pdf = new jsPDF('p', 'mm', 'a4')
     const pageWidth = pdf.internal.pageSize.getWidth()
     const pageHeight = pdf.internal.pageSize.getHeight()
-    const pdfMarginX = 8
-    const pdfMarginY = 8
+    const pdfMarginX = 5
+    const pdfMarginY = 5
     const pdfWidth = pageWidth - pdfMarginX * 2
     const pdfHeight = pageHeight - pdfMarginY * 2
     const imageHeight = (canvas.height * pdfWidth) / canvas.width

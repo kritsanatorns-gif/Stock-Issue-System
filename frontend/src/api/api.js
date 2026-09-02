@@ -1,5 +1,6 @@
 import axios from 'axios'
 import { apiBaseUrl } from './apiConfig'
+import { trimPayloadOuterWhitespace } from '../utils/inputGuards'
 
 const api = axios.create({
   baseURL: apiBaseUrl,
@@ -11,6 +12,10 @@ const api = axios.create({
 
 api.interceptors.request.use(
   (config) => {
+    if (config.data && !(config.data instanceof FormData)) {
+      config.data = trimPayloadOuterWhitespace(config.data)
+    }
+
     const token = localStorage.getItem('accessToken')
     const expiresAt = Number(localStorage.getItem('authExpiresAt') ?? 0)
 
@@ -46,6 +51,12 @@ export async function login(credentials) {
 
 export async function getEmployees() {
   const response = await api.get('/employee')
+
+  return response.data
+}
+
+export async function getEmployee(employeeId) {
+  const response = await api.get(`/employee/${encodeURIComponent(employeeId)}`)
 
   return response.data
 }

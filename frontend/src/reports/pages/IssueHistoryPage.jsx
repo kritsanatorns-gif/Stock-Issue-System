@@ -154,14 +154,24 @@ function getReportTypeLabel(reportType) {
   if (reportType === 'stockReceive') return 'รับเข้า'
   if (reportType === 'stockIssue') return 'เบิกสินค้า'
   if (reportType === 'stockAdjust') return 'ปรับสต็อก'
-  if (reportType === 'backlog') return 'งานค้าง'
+  if (reportType === 'cancellation') return 'ถอยยอด'
   return 'ทั้งหมด'
 }
 
-function printSummaryReport({ detailRows, endDate, reportType, startDate, summaryItems }) {
-  const printWindow = window.open('', '_blank')
+function getDetailColumnLabel(reportType) {
+  if (reportType === 'stockReceive') return 'PO / Invoice'
+  if (reportType === 'cancellation') return 'เลขที่ใบที่ถอยยอด'
+  return 'รายละเอียด'
+}
 
-  if (!printWindow) return
+function printSummaryReport({ detailRows, endDate, reportType, startDate, summaryItems }, { autoPrint = true } = {}) {
+  const printWindow = window.open('', '_blank')
+  const isReceiveReport = reportType === 'stockReceive'
+  const isAdjustReport = reportType === 'stockAdjust'
+  const needsSignaturePage = detailRows.length > 35
+  const printPageCount = Math.max(1, Math.ceil(detailRows.length / 35))
+
+  if (!printWindow) return null
 
   const rows = summaryItems.map((item, index) => `
     <tr>
@@ -177,11 +187,11 @@ function printSummaryReport({ detailRows, endDate, reportType, startDate, summar
     </table>
   ` : ''
   const detailRowsHtml = detailRows.map((row, index) => `
-    <tr><td>${index + 1}</td><td>${escapeHtml(formatDisplayDateTime(row.createdAt))}</td><td>${escapeHtml(row.employeeName)}</td><td>${escapeHtml(row.productName)}</td><td>${escapeHtml(`${Number(row.quantity).toLocaleString('th-TH')} ${row.unit}`)}</td><td>${escapeHtml(row.reason || '-')}</td></tr>
+    <tr class="${index > 0 && index % 35 === 0 ? 'page-break-row' : ''}"><td>${index + 1}</td><td>${escapeHtml(formatDisplayDateTime(row.createdAt))}</td><td>${escapeHtml(row.employeeName)}</td><td>${escapeHtml(row.productName)}</td>${isAdjustReport ? `<td>${escapeHtml(`${Number(row.beforeQty ?? 0).toLocaleString('th-TH')} ${row.unit}`)}</td><td>${escapeHtml(`${Number(row.quantity).toLocaleString('th-TH')} ${row.unit}`)}</td>` : `<td>${escapeHtml(`${Number(row.quantity).toLocaleString('th-TH')} ${row.unit}`)}</td>${isReceiveReport ? `<td>${escapeHtml(formatMoney(row.unitCost))}</td><td>${escapeHtml(formatMoney(row.totalCost))}</td>` : ''}<td>${escapeHtml(row.reason || '-')}</td>`}</tr>
   `).join('')
   const detailSection = reportType !== 'all' ? `
     <h3>รายละเอียด${escapeHtml(getReportTypeLabel(reportType))}</h3>
-    <table class="detail-table"><thead><tr><th>ลำดับ</th><th>วันเวลา</th><th>ผู้ทำรายการ</th><th>สินค้า</th><th>จำนวน</th><th>รายละเอียด</th></tr></thead><tbody>${detailRowsHtml}</tbody></table>
+    <table class="detail-table${isAdjustReport ? ' adjust-detail-table' : reportType === 'cancellation' ? ' cancel-detail-table' : ''}"><thead><tr><th>ลำดับ</th><th>วันเวลา</th><th>ผู้ทำรายการ</th><th>สินค้า</th>${isAdjustReport ? '<th>จำนวนก่อนปรับ</th><th>จำนวนที่ปรับ</th>' : `<th>จำนวน</th>${isReceiveReport ? '<th>ต้นทุน/หน่วย</th><th>ต้นทุนรวม</th>' : ''}<th>${escapeHtml(getDetailColumnLabel(reportType))}</th>`}</tr></thead><tbody>${detailRowsHtml}</tbody></table>
   ` : ''
 
   printWindow.document.write(`<!doctype html>
@@ -192,29 +202,46 @@ function printSummaryReport({ detailRows, endDate, reportType, startDate, summar
         <style>
           @page { size: A4; margin: 8mm; }
           body { font-family: Tahoma, Arial, sans-serif; color: #111827; font-size: 13px; }
-          .sheet { min-height: 276mm; padding: 4mm 0; box-sizing: border-box; }
+          .sheet { min-height: 276mm; padding: 4mm 0; box-sizing: border-box; position: relative; }
           h1 { font-size: 22px; margin: 0; text-align: center; }
           h2 { font-size: 14px; font-weight: normal; margin: 4px 0 22px; text-align: center; }
           .meta { display: flex; justify-content: space-between; margin-bottom: 18px; }
-          table { border-collapse: collapse; font-size: 11px; width: 100%; }
+          table { border-collapse: collapse; font-size: 9px; table-layout: fixed; width: 100%; }
           th, td { border: 1px solid #111; padding: 5px 6px; text-align: center; vertical-align: middle; }
-          th { background: #f1f5f9; text-align: center; }
+          th { background: #ffffff; text-align: center; }
           thead { display: table-header-group; }
           tr { break-inside: avoid; page-break-inside: avoid; }
+          .page-break-row { break-before: page; page-break-before: always; }
           td:first-child { text-align: center; width: 5%; }
           td:last-child { text-align: center; width: 28%; font-weight: bold; }
           .detail-table th:nth-child(1) { width: 5%; }
-          .detail-table th:nth-child(2) { width: 18%; }
-          .detail-table th:nth-child(3) { width: 12%; }
-          .detail-table th:nth-child(4) { width: 30%; }
+          .detail-table th:nth-child(2) { width: 12%; }
+          .detail-table th:nth-child(3) { width: 16%; }
+          .detail-table th:nth-child(4) { width: 26%; }
           .detail-table th:nth-child(5) { width: 9%; }
+          .detail-table th:nth-child(6) { width: 8%; }
+          .detail-table th:nth-child(7) { width: 8%; }
+          .detail-table th:nth-child(8) { width: 16%; }
+          .detail-table td:last-child { width: 16%; }
+          .adjust-detail-table th:nth-child(1) { width: 6%; }
+          .adjust-detail-table th:nth-child(2) { width: 18%; }
+          .adjust-detail-table th:nth-child(3) { width: 16%; }
+          .adjust-detail-table th:nth-child(4) { width: 34%; }
+          .adjust-detail-table th:nth-child(5) { width: 15%; }
+          .adjust-detail-table th:nth-child(6) { width: 11%; }
+          .cancel-detail-table th:nth-child(2) { width: 14%; }
+          .cancel-detail-table th:nth-child(3) { width: 16%; }
+          .cancel-detail-table th:nth-child(4) { width: 25%; }
+          .cancel-detail-table th:nth-child(5) { width: 9%; }
+          .cancel-detail-table th:nth-child(6) { width: 31%; }
           .detail-table td:nth-child(2) { white-space: nowrap; }
-          .footer { break-inside: avoid; display: flex; justify-content: space-between; margin-top: 24px; page-break-inside: avoid; text-align: center; }
-          .sign { min-width: 220px; border-top: 1px solid #111; padding-top: 8px; }
+          .footer { bottom: 0; break-inside: avoid; display: flex; gap: 28px; justify-content: flex-end; page-break-inside: avoid; position: absolute; right: 0; text-align: center; }
+          .footer-next-page { bottom: 0; margin-top: 0; position: absolute; right: 0; }
+          .sign { width: 170px; border-top: 1px solid #111; padding-top: 8px; }
         </style>
       </head>
       <body>
-        <section class="sheet">
+        <section class="sheet" style="min-height: ${printPageCount * 276}mm">
           <h1>รายงานสรุปการเคลื่อนไหวสต็อก</h1>
           <h2>ระบบเบิกสินค้าสำนักงาน</h2>
           <div class="meta">
@@ -223,15 +250,16 @@ function printSummaryReport({ detailRows, endDate, reportType, startDate, summar
           </div>
           ${summarySection}
           ${detailSection}
-          <div class="footer">
+          <div class="footer${needsSignaturePage ? ' footer-next-page' : ''}">
             <div class="sign">ผู้จัดทำรายงาน</div>
             <div class="sign">ผู้ตรวจสอบ</div>
           </div>
         </section>
-        <script>window.onload = () => window.print()</script>
+        ${autoPrint ? '<script>window.onload = () => window.print()</script>' : ''}
       </body>
     </html>`)
   printWindow.document.close()
+  return printWindow
 }
 
 function escapeHtml(value) {
@@ -301,6 +329,13 @@ function cleanReportDepartment(value) {
   return text
 }
 
+function getCancelReason(value) {
+  const text = String(value ?? '').trim()
+  const match = text.match(/(?:^|\|)\s*cancel\s*:\s*(.+)$/i)
+
+  return match?.[1]?.trim() || text.replace(/^cancel\s*:\s*/i, '').trim() || '-'
+}
+
 function getNumberValue(...values) {
   const value = values.find((item) => item !== undefined && item !== null && item !== '')
   const numberValue = Number(value)
@@ -334,10 +369,6 @@ function findRelatedRequisition(report, requisitions) {
 function buildRequestSlipRowFromReport(report, requisitions) {
   const relatedRequisition = findRelatedRequisition(report, requisitions)
 
-  if (relatedRequisition) {
-    return buildPrintableRowWithBacklog(relatedRequisition, requisitions)
-  }
-
   const items = (report.items ?? []).map((item, index) => {
     const normalizedItem = normalizeReportItem(item, index)
     const quantity = getNumberValue(
@@ -360,23 +391,23 @@ function buildRequestSlipRowFromReport(report, requisitions) {
   })
 
   return buildPrintableRowWithBacklog({
-    createdAt: report.createdAt,
-    department: cleanReportDepartment(report.department),
+    createdAt: report.createdAt ?? relatedRequisition?.createdAt,
+    department: cleanReportDepartment(relatedRequisition?.department ?? report.department),
     employeeName: getTextValue(
+      relatedRequisition?.employeeName,
+      relatedRequisition?.requesterName,
       report.requesterName,
       report.requestEmployeeName,
-      report.employeeName,
-      report.department,
       '-',
     ),
-    hrRemark: getTextValue(report.hrRemark, report.HrRemark),
-    isUrgent: Boolean(report.isUrgent ?? report.IsUrgent),
+    hrRemark: getTextValue(relatedRequisition?.hrRemark, report.hrRemark, report.HrRemark),
+    isUrgent: Boolean(relatedRequisition?.isUrgent ?? report.isUrgent ?? report.IsUrgent),
     items,
-    requestNo: getTextValue(report.requestNo, report.RequestNo, report.documentNo),
+    requestNo: getTextValue(relatedRequisition?.requestNo, report.requestNo, report.RequestNo, report.documentNo),
     status: report.status,
     statusId: getNumberValue(report.statusId, report.StatusId),
-    urgentRemark: getTextValue(report.urgentRemark, report.UrgentRemark),
-    userRemark: getTextValue(report.userRemark, report.UserRemark, report.remark),
+    urgentRemark: getTextValue(relatedRequisition?.urgentRemark, report.urgentRemark, report.UrgentRemark),
+    userRemark: getTextValue(relatedRequisition?.userRemark, report.userRemark, report.UserRemark, report.remark),
   }, requisitions)
 }
 
@@ -447,16 +478,29 @@ async function getHistoryReports(params) {
 function getDocumentLabels(report) {
   const isReceive = report.documentType === 'RECEIVE'
   const isAdjust = report.documentType === 'ADJUST'
+  const isCancelled = isReversedStatus(report.status)
 
   return {
     actorLabel: isAdjust ? 'ผู้ปรับสต๊อก' : isReceive ? 'ผู้รับเข้า' : 'ผู้จ่ายสินค้า',
-    departmentLabel: isAdjust ? 'เหตุผลการปรับสต๊อก' : isReceive ? 'แผนก / หมายเหตุ' : 'ผู้เบิก / แผนก',
-    printLabel: isAdjust ? 'พิมพ์ใบปรับสต๊อก' : isReceive ? 'พิมพ์ใบรับเข้า' : 'พิมพ์ใบเบิก',
+    departmentLabel: isAdjust || isReceive ? 'หมายเหตุ' : 'แผนกผู้เบิก',
+    printLabel: isCancelled ? 'พิมพ์ใบถอยยอด' : isAdjust ? 'พิมพ์ใบปรับสต๊อก' : isReceive ? 'พิมพ์ใบรับเข้า' : 'พิมพ์ใบเบิก',
     title: isAdjust ? 'ใบปรับสต๊อก' : isReceive ? 'ใบรับเข้าสินค้า' : 'ใบเบิกสินค้า',
   }
 }
 
 function buildIssueSlipContentHtml(report) {
+  if (isReversedStatus(report.status) && report.cancelNo) {
+    return buildCancelSlipContentHtml(report)
+  }
+
+  if (report.documentType === 'ADJUST') {
+    return buildAdjustSummaryContentHtml(report)
+  }
+
+  if (report.documentType === 'RECEIVE') {
+    return buildReceiveSummaryContentHtml(report)
+  }
+
   const labels = getDocumentLabels(report)
   const issueDepartment = report.department || '-'
   const issuedBy = report.employeeName || '-'
@@ -538,22 +582,148 @@ function buildIssueSlipContentHtml(report) {
   `
 }
 
+function buildCancelSlipContentHtml(report) {
+  const rows = (report.items ?? []).map(normalizeReportItem).map((item, index) => `
+    <tr>
+      <td class="center">${index + 1}</td>
+      <td class="center">${escapeHtml(formatDisplayDateTime(report.createdAt))}</td>
+      <td>${escapeHtml(report.employeeName || '-')}</td>
+      <td>${escapeHtml(item.productName)}</td>
+      <td class="center">${escapeHtml(`${Number(item.quantity ?? 0).toLocaleString('th-TH')} ${item.unit || ''}`.trim())}</td>
+    </tr>
+  `).join('')
+
+  return `
+    <div class="receive-summary adjust-summary">
+      <header class="receive-summary__header"><h1>รายงานสรุปการถอยยอดสินค้า</h1><p>ระบบเบิกสินค้าสำนักงาน</p></header>
+      <section class="receive-summary__meta">
+        <span>เลขที่ใบถอยยอด: ${escapeHtml(report.cancelNo || '-')}</span>
+        <span>อ้างอิง: ${escapeHtml(report.documentNo || '-')}</span>
+        <span>ประเภท: ถอยยอด</span>
+      </section>
+      <h3>รายละเอียดการถอยยอด</h3>
+      <table><thead><tr><th>ลำดับ</th><th>วันเวลา</th><th>ผู้ทำรายการ</th><th>สินค้า</th><th>จำนวน</th></tr></thead><tbody>${rows}</tbody></table>
+      <section class="adjust-summary__reason"><strong>หมายเหตุ:</strong> ${escapeHtml(getCancelReason(report.department || report.remark))}</section>
+      <section class="receive-summary__signatures"><div>ผู้จัดทำรายงาน</div><div>ผู้ตรวจสอบ</div></section>
+    </div>
+  `
+}
+
+function buildAdjustSummaryContentHtml(report) {
+  const rows = (report.items ?? []).map(normalizeReportItem)
+    .map((item, index) => {
+      const adjustedQty = Number(item.quantity ?? 0)
+      const afterQty = Number(item.stockQty ?? item.StockQty)
+      const beforeQty = Number.isFinite(afterQty) ? afterQty - adjustedQty : null
+
+      return `
+      <tr>
+        <td class="center">${index + 1}</td>
+        <td class="center">${escapeHtml(formatDisplayDateTime(report.createdAt))}</td>
+        <td>${escapeHtml(report.employeeName || '-')}</td>
+        <td>${escapeHtml(item.productName)}</td>
+        <td class="center">${escapeHtml(beforeQty === null ? '-' : `${beforeQty.toLocaleString('th-TH')} ${item.unit || ''}`.trim())}</td>
+        <td class="center">${escapeHtml(`${adjustedQty.toLocaleString('th-TH')} ${item.unit || ''}`.trim())}</td>
+      </tr>
+    `
+    })
+    .join('')
+
+  return `
+    <div class="receive-summary adjust-summary">
+      <header class="receive-summary__header">
+        <h1>รายงานสรุปการปรับสต๊อก</h1>
+        <p>ระบบเบิกสินค้าสำนักงาน</p>
+      </header>
+      <section class="receive-summary__meta">
+        <span>วันที่ปรับ ${escapeHtml(formatDisplayDateTime(report.createdAt))}</span>
+        <span>เลขที่เอกสาร: ${escapeHtml(report.documentNo || '-')}</span>
+        <span>ประเภท: ปรับสต๊อก</span>
+      </section>
+      <h3>รายละเอียดการปรับสต๊อก</h3>
+      <table>
+        <thead><tr><th>ลำดับ</th><th>วันเวลา</th><th>ผู้ทำรายการ</th><th>สินค้า</th><th>จำนวนก่อนปรับ</th><th>จำนวนที่ปรับ</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+      <section class="adjust-summary__reason"><strong>หมายเหตุ:</strong> ${escapeHtml(report.department || '-')}</section>
+      <section class="receive-summary__signatures">
+        <div>ผู้จัดทำรายงาน</div>
+        <div>ผู้ตรวจสอบ</div>
+      </section>
+    </div>
+  `
+}
+
+function buildReceiveSummaryContentHtml(report) {
+  const rows = (report.items ?? []).map(normalizeReportItem)
+    .map((item, index) => `
+      <tr>
+        <td class="center">${index + 1}</td>
+        <td class="center">${escapeHtml(formatDisplayDateTime(report.createdAt))}</td>
+        <td>${escapeHtml(report.employeeName || '-')}</td>
+        <td>${escapeHtml(item.productName)}</td>
+        <td class="center">${escapeHtml(`${Number(item.quantity ?? 0).toLocaleString('th-TH')} ${item.unit || ''}`.trim())}</td>
+        <td class="right">${escapeHtml(formatMoney(item.unitCost))}</td>
+        <td class="right">${escapeHtml(formatMoney(item.totalCost))}</td>
+        <td class="center">${escapeHtml(report.poInvoiceNo || report.PoInvoiceNo || '-')}</td>
+      </tr>
+    `)
+    .join('')
+
+  return `
+    <div class="receive-summary">
+      <header class="receive-summary__header">
+        <h1>รายงานสรุปการรับเข้าสินค้า</h1>
+        <p>ระบบเบิกสินค้าสำนักงาน</p>
+      </header>
+
+      <section class="receive-summary__meta">
+        <span>วันที่รับเข้า ${escapeHtml(formatDisplayDateTime(report.createdAt))}</span>
+        <span>เลขที่เอกสาร: ${escapeHtml(report.documentNo || '-')}</span>
+        <span>ประเภท: รับเข้า</span>
+      </section>
+
+      <h3>รายละเอียดรับเข้า</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>ลำดับ</th>
+            <th>วันเวลา</th>
+            <th>ผู้ทำรายการ</th>
+            <th>สินค้า</th>
+            <th>จำนวน</th>
+            <th>ต้นทุน/หน่วย</th>
+            <th>ต้นทุนรวม</th>
+            <th>PO / Invoice</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+
+      <section class="receive-summary__signatures">
+        <div>ผู้จัดทำรายงาน</div>
+        <div>ผู้ตรวจสอบ</div>
+      </section>
+    </div>
+  `
+}
+
 function buildIssueSlipStyleHtml() {
   return `
     <style>
       * { box-sizing: border-box; }
       body {
-        color: #111827;
+        color: #000000;
         font-family: "Tahoma", "Arial", sans-serif;
-        font-size: 12px;
+        font-size: 14px;
         margin: 0;
       }
       .issue-slip {
         background: #ffffff;
-        color: #111827;
+        color: #000000;
         font-family: "Tahoma", "Arial", sans-serif;
         min-height: 1123px;
-        padding: 42px;
+        padding: 24px;
         width: 794px;
       }
       .issue-slip__header {
@@ -564,18 +734,18 @@ function buildIssueSlipStyleHtml() {
         padding-bottom: 14px;
       }
       .issue-slip h1 {
-        font-size: 26px;
+        font-size: 28px;
         font-weight: 800;
         margin: 0 0 6px;
       }
       .issue-slip p {
-        color: #475569;
+        color: #000000;
         margin: 0;
       }
       .issue-slip__status {
-        border: 1px solid #16a34a;
+        border: 1px solid #000000;
         border-radius: 999px;
-        color: #15803d;
+        color: #000000;
         font-weight: 800;
         padding: 6px 14px;
       }
@@ -586,14 +756,14 @@ function buildIssueSlipStyleHtml() {
         margin: 18px 0;
       }
       .issue-slip__info span {
-        color: #64748b;
+        color: #000000;
         display: block;
         font-size: 11px;
         font-weight: 700;
         margin-bottom: 4px;
       }
       .issue-slip__info strong {
-        color: #0f172a;
+        color: #000000;
         display: block;
         font-size: 13px;
         font-weight: 800;
@@ -605,13 +775,13 @@ function buildIssueSlipStyleHtml() {
       }
       .issue-slip th,
       .issue-slip td {
-        border: 1px solid #cbd5e1;
+        border: 1px solid #000000;
         padding: 8px;
         vertical-align: top;
       }
       .issue-slip th {
-        background: #f1f5f9;
-        font-size: 11px;
+        background: #ffffff;
+        font-size: 13px;
         text-align: center;
       }
       .issue-slip .center { text-align: center; }
@@ -620,26 +790,89 @@ function buildIssueSlipStyleHtml() {
         display: grid;
         gap: 28px;
         grid-template-columns: repeat(2, 1fr);
-        margin-top: 58px;
+        bottom: 42px;
+        left: 24px;
+        margin-top: 0;
+        position: absolute;
+        right: 24px;
       }
       .issue-slip__signatures div {
-        color: #475569;
+        color: #000000;
         text-align: center;
       }
       .issue-slip__signatures span {
-        border-top: 1px solid #94a3b8;
+        border-top: 1px solid #000000;
         display: block;
-        font-size: 11px;
+        font-size: 13px;
         margin-top: 8px;
         padding-top: 8px;
       }
       .issue-slip__signatures strong {
-        color: #0f172a;
+        color: #000000;
         display: block;
-        font-size: 13px;
+        font-size: 15px;
         min-height: 20px;
       }
-      @page { margin: 14mm; size: A4; }
+      .issue-slip__cancel-reason { margin: 8px 0 16px; }
+      .receive-summary {
+        background: #ffffff;
+        color: #000000;
+        font-family: "Tahoma", "Arial", sans-serif;
+        min-height: 1123px;
+        padding: 24px;
+        position: relative;
+        position: relative;
+        position: relative;
+        width: 794px;
+      }
+      .receive-summary__header { text-align: center; }
+      .receive-summary h1 { font-size: 24px; font-weight: 800; margin: 0; }
+      .receive-summary__header p { font-size: 15px; margin: 4px 0 22px; }
+      .receive-summary__meta { display: flex; justify-content: space-between; margin-bottom: 18px; }
+      .receive-summary h3 { font-size: 16px; margin: 0 0 8px; }
+      .receive-summary table { border-collapse: collapse; font-size: 13px; width: 100%; }
+      .receive-summary th, .receive-summary td { border: 1px solid #111827; padding: 6px; text-align: center; vertical-align: middle; }
+      .receive-summary th { background: #ffffff; text-align: center; }
+      .receive-summary th:nth-child(1) { width: 5%; }
+      .receive-summary th:nth-child(2) { width: 15%; }
+      .receive-summary th:nth-child(3) { width: 14%; }
+      .receive-summary th:nth-child(4) { width: 25%; }
+      .receive-summary th:nth-child(5) { width: 9%; }
+      .receive-summary th:nth-child(6) { width: 10%; }
+      .receive-summary th:nth-child(7) { width: 10%; }
+      .receive-summary th:nth-child(8) { width: 12%; }
+      .adjust-summary th:nth-child(1) { width: 5%; }
+      .adjust-summary th:nth-child(2) { width: 16%; }
+      .adjust-summary th:nth-child(3) { width: 15%; }
+      .adjust-summary th:nth-child(4) { width: 36%; }
+      .adjust-summary th:nth-child(5) { width: 16%; white-space: nowrap; }
+      .adjust-summary th:nth-child(6) { width: 12%; }
+      .adjust-summary__reason { margin-top: 14px; white-space: pre-wrap; }
+      .receive-summary__signatures {
+        display: flex;
+        gap: 28px;
+        justify-content: flex-end;
+        bottom: 42px;
+        left: 24px;
+        margin-top: 0;
+        position: absolute;
+        right: 24px;
+      }
+      .receive-summary__signatures div {
+        border-top: 1px solid #111827;
+        padding-top: 8px;
+        text-align: center;
+        width: 170px;
+      }
+      .issue-slip, .receive-summary { display: flex; flex-direction: column; }
+      .issue-slip__signatures, .receive-summary__signatures {
+        bottom: auto;
+        left: auto;
+        margin-top: auto;
+        position: static;
+        right: auto;
+      }
+      @page { margin: 8mm; size: A4; }
       @media print {
         body { background: #ffffff; }
       }
@@ -700,7 +933,7 @@ async function downloadIssueSlipPdf(report) {
   document.body.appendChild(container)
 
   try {
-    const canvas = await html2canvas(container.querySelector('.issue-slip'), {
+    const canvas = await html2canvas(container.querySelector('.issue-slip, .receive-summary'), {
       backgroundColor: '#ffffff',
       scale: 2,
       useCORS: true,
@@ -709,18 +942,21 @@ async function downloadIssueSlipPdf(report) {
     const pdf = new jsPDF('p', 'mm', 'a4')
     const pdfWidth = pdf.internal.pageSize.getWidth()
     const pdfHeight = pdf.internal.pageSize.getHeight()
-    const imageHeight = (canvas.height * pdfWidth) / canvas.width
+    const pageMargin = 8
+    const printableWidth = pdfWidth - (pageMargin * 2)
+    const printableHeight = pdfHeight - (pageMargin * 2)
+    const imageHeight = (canvas.height * printableWidth) / canvas.width
     let heightLeft = imageHeight
     let position = 0
 
-    pdf.addImage(imageData, 'PNG', 0, position, pdfWidth, imageHeight)
-    heightLeft -= pdfHeight
+    pdf.addImage(imageData, 'PNG', pageMargin, pageMargin + position, printableWidth, imageHeight)
+    heightLeft -= printableHeight
 
     while (heightLeft > 0) {
       position = heightLeft - imageHeight
       pdf.addPage()
-      pdf.addImage(imageData, 'PNG', 0, position, pdfWidth, imageHeight)
-      heightLeft -= pdfHeight
+      pdf.addImage(imageData, 'PNG', pageMargin, pageMargin + position, printableWidth, imageHeight)
+      heightLeft -= printableHeight
     }
 
     pdf.save(`${report.documentNo}.pdf`)
@@ -762,16 +998,27 @@ function ReportsPage() {
         return null
       }
 
+      const relatedRequisition = report.documentType === 'ISSUE'
+        ? findRelatedRequisition(report, requisitions)
+        : null
+
       return {
         ...report,
+        department: relatedRequisition?.department ?? report.department,
         items: (report.items ?? []).map(normalizeReportItem),
+        requesterName: getTextValue(
+          relatedRequisition?.employeeName,
+          relatedRequisition?.requesterName,
+          report.requesterName,
+          '-',
+        ),
       }
     },
-    [reports, selectedDocumentNo],
+    [reports, requisitions, selectedDocumentNo],
   )
 
   const filteredReports = useMemo(() => {
-    if (!['all', 'stockIssue', 'stockReceive', 'stockAdjust'].includes(reportType)) {
+    if (!['all', 'stockIssue', 'stockReceive', 'stockAdjust', 'cancellation'].includes(reportType)) {
       return []
     }
 
@@ -786,7 +1033,9 @@ function ReportsPage() {
             ? report.documentType === 'ISSUE'
             : reportType === 'stockReceive'
               ? report.documentType === 'RECEIVE'
-              : report.documentType === 'ADJUST'
+              : reportType === 'stockAdjust'
+                ? report.documentType === 'ADJUST'
+                : isReversedStatus(report.status)
 
       return matchesStart && matchesEnd && matchesType
     })
@@ -816,7 +1065,14 @@ function ReportsPage() {
       productCode: item.code ?? item.Code ?? '-',
       productName: item.productName ?? item.ProductName ?? '-',
       quantity: Number(item.quantity ?? item.Quantity ?? 0),
-      reason: report.documentType === 'ADJUST'
+      beforeQty: Number(item.stockQty ?? item.StockQty) - Number(item.quantity ?? item.Quantity ?? 0),
+      totalCost: Number(item.totalCost ?? item.TotalCost ?? 0),
+      unitCost: Number(item.unitCost ?? item.UnitCost ?? 0),
+      reason: reportType === 'cancellation'
+        ? (report.documentNo ?? report.DocumentNo ?? '-')
+        : reportType === 'stockReceive'
+        ? (report.poInvoiceNo ?? report.PoInvoiceNo ?? '-')
+        : report.documentType === 'ADJUST'
         ? (report.department ?? report.Department ?? '-')
         : (report.poInvoiceNo ?? report.PoInvoiceNo ?? report.department ?? report.Department ?? '-'),
       rowKey: `${report.documentNo}-${item.detailId ?? item.DetailId ?? index}`,
@@ -947,7 +1203,7 @@ function ReportsPage() {
       return
     }
 
-    const headerId = Number(selectedReport.documentNo)
+    const headerId = Number(selectedReport.headerId ?? selectedReport.HeaderId ?? selectedReport.documentNo)
 
     if (!Number.isFinite(headerId) || headerId <= 0) {
       await Swal.fire({
@@ -1038,8 +1294,19 @@ function ReportsPage() {
         { header: 'วันเวลา', value: (row) => formatDisplayDateTime(row.createdAt) },
         { header: 'ผู้ทำรายการ', value: (row) => row.employeeName },
         { header: 'สินค้า', value: (row) => row.productName },
-        { header: 'จำนวน', value: (row) => `${row.quantity} ${row.unit}` },
-        { header: 'รายละเอียด', value: (row) => row.reason || '-' },
+        ...(reportType === 'stockAdjust'
+          ? [
+              { header: 'จำนวนก่อนปรับ', value: (row) => `${row.beforeQty} ${row.unit}` },
+              { header: 'จำนวนที่ปรับ', value: (row) => `${row.quantity} ${row.unit}` },
+            ]
+          : [{ header: 'จำนวน', value: (row) => `${row.quantity} ${row.unit}` }]),
+        ...(reportType === 'stockReceive'
+          ? [
+              { header: 'ต้นทุน/หน่วย', value: (row) => formatMoney(row.unitCost) },
+              { header: 'ต้นทุนรวม', value: (row) => formatMoney(row.totalCost) },
+            ]
+          : []),
+        ...(reportType === 'stockAdjust' ? [] : [{ header: getDetailColumnLabel(reportType), value: (row) => row.reason || '-' }]),
       ],
       `${reportType}-report-${dayjs().format('YYYYMMDD-HHmm')}.xlsx`,
       { reportContext },
@@ -1047,35 +1314,75 @@ function ReportsPage() {
   }
 
   const handleDownloadSummaryPdf = async () => {
-    const reportElement = document.getElementById('summary-report-sheet')
+    const pdfWindow = printSummaryReport(
+      { detailRows: reportDetailRows, endDate, reportType, startDate, summaryItems },
+      { autoPrint: false },
+    )
 
-    if (!reportElement) return
+    if (!pdfWindow) return
 
     const [{ jsPDF }, html2canvasModule] = await Promise.all([
       import('jspdf'),
       import('html2canvas'),
     ])
     const html2canvas = html2canvasModule.default
-    const canvas = await html2canvas(reportElement, {
-      backgroundColor: '#ffffff',
-      scale: 2,
-      useCORS: true,
-    })
-    const pdf = new jsPDF('p', 'mm', 'a4')
-    const pdfWidth = pdf.internal.pageSize.getWidth()
-    const pdfHeight = pdf.internal.pageSize.getHeight()
-    const imageHeight = (canvas.height * pdfWidth) / canvas.width
-    const imageData = canvas.toDataURL('image/png')
-    let heightLeft = imageHeight
-    let position = 0
+    const sourceSheet = pdfWindow.document.querySelector('.sheet')
 
-    pdf.addImage(imageData, 'PNG', 0, position, pdfWidth, imageHeight)
-    heightLeft -= pdfHeight
-    while (heightLeft > 0) {
-      position = heightLeft - imageHeight
-      pdf.addPage()
-      pdf.addImage(imageData, 'PNG', 0, position, pdfWidth, imageHeight)
-      heightLeft -= pdfHeight
+    if (!sourceSheet) {
+      pdfWindow.close()
+      return
+    }
+
+    const sourceRows = [...sourceSheet.querySelectorAll('tbody tr')]
+    const pageCount = Math.max(1, Math.ceil(sourceRows.length / 35))
+    const pageSheets = Array.from({ length: pageCount }, (_, pageIndex) => {
+      const pageSheet = sourceSheet.cloneNode(true)
+      const rows = [...pageSheet.querySelectorAll('tbody tr')]
+      const firstRow = pageIndex * 35
+      const lastRow = firstRow + 35
+
+      rows.forEach((row, rowIndex) => {
+        if (rowIndex < firstRow || rowIndex >= lastRow) row.remove()
+        else row.classList.remove('page-break-row')
+      })
+
+      if (pageIndex > 0) {
+        pageSheet.querySelectorAll('h1, h2, h3, .meta').forEach((element) => element.remove())
+      }
+
+      const footer = pageSheet.querySelector('.footer')
+      if (footer && pageIndex !== pageCount - 1) footer.remove()
+      if (footer) footer.classList.remove('footer-next-page')
+
+      Object.assign(pageSheet.style, {
+        boxSizing: 'border-box',
+        minHeight: '276mm',
+        padding: '4mm 0',
+        position: 'relative',
+        width: '194mm',
+      })
+      return pageSheet
+    })
+
+    pdfWindow.document.body.replaceChildren(...pageSheets)
+    Object.assign(pdfWindow.document.body.style, { margin: '0', width: '194mm' })
+
+    const pdf = new jsPDF('p', 'mm', 'a4')
+    try {
+      for (let pageIndex = 0; pageIndex < pageSheets.length; pageIndex += 1) {
+        const canvas = await html2canvas(pageSheets[pageIndex], {
+          backgroundColor: '#ffffff',
+          scale: 2,
+          useCORS: true,
+        })
+        const imageData = canvas.toDataURL('image/png')
+        const imageHeight = (canvas.height * 194) / canvas.width
+
+        if (pageIndex > 0) pdf.addPage()
+        pdf.addImage(imageData, 'PNG', 8, 8, 194, imageHeight)
+      }
+    } finally {
+      pdfWindow.close()
     }
 
     pdf.save(`stock-report-${dayjs().format('YYYYMMDD-HHmm')}.pdf`)
@@ -1208,12 +1515,27 @@ function ReportsPage() {
             id="summary-report-sheet"
             sx={{
               bgcolor: '#ffffff',
+              boxSizing: 'border-box',
               boxShadow: '0 3px 12px rgba(15, 23, 42, 0.18)',
-              minHeight: 620,
+              minHeight: 1100,
               mx: 'auto',
               maxWidth: 794,
               p: { xs: 2, sm: 4 },
+              position: 'relative',
               width: '100%',
+              "&[data-pdf-render='true']": {
+                minHeight: 1100,
+                p: 3,
+                '& .MuiTypography-root': { lineHeight: 1.2 },
+                '& .MuiTableCell-root': {
+                  fontSize: '9px !important',
+                  lineHeight: 1.2,
+                  px: '6px !important',
+                  py: '5px !important',
+                },
+                '& .MuiTableCell-root br': { display: 'none' },
+                '& [data-summary-signatures]': { bottom: 28, right: 24 },
+              },
             }}
           >
             <Typography align="center" sx={{ fontSize: 24, fontWeight: 900 }}>
@@ -1229,7 +1551,7 @@ function ReportsPage() {
             {reportType === 'all' ? (
               <Table size="small" sx={{ border: '1px solid #0f172a', tableLayout: 'fixed', '& .MuiTableCell-root': { borderBottom: '1px solid #0f172a', borderRight: '1px solid #0f172a', textAlign: 'center' }, '& .MuiTableCell-root:last-child': { borderRight: 0 } }}>
                 <TableHead>
-                  <TableRow sx={{ bgcolor: '#f1f5f9' }}>
+                  <TableRow>
                     <TableCell align="center" sx={{ fontWeight: 900, width: 80 }}>ลำดับ</TableCell>
                     <TableCell align="center" sx={{ fontWeight: 900 }}>รายการ</TableCell>
                     <TableCell align="center" sx={{ fontWeight: 900, width: 180 }}>จำนวนเอกสาร</TableCell>
@@ -1248,35 +1570,72 @@ function ReportsPage() {
             ) : (
               <Box>
                 <Typography sx={{ fontSize: 16, fontWeight: 900, mb: 1 }}>รายละเอียด{getReportTypeLabel(reportType)}</Typography>
-                <Table size="small" sx={{ border: '1px solid #0f172a', tableLayout: 'fixed', '& .MuiTableCell-root': { borderBottom: '1px solid #0f172a', borderRight: '1px solid #0f172a', fontSize: 12, textAlign: 'center' }, '& .MuiTableCell-root:last-child': { borderRight: 0 } }}>
+                <Table size="small" sx={{ border: '1px solid #0f172a', tableLayout: 'fixed', width: '100%', '& .MuiTableCell-root': { borderBottom: '1px solid #0f172a', borderRight: '1px solid #0f172a', fontSize: reportType === 'stockReceive' ? 8 : 12, px: reportType === 'stockReceive' ? 0.5 : 1, textAlign: 'center' }, '& .MuiTableCell-root:last-child': { borderRight: 0 } }}>
                   <TableHead>
-                    <TableRow sx={{ bgcolor: '#f1f5f9' }}>
-                      <TableCell align="center" sx={{ fontWeight: 900, width: 128, whiteSpace: 'nowrap' }}>วันเวลา</TableCell>
-                      <TableCell align="center" sx={{ fontWeight: 900, width: 150 }}>ผู้ทำรายการ</TableCell>
-                      <TableCell align="center" sx={{ fontWeight: 900, width: 250 }}>สินค้า</TableCell>
-                      <TableCell align="center" sx={{ fontWeight: 900, width: 90 }}>จำนวน</TableCell>
-                      <TableCell align="center" sx={{ fontWeight: 900 }}>รายละเอียด</TableCell>
+                    <TableRow>
+                      <TableCell align="center" sx={{ fontWeight: 900, width: reportType === 'stockReceive' ? 40 : 52 }}>ลำดับ</TableCell>
+                      <TableCell align="center" sx={{ fontWeight: 900, width: reportType === 'stockReceive' ? 92 : reportType === 'stockAdjust' || reportType === 'cancellation' ? 110 : 128, whiteSpace: 'nowrap' }}>วันเวลา</TableCell>
+                      <TableCell align="center" sx={{ fontWeight: 900, width: reportType === 'stockReceive' ? 110 : reportType === 'stockAdjust' || reportType === 'cancellation' ? 120 : 150 }}>ผู้ทำรายการ</TableCell>
+                      <TableCell align="center" sx={{ fontWeight: 900, width: reportType === 'stockReceive' ? 145 : reportType === 'stockAdjust' || reportType === 'cancellation' ? 220 : 250 }}>สินค้า</TableCell>
+                      {reportType === 'stockAdjust' ? (
+                        <>
+                          <TableCell align="center" sx={{ fontWeight: 900, width: 130, whiteSpace: 'nowrap' }}>จำนวนก่อนปรับ</TableCell>
+                          <TableCell align="center" sx={{ fontWeight: 900, width: 100 }}>จำนวนที่ปรับ</TableCell>
+                        </>
+                      ) : (
+                        <TableCell align="center" sx={{ fontWeight: 900, width: reportType === 'stockReceive' ? 64 : reportType === 'cancellation' ? 75 : 90 }}>จำนวน</TableCell>
+                      )}
+                      {reportType === 'stockReceive' && (
+                        <>
+                          <TableCell align="center" sx={{ fontWeight: 900, width: 70 }}>ต้นทุน/<br />หน่วย</TableCell>
+                          <TableCell align="center" sx={{ fontWeight: 900, width: 75 }}>ต้นทุนรวม</TableCell>
+                        </>
+                      )}
+                      {reportType !== 'stockAdjust' && (
+                        <TableCell align="center" sx={{ fontWeight: 900, whiteSpace: 'nowrap', width: reportType === 'stockReceive' ? 75 : reportType === 'cancellation' ? 122 : undefined }}>{getDetailColumnLabel(reportType)}</TableCell>
+                      )}
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {reportDetailRows.map((row) => (
+                    {reportDetailRows.map((row, index) => (
                       <TableRow key={row.rowKey}>
+                        <TableCell align="center">{index + 1}</TableCell>
                         <TableCell align="center" sx={{ fontSize: 11, whiteSpace: 'nowrap' }}>{formatDisplayDateTime(row.createdAt)}</TableCell>
                         <TableCell align="center">{row.employeeName}</TableCell>
                         <TableCell align="center">{row.productName}</TableCell>
-                        <TableCell align="center" sx={{ color: '#0f172a', fontWeight: 900 }}>
-                          {row.quantity.toLocaleString('th-TH')} {row.unit}
-                        </TableCell>
-                        <TableCell align="center">{row.reason || '-'}</TableCell>
+                        {reportType === 'stockAdjust' ? (
+                          <>
+                            <TableCell align="center" sx={{ fontWeight: 900 }}>{row.beforeQty.toLocaleString('th-TH')} {row.unit}</TableCell>
+                            <TableCell align="center" sx={{ color: '#0f172a', fontWeight: 900 }}>{row.quantity.toLocaleString('th-TH')} {row.unit}</TableCell>
+                          </>
+                        ) : (
+                          <TableCell align="center" sx={{ color: '#0f172a', fontWeight: 900 }}>
+                            {row.quantity.toLocaleString('th-TH')} {row.unit}
+                          </TableCell>
+                        )}
+                        {reportType === 'stockReceive' && (
+                          <>
+                            <TableCell align="right">{formatMoney(row.unitCost)}</TableCell>
+                            <TableCell align="right">{formatMoney(row.totalCost)}</TableCell>
+                          </>
+                        )}
+                        {reportType !== 'stockAdjust' && <TableCell align="center">{row.reason || '-'}</TableCell>}
                       </TableRow>
                     ))}
                   </TableBody>
                 </Table>
               </Box>
             )}
-            <Box sx={{ display: 'flex', gap: 8, justifyContent: 'flex-end', mt: 12 }}>
-              <Box sx={{ borderTop: '1px solid #0f172a', pt: 1, textAlign: 'center', width: 190 }}>ผู้จัดทำรายงาน</Box>
-              <Box sx={{ borderTop: '1px solid #0f172a', pt: 1, textAlign: 'center', width: 190 }}>ผู้ตรวจสอบ</Box>
+            <Box
+              data-summary-signatures
+              sx={{
+                ...(reportDetailRows.length > 25
+                  ? { display: 'flex', gap: 3.5, justifyContent: 'flex-end', mt: 3, position: 'static' }
+                  : { bottom: 50, display: 'flex', gap: 3.5, justifyContent: 'flex-end', position: 'absolute', right: 32 }),
+              }}
+            >
+              <Box sx={{ borderTop: '1px solid #0f172a', pt: 1, textAlign: 'center', width: 170 }}>ผู้จัดทำรายงาน</Box>
+              <Box sx={{ borderTop: '1px solid #0f172a', pt: 1, textAlign: 'center', width: 170 }}>ผู้ตรวจสอบ</Box>
             </Box>
           </Box>
         </DialogContent>
@@ -1324,6 +1683,14 @@ function ReportsPage() {
               <Divider />
 
               <Grid container spacing={2}>
+                {selectedReport.documentType === 'ISSUE' && (
+                  <Grid size={3}>
+                    <Typography sx={{ color: '#64748b', fontSize: 12, fontWeight: 700 }}>ผู้เบิก</Typography>
+                    <Typography sx={{ color: '#0f172a', fontSize: 14, fontWeight: 800 }}>
+                      {selectedReport.requesterName || '-'}
+                    </Typography>
+                  </Grid>
+                )}
                 <Grid size={3}>
                   <Typography sx={{ color: '#64748b', fontSize: 12, fontWeight: 700 }}>
                     {getDocumentLabels(selectedReport).departmentLabel}
@@ -1357,6 +1724,14 @@ function ReportsPage() {
                     <Typography sx={{ color: '#64748b', fontSize: 12, fontWeight: 700 }}>เลขที่ PO / Invoice</Typography>
                     <Typography sx={{ color: '#0f172a', fontSize: 14, fontWeight: 800 }}>
                       {selectedReport.poInvoiceNo || '-'}
+                    </Typography>
+                  </Grid>
+                )}
+                {isReversedStatus(selectedReport.status) && selectedReport.cancelNo && (
+                  <Grid size={3}>
+                    <Typography sx={{ color: '#64748b', fontSize: 12, fontWeight: 700 }}>เลขที่ใบถอยยอด</Typography>
+                    <Typography sx={{ color: '#dc2626', fontSize: 14, fontWeight: 800 }}>
+                      {selectedReport.cancelNo}
                     </Typography>
                   </Grid>
                 )}
@@ -1441,8 +1816,8 @@ function ReportsPage() {
               fullWidth
               multiline
               minRows={3}
-              helperText="กรุณาระบุเหตุผล เช่น ยิงผิด เลือกสินค้าผิด หรือจำนวนผิด"
-              label="เหตุผลในการถอยยอด"
+              helperText="กรุณาระบุหมายเหตุ เช่น ยิงผิด เลือกสินค้าผิด หรือจำนวนผิด"
+              label="หมายเหตุ"
               value={cancelRemark}
               onChange={(event) => setCancelRemark(event.target.value)}
             />

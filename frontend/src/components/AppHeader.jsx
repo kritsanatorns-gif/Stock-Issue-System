@@ -3,6 +3,7 @@ import { Bell, Menu, Moon, Sun } from 'lucide-react'
 import { useContext, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { connectNotificationHub } from '../api/notificationHub'
+import { getRequisitions } from '../api/api'
 import { canAccessMenu } from '../app/navigationItems'
 import { useAuthStore } from '../store/authStore'
 import { ColorModeContext } from '../theme/ColorModeContext'
@@ -20,6 +21,7 @@ function AppHeader({ onToggleSidebar, sidebarCollapsed }) {
   const employeeId = Number(employee?.id ?? employee?.employeeId ?? employee?.EmployeeId ?? 0)
   const employeeName = employee?.fullName || employee?.employeeName || employee?.name || employee?.username || 'hr'
   const notificationStorageKey = `stock-issue-hr-request-notifications-v1-${employeeId || employeeName}`
+  const knownRequestStorageKey = 'stock-issue-hr-known-request-ids-v1'
   const sidebarToggleLabel = sidebarCollapsed ? 'ขยายเมนู' : 'ย่อเมนู'
   const themeToggleLabel = isDarkMode ? 'โหมดสว่าง' : 'โหมดมืด'
   const isNotificationOpen = Boolean(notificationAnchor)
@@ -31,11 +33,71 @@ function AppHeader({ onToggleSidebar, sidebarCollapsed }) {
     }
 
     setNotifications(JSON.parse(localStorage.getItem(notificationStorageKey) || '[]'))
+    const checkNewRequisitions = async () => {
+      try {
+        const requests = await getRequisitions()
+        const requestIds = (requests ?? [])
+          .map((request) => String(request.headerId ?? request.HeaderId ?? ''))
+          .filter(Boolean)
+        const knownRequestIds = JSON.parse(localStorage.getItem(knownRequestStorageKey) || '[]')
+
+        if (knownRequestIds.length === 0) {
+          localStorage.setItem(knownRequestStorageKey, JSON.stringify(requestIds.slice(0, 300)))
+          return
+        }
+
+        const knownIds = new Set(knownRequestIds)
+        const newRequests = (requests ?? []).filter((request) => !knownIds.has(String(request.headerId ?? request.HeaderId ?? '')))
+        localStorage.setItem(knownRequestStorageKey, JSON.stringify(requestIds.slice(0, 300)))
+
+        if (newRequests.length === 0) return
+
+        setNotifications((current) => {
+          const nextNotifications = [...current]
+          newRequests.reverse().forEach((request) => {
+            const headerId = String(request.headerId ?? request.HeaderId ?? '')
+            const notificationId = `new-request-${headerId}`
+            if (!headerId || nextNotifications.some((item) => item.id === notificationId)) return
+            nextNotifications.unshift({
+              id: notificationId,
+              requestNo: request.requestNo ?? request.RequestNo ?? `คำขอ #${headerId}`,
+              requester: request.employeeName ?? request.EmployeeName ?? '-',
+              label: 'มีคำขอเบิกสินค้าใหม่จากผู้ใช้',
+              read: false,
+            })
+          })
+          const limitedNotifications = nextNotifications.slice(0, 30)
+          localStorage.setItem(notificationStorageKey, JSON.stringify(limitedNotifications))
+          return limitedNotifications
+        })
+      } catch {
+        // SignalR remains the primary path; retry on the next low-frequency check.
+      }
+    }
+
+    checkNewRequisitions()
+    let requestCheckInterval
+    const startFallbackRequestCheck = () => {
+      if (!requestCheckInterval) {
+        checkNewRequisitions()
+        requestCheckInterval = window.setInterval(checkNewRequisitions, 120000)
+      }
+    }
+    const stopFallbackRequestCheck = () => {
+      if (requestCheckInterval) {
+        window.clearInterval(requestCheckInterval)
+        requestCheckInterval = undefined
+      }
+    }
     let connection
     let active = true
 
     connectNotificationHub({
       groupMethod: 'JoinHrNotifications',
+      onConnectionStateChange: (isConnected) => {
+        if (isConnected) stopFallbackRequestCheck()
+        else startFallbackRequestCheck()
+      },
       handlers: {
         RequisitionCreated: (request) => {
           if (!active) return
@@ -62,14 +124,15 @@ function AppHeader({ onToggleSidebar, sidebarCollapsed }) {
       if (active) connection = startedConnection
       else startedConnection.stop()
     }).catch(() => {
-      // Realtime notifications are optional; normal HR pages remain available.
+      startFallbackRequestCheck()
     })
 
     return () => {
       active = false
+      stopFallbackRequestCheck()
       connection?.stop()
     }
-  }, [canApproveRequests, notificationStorageKey])
+  }, [canApproveRequests, knownRequestStorageKey, notificationStorageKey])
 
   const unreadNotificationCount = notifications.filter((item) => !item.read).length
   const handleOpenNotifications = (event) => {

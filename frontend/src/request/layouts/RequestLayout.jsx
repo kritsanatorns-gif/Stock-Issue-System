@@ -127,6 +127,19 @@ function RequestLayout() {
   useEffect(() => {
     setNotifications(JSON.parse(localStorage.getItem(notificationStorageKey) || '[]'))
     checkRequestStatuses()
+    let statusCheckInterval
+    const startFallbackStatusCheck = () => {
+      if (!statusCheckInterval) {
+        checkRequestStatuses()
+        statusCheckInterval = window.setInterval(checkRequestStatuses, 120000)
+      }
+    }
+    const stopFallbackStatusCheck = () => {
+      if (statusCheckInterval) {
+        window.clearInterval(statusCheckInterval)
+        statusCheckInterval = undefined
+      }
+    }
     let connection
     let active = true
 
@@ -134,6 +147,10 @@ function RequestLayout() {
       connectNotificationHub({
         groupMethod: 'JoinRequesterNotifications',
         groupArguments: [employeeId],
+        onConnectionStateChange: (isConnected) => {
+          if (isConnected) stopFallbackStatusCheck()
+          else startFallbackStatusCheck()
+        },
         handlers: {
           RequisitionStatusChanged: (request) => {
             if (!active) return
@@ -174,12 +191,13 @@ function RequestLayout() {
         if (active) connection = startedConnection
         else startedConnection.stop()
       }).catch(() => {
-        // The history page remains available even if realtime connection is unavailable.
+        startFallbackStatusCheck()
       })
     }
 
     return () => {
       active = false
+      stopFallbackStatusCheck()
       connection?.stop()
     }
   }, [checkRequestStatuses, employeeId, notificationStorageKey, statusStorageKey])

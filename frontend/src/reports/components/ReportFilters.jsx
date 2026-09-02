@@ -7,7 +7,7 @@ const reportTypes = [
   { label: 'เบิกสินค้า', value: 'stockIssue' },
   { label: 'รับเข้า', value: 'stockReceive' },
   { label: 'ปรับสต๊อก', value: 'stockAdjust' },
-  { label: 'งานค้าง', value: 'backlog' },
+  { label: 'ถอยยอด', value: 'cancellation' },
 ]
 
 function DateFilterField({ label, onChange, value }) {

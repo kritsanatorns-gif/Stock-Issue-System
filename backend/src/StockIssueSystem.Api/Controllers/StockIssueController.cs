@@ -1,4 +1,5 @@
 using System.Data;
+using System.Globalization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using StockIssueSystem.Api.Data;
@@ -126,7 +127,7 @@ public sealed class StockIssueController(AppDbContext dbContext, FifoCostService
             EmployeeId = request.EmployeeId.ToString(),
             Remark = request.Department.Trim(),
             Status = StockHeaderStatuses.Completed,
-            TransactionDate = request.CreatedAt ?? DateTime.Now,
+            TransactionDate = ThailandDateTime.FromClient(request.CreatedAt),
         };
 
         dbContext.StockHeaders.Add(report);
@@ -210,6 +211,7 @@ public sealed class StockIssueController(AppDbContext dbContext, FifoCostService
             ? StockHeaderStatuses.Cancelled
             : StockHeaderStatuses.PartiallyCancelled;
         report.Remark = AppendCancelRemark(report.Remark, request.Remark);
+        report.CancelNo = FormatCancelNo(DateTime.Now, await GetDailyCancelSequence(DateTime.Now));
 
         await dbContext.SaveChangesAsync();
         await transaction.CommitAsync();
@@ -422,9 +424,7 @@ public sealed class StockIssueController(AppDbContext dbContext, FifoCostService
             return currentRemark;
         }
 
-        var nextRemark = string.IsNullOrWhiteSpace(currentRemark)
-            ? $"Cancel: {cancelRemark.Trim()}"
-            : $"{currentRemark} | Cancel: {cancelRemark.Trim()}";
+        var nextRemark = cancelRemark.Trim();
 
         return nextRemark.Length <= 255 ? nextRemark : nextRemark[..255];
     }
@@ -563,9 +563,12 @@ public sealed class StockIssueController(AppDbContext dbContext, FifoCostService
 
         return new StockIssueDto
         {
+            HeaderId = report.HeaderId,
             CreatedAt = report.TransactionDate,
             Department = report.Remark,
             DocumentNo = report.HeaderId.ToString(),
+            CancelNo = report.CancelNo,
+            RequestHeaderId = report.SourceRequisitionId,
             EmployeeId = parsedEmployeeId,
             EmployeeDepartment = employee?.Department ?? "HR",
             EmployeeName = employee?.Name ?? report.EmployeeId,
@@ -574,5 +577,16 @@ public sealed class StockIssueController(AppDbContext dbContext, FifoCostService
             TotalItems = details.Count,
             TotalQty = details.Sum(detail => detail.Quantity),
         };
+    }
+
+    private async Task<int> GetDailyCancelSequence(DateTime cancelledAt)
+    {
+        var prefix = $"CN-{cancelledAt:yyMMdd}-";
+        return await dbContext.StockHeaders.CountAsync(item => item.CancelNo.StartsWith(prefix)) + 1;
+    }
+
+    private static string FormatCancelNo(DateTime cancelledAt, int sequence)
+    {
+        return $"CN-{cancelledAt:yyMMdd}-{sequence.ToString("0000", CultureInfo.InvariantCulture)}";
     }
 }

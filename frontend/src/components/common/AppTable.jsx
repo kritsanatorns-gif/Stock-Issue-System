@@ -82,6 +82,8 @@ function AppTable({
   defaultSortDirection = 'desc',
   globalSearchPlaceholder = 'ค้นหา / กรองข้อมูล',
   isLoading = false,
+  initialRowsPerPage = 10,
+  rowsPerPageOptions = [10, 25, 50, 100],
   maxHeight = 'calc(100vh - 310px)',
   noDataText = 'No records found',
   expandable = false,
@@ -94,6 +96,7 @@ function AppTable({
   showColumnFilters = true,
   showGlobalSearch = false,
   showPagination = true,
+  toolbarContent = null,
 }) {
   const [globalSearch, setGlobalSearch] = useState('')
   const [columnFilters, setColumnFilters] = useState({})
@@ -102,7 +105,7 @@ function AppTable({
     field: getDefaultSortField(columns, defaultSortField),
   })
   const [page, setPage] = useState(0)
-  const [rowsPerPage, setRowsPerPage] = useState(10)
+  const [rowsPerPage, setRowsPerPage] = useState(initialRowsPerPage)
 
   const visibleColumns = columns.filter((column) => column.hidden !== true)
 
@@ -187,8 +190,8 @@ function AppTable({
       {showPagination || showGlobalSearch ? (
         <Box sx={{ alignItems: 'center', display: 'flex', justifyContent: 'space-between', mb: 2 }}>
           {showPagination ? (
-            <Box sx={{ alignItems: 'center', display: 'flex', gap: 1 }}>
-              <Typography sx={{ color: '#475569', fontSize: 14 }}>แสดงต่อหน้า:</Typography>
+            <Box sx={{ alignItems: 'center', display: 'flex', flexWrap: 'nowrap', gap: 1 }}>
+              <Typography sx={{ color: '#475569', fontSize: 14, whiteSpace: 'nowrap' }}>แสดงต่อหน้า:</Typography>
               <FormControl size="small">
                 <Select
                   value={rowsPerPage}
@@ -198,21 +201,24 @@ function AppTable({
                   }}
                   sx={{ fontSize: 14, minWidth: 72 }}
                 >
-                  {[10, 25, 50, 100].map((size) => <MenuItem key={size} value={size}>{size}</MenuItem>)}
+                  {rowsPerPageOptions.map((size) => <MenuItem key={size} value={size}>{size}</MenuItem>)}
                 </Select>
               </FormControl>
             </Box>
           ) : <Box />}
-          {showGlobalSearch ? (
-            <TextField
-              placeholder={globalSearchPlaceholder}
-              size="small"
-              value={globalSearch}
-              onChange={(event) => setGlobalSearch(event.target.value)}
-              slotProps={{ input: { startAdornment: <InputAdornment position="start"><Search color="#64748b" size={18} /></InputAdornment> } }}
-              sx={{ maxWidth: 560, width: '100%' }}
-            />
-          ) : null}
+          <Box sx={{ alignItems: 'center', display: 'flex', gap: 1, justifyContent: 'flex-end', width: showGlobalSearch ? '100%' : 'auto' }}>
+            {toolbarContent}
+            {showGlobalSearch ? (
+              <TextField
+                placeholder={globalSearchPlaceholder}
+                size="small"
+                value={globalSearch}
+                onChange={(event) => setGlobalSearch(event.target.value)}
+                slotProps={{ input: { startAdornment: <InputAdornment position="start"><Search color="#64748b" size={18} /></InputAdornment> } }}
+                sx={{ maxWidth: 560, width: '100%' }}
+              />
+            ) : null}
+          </Box>
         </Box>
       ) : null}
 

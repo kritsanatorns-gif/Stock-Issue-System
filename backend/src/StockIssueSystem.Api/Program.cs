@@ -57,6 +57,14 @@ app.Logger.LogInformation("Preparing database schema: employee department");
 await EnsureEmployeeDepartmentColumn(app);
 app.Logger.LogInformation("Preparing database schema: stock header remarks");
 await EnsureStockHeaderSeparatedRemarkColumns(app);
+app.Logger.LogInformation("Preparing stored requisition document numbers");
+await EnsureStockHeaderRequestNumbers(app);
+app.Logger.LogInformation("Preparing stored receive document numbers");
+await EnsureStockHeaderReceiveNumbers(app);
+app.Logger.LogInformation("Preparing stored cancellation document numbers");
+await EnsureStockHeaderCancelNumbers(app);
+app.Logger.LogInformation("Preparing stored stock adjustment document numbers");
+await EnsureStockHeaderAdjustNumbers(app);
 app.Logger.LogInformation("Removing unused requisition header remark");
 await RemoveStockHeaderHrRemarkColumn(app);
 app.Logger.LogInformation("Preparing database schema: urgent requisitions");
@@ -132,6 +140,194 @@ static async Task EnsureEmployeeDepartmentColumn(WebApplication app)
         UPDATE dbo.Employee
         SET Department = N'HR'
         WHERE Department IS NULL OR LTRIM(RTRIM(Department)) = N''
+    """);
+}
+
+static async Task EnsureStockHeaderRequestNumbers(WebApplication app)
+{
+    await using var scope = app.Services.CreateAsyncScope();
+    var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+    await dbContext.Database.ExecuteSqlRawAsync("""
+        IF COL_LENGTH(N'dbo.StockHeader', N'RequestNo') IS NULL
+        BEGIN
+            ALTER TABLE dbo.StockHeader
+            ADD RequestNo nvarchar(30) NOT NULL
+                CONSTRAINT DF_StockHeader_RequestNo DEFAULT N'';
+        END
+    """);
+
+    await dbContext.Database.ExecuteSqlRawAsync("""
+        ;WITH RequisitionNumbers AS (
+            SELECT
+                HeaderId,
+                TransactionDate,
+                ROW_NUMBER() OVER (
+                    PARTITION BY CONVERT(date, TransactionDate)
+                    ORDER BY HeaderId
+                ) AS SequenceNo
+            FROM dbo.StockHeader
+            WHERE DocType = N'REQUISITION'
+        )
+        UPDATE header
+        SET RequestNo = CONCAT(
+            N'RQ-',
+            CONVERT(char(6), numbered.TransactionDate, 12),
+            N'-',
+            RIGHT(N'0000' + CONVERT(nvarchar(10), numbered.SequenceNo), 4)
+        )
+        FROM dbo.StockHeader header
+        INNER JOIN RequisitionNumbers numbered ON numbered.HeaderId = header.HeaderId
+        WHERE ISNULL(header.RequestNo, N'') = N'';
+
+        IF NOT EXISTS (
+            SELECT 1
+            FROM sys.indexes
+            WHERE name = N'UX_StockHeader_RequestNo'
+              AND object_id = OBJECT_ID(N'dbo.StockHeader')
+        )
+        BEGIN
+            CREATE UNIQUE INDEX UX_StockHeader_RequestNo
+            ON dbo.StockHeader(RequestNo)
+            WHERE RequestNo <> N'';
+        END
+    """);
+}
+
+static async Task EnsureStockHeaderReceiveNumbers(WebApplication app)
+{
+    await using var scope = app.Services.CreateAsyncScope();
+    var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+    await dbContext.Database.ExecuteSqlRawAsync("""
+        IF COL_LENGTH(N'dbo.StockHeader', N'ReceiveNo') IS NULL
+        BEGIN
+            ALTER TABLE dbo.StockHeader
+            ADD ReceiveNo nvarchar(30) NOT NULL
+                CONSTRAINT DF_StockHeader_ReceiveNo DEFAULT N'';
+        END
+    """);
+
+    await dbContext.Database.ExecuteSqlRawAsync("""
+        ;WITH ReceiveNumbers AS (
+            SELECT
+                HeaderId,
+                TransactionDate,
+                ROW_NUMBER() OVER (
+                    PARTITION BY CONVERT(date, TransactionDate)
+                    ORDER BY HeaderId
+                ) AS SequenceNo
+            FROM dbo.StockHeader
+            WHERE DocType = N'RECEIVE'
+        )
+        UPDATE header
+        SET ReceiveNo = CONCAT(
+            N'RC-',
+            CONVERT(char(6), numbered.TransactionDate, 12),
+            N'-',
+            RIGHT(N'0000' + CONVERT(nvarchar(10), numbered.SequenceNo), 4)
+        )
+        FROM dbo.StockHeader header
+        INNER JOIN ReceiveNumbers numbered ON numbered.HeaderId = header.HeaderId
+        WHERE ISNULL(header.ReceiveNo, N'') = N'';
+
+        IF NOT EXISTS (
+            SELECT 1
+            FROM sys.indexes
+            WHERE name = N'UX_StockHeader_ReceiveNo'
+              AND object_id = OBJECT_ID(N'dbo.StockHeader')
+        )
+        BEGIN
+            CREATE UNIQUE INDEX UX_StockHeader_ReceiveNo
+            ON dbo.StockHeader(ReceiveNo)
+            WHERE ReceiveNo <> N'';
+        END
+    """);
+}
+
+static async Task EnsureStockHeaderCancelNumbers(WebApplication app)
+{
+    await using var scope = app.Services.CreateAsyncScope();
+    var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+    await dbContext.Database.ExecuteSqlRawAsync("""
+        IF COL_LENGTH(N'dbo.StockHeader', N'CancelNo') IS NULL
+        BEGIN
+            ALTER TABLE dbo.StockHeader
+            ADD CancelNo nvarchar(30) NOT NULL
+                CONSTRAINT DF_StockHeader_CancelNo DEFAULT N'';
+        END
+    """);
+
+    await dbContext.Database.ExecuteSqlRawAsync("""
+        ;WITH CancelNumbers AS (
+            SELECT
+                HeaderId,
+                TransactionDate,
+                ROW_NUMBER() OVER (
+                    PARTITION BY CONVERT(date, TransactionDate)
+                    ORDER BY HeaderId
+                ) AS SequenceNo
+            FROM dbo.StockHeader
+            WHERE Status IN (4, 5)
+        )
+        UPDATE header
+        SET CancelNo = CONCAT(
+            N'CN-',
+            CONVERT(char(6), numbered.TransactionDate, 12),
+            N'-',
+            RIGHT(N'0000' + CONVERT(nvarchar(10), numbered.SequenceNo), 4)
+        )
+        FROM dbo.StockHeader header
+        INNER JOIN CancelNumbers numbered ON numbered.HeaderId = header.HeaderId
+        WHERE ISNULL(header.CancelNo, N'') = N'';
+
+        IF NOT EXISTS (
+            SELECT 1
+            FROM sys.indexes
+            WHERE name = N'UX_StockHeader_CancelNo'
+              AND object_id = OBJECT_ID(N'dbo.StockHeader')
+        )
+        BEGIN
+            CREATE UNIQUE INDEX UX_StockHeader_CancelNo
+            ON dbo.StockHeader(CancelNo)
+            WHERE CancelNo <> N'';
+        END
+    """);
+}
+
+static async Task EnsureStockHeaderAdjustNumbers(WebApplication app)
+{
+    await using var scope = app.Services.CreateAsyncScope();
+    var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+    await dbContext.Database.ExecuteSqlRawAsync("""
+        IF COL_LENGTH(N'dbo.StockHeader', N'AdjustNo') IS NULL
+        BEGIN
+            ALTER TABLE dbo.StockHeader
+            ADD AdjustNo nvarchar(30) NOT NULL
+                CONSTRAINT DF_StockHeader_AdjustNo DEFAULT N'';
+        END
+    """);
+
+    await dbContext.Database.ExecuteSqlRawAsync("""
+        ;WITH AdjustNumbers AS (
+            SELECT HeaderId, TransactionDate,
+                ROW_NUMBER() OVER (PARTITION BY CONVERT(date, TransactionDate) ORDER BY HeaderId) AS SequenceNo
+            FROM dbo.StockHeader
+            WHERE DocType = N'ADJUST'
+        )
+        UPDATE header
+        SET AdjustNo = CONCAT(N'AD-', CONVERT(char(6), numbered.TransactionDate, 12), N'-',
+            RIGHT(N'0000' + CONVERT(nvarchar(10), numbered.SequenceNo), 4))
+        FROM dbo.StockHeader header
+        INNER JOIN AdjustNumbers numbered ON numbered.HeaderId = header.HeaderId
+        WHERE ISNULL(header.AdjustNo, N'') = N'';
+
+        IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'UX_StockHeader_AdjustNo' AND object_id = OBJECT_ID(N'dbo.StockHeader'))
+        BEGIN
+            CREATE UNIQUE INDEX UX_StockHeader_AdjustNo ON dbo.StockHeader(AdjustNo) WHERE AdjustNo <> N'';
+        END
     """);
 }
 

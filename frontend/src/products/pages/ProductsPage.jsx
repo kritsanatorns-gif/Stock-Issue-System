@@ -368,6 +368,7 @@ function ProductsPage() {
   const [products, setProducts] = useState([])
   const [selectedRemarkProduct, setSelectedRemarkProduct] = useState(null)
   const [selectedRemarkType, setSelectedRemarkType] = useState('latest')
+  const [statusFilter, setStatusFilter] = useState('all')
   const activeCategoryOptions = useMemo(() => {
     const categoryNames = [
       ...categories
@@ -388,6 +389,19 @@ function ProductsPage() {
       outOfStockCount: products.filter((product) => product.stockQty <= 0).length,
     }),
     [products],
+  )
+
+  const filteredProducts = useMemo(
+    () => statusFilter === 'all'
+      ? products
+      : products.filter((product) => {
+        const stockQty = Number(product.stockQty ?? 0)
+        const minQty = Number(product.minQty ?? 10)
+        const stockStatus = stockQty > minQty ? 'ready' : stockQty > 0 ? 'low' : 'out'
+
+        return stockStatus === statusFilter
+      }),
+    [products, statusFilter],
   )
 
   const loadProducts = async () => {
@@ -1106,7 +1120,7 @@ function ProductsPage() {
       >
         <CardContent sx={{ p: 2.5 }}>
           <ProductDataTable
-            data={products}
+            data={filteredProducts}
             expandedProductId={expandedProductId}
             isLoading={isLoading}
             movementData={movementData}
@@ -1119,6 +1133,8 @@ function ProductsPage() {
               setSelectedRemarkProduct(product)
               setSelectedRemarkType(type)
             }}
+            statusFilter={statusFilter}
+            onStatusFilterChange={setStatusFilter}
           />
         </CardContent>
       </Card>
