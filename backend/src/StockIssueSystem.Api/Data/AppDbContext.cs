@@ -86,8 +86,11 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
             entity.HasKey(department => department.DepartmentId);
             entity.Property(department => department.DepartmentCode).HasMaxLength(200).IsRequired();
             entity.Property(department => department.DepartmentName).HasMaxLength(50).IsRequired();
+            entity.Property(department => department.DivisionName).HasMaxLength(100).HasDefaultValue("");
             entity.Property(department => department.DepartmentStatus).HasDefaultValue(1);
-            entity.HasIndex(department => department.DepartmentCode).IsUnique();
+            entity.HasIndex(department => department.DepartmentCode)
+                .HasFilter("[DepartmentCode] <> N''")
+                .IsUnique();
         });
 
         modelBuilder.Entity<Employee>(entity =>
@@ -228,6 +231,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
             entity.Property(header => header.EmployeeId).HasMaxLength(20).IsRequired();
             entity.Property(header => header.TransactionDate).HasDefaultValueSql("GETDATE()");
             entity.Property(header => header.Department).HasMaxLength(50).HasDefaultValue("");
+            entity.Property(header => header.Division).HasMaxLength(100).HasDefaultValue("");
             entity.Property(header => header.RequesterName).HasMaxLength(100).HasDefaultValue("");
             entity.Property(header => header.IsUrgent).HasDefaultValue(false);
             entity.Property(header => header.UrgentRemark).HasMaxLength(500).HasDefaultValue("");

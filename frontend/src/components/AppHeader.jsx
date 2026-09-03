@@ -41,6 +41,18 @@ function AppHeader({ onToggleSidebar, sidebarCollapsed }) {
     const checkNewRequisitions = async () => {
       try {
         const requests = await getRequisitions()
+        const activeRequestIds = new Set((requests ?? [])
+          .filter((request) => [6, 8].includes(Number(request.statusId ?? request.StatusId ?? 0)))
+          .map((request) => `new-request-${String(request.headerId ?? request.HeaderId ?? '')}`))
+        setNotifications((current) => {
+          const nextNotifications = current.filter((item) => activeRequestIds.has(item.id))
+
+          if (nextNotifications.length !== current.length) {
+            localStorage.setItem(notificationStorageKey, JSON.stringify(nextNotifications))
+          }
+
+          return nextNotifications
+        })
         const requestIds = (requests ?? [])
           .map((request) => String(request.headerId ?? request.HeaderId ?? ''))
           .filter(Boolean)
@@ -81,6 +93,8 @@ function AppHeader({ onToggleSidebar, sidebarCollapsed }) {
     }
 
     checkNewRequisitions()
+    const handleRequisitionUpdated = () => checkNewRequisitions()
+    window.addEventListener('stock-issue:requisition-updated', handleRequisitionUpdated)
     let requestCheckInterval
     const startFallbackRequestCheck = () => {
       if (!requestCheckInterval) {
@@ -136,6 +150,7 @@ function AppHeader({ onToggleSidebar, sidebarCollapsed }) {
       active = false
       stopFallbackRequestCheck()
       connection?.stop()
+      window.removeEventListener('stock-issue:requisition-updated', handleRequisitionUpdated)
     }
   }, [canApproveRequests, knownRequestStorageKey, notificationStorageKey])
 

@@ -256,12 +256,14 @@ function RequestLoginPage() {
       const employeeCode = username.trim()
       const employeeDepartment = department.trim()
       const checkedEmployee =
-        hrEmployee?.code === employeeCode && hrEmployee?.department === employeeDepartment
+        hrEmployee?.code === employeeCode && hrEmployee?.division === employeeDepartment
           ? hrEmployee
           : await getHrEmployee(employeeCode, employeeDepartment)
 
       await login({
-        department: checkedEmployee.department,
+        // HR Department is the division (ฝ่าย); HR Division is the department (แผนก).
+        department: checkedEmployee.division,
+        division: checkedEmployee.department,
         employeeCode: checkedEmployee.code,
         employeeName: checkedEmployee.name,
         unitRef: checkedEmployee.unitRef || '',

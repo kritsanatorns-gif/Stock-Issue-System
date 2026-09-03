@@ -99,7 +99,7 @@ function mapProduct(row) {
     minQty: Number(row.minQty ?? row.MinQty ?? 10),
     productId: row.productId ?? row.ProductId ?? row.code ?? '',
     productName: row.productName ?? row.ProductName ?? row.name ?? '',
-    productRemark: row.productRemark ?? row.ProductRemark ?? '',
+  productRemark: row.productRemark ?? row.ProductRemark ?? '',
     receiveQty: Number(row.receiveQty ?? row.ReceiveQty ?? row.lastReceiveQty ?? row.LastReceiveQty ?? 0),
     receiveUnit: row.receiveUnit || row.ReceiveUnit || unit,
     remainingCostValue: Number(row.remainingCostValue ?? row.RemainingCostValue ?? 0),

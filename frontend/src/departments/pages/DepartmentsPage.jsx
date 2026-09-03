@@ -27,6 +27,7 @@ const emptyForm = {
   departmentCode: '',
   departmentId: '',
   departmentName: '',
+  divisionName: '',
   departmentStatus: 1,
 }
 
@@ -35,6 +36,7 @@ function mapDepartment(row) {
     departmentCode: row.departmentCode ?? row.DepartmentCode ?? '',
     departmentId: row.departmentId ?? row.DepartmentId ?? '',
     departmentName: row.departmentName ?? row.DepartmentName ?? '',
+    divisionName: row.divisionName ?? row.DivisionName ?? row.departmentName ?? row.DepartmentName ?? '',
     departmentStatus: Number(row.departmentStatus ?? row.DepartmentStatus ?? 1),
   }
 }
@@ -100,7 +102,7 @@ function DepartmentsPage() {
     }))
   }
 
-  const canSave = form.departmentCode.trim() && form.departmentName.trim()
+  const canSave = form.divisionName.trim() && form.departmentName.trim()
 
   const handleSave = async () => {
     if (!canSave) {
@@ -109,7 +111,7 @@ function DepartmentsPage() {
 
     setIsSaving(true)
 
-    const payload = {  departmentCode: form.departmentCode.trim(),  departmentName: form.departmentName.trim(),departmentStatus: Number(form.departmentStatus),}
+    const payload = { departmentCode: form.departmentCode.trim(), departmentName: form.departmentName.trim(), divisionName: form.divisionName.trim(), departmentStatus: Number(form.departmentStatus) }
 
     try {
       const savedDepartment = form.departmentId
@@ -134,10 +136,15 @@ function DepartmentsPage() {
         },
         confirmButtonText: 'ตกลง',
       })
-    } catch {
+    } catch (error) {
+      const apiMessage = String(error?.response?.data ?? '')
+      const isDuplicateCode = apiMessage.toLowerCase().includes('department code already exists')
+
       await Swal.fire({
         title: 'ไม่สำเร็จ',
-        text: 'บันทึกข้อมูลแผนกไม่สำเร็จ',
+        text: isDuplicateCode
+          ? `รหัสแผนก / QR Code “${form.departmentCode.trim()}” มีอยู่ในระบบแล้ว กรุณาใช้รหัสอื่น`
+          : (apiMessage || 'บันทึกข้อมูลแผนกไม่สำเร็จ'),
         icon: 'error',
         customClass: {
         container: 'stock-swal-container',
@@ -169,6 +176,7 @@ function DepartmentsPage() {
       ),
     },
     { key: 'departmentCode', label: 'รหัสแผนก / QR Code', width: 240, sortValue: (row) => Number(row.departmentId ?? 0) },
+    { key: 'divisionName', label: 'ฝ่าย', width: 180 },
     { key: 'departmentName', label: 'ชื่อแผนก', width: 260 },
     {
       key: 'departmentStatus',
@@ -255,7 +263,6 @@ function DepartmentsPage() {
                 <TextField
                   autoFocus
                   fullWidth
-                  required
                   helperText="ใช้ตัวอังกฤษ ตัวเลข และ . _ / - ไม่รองรับภาษาไทย"
                   label="รหัสแผนก / QR Code"
                   value={form.departmentCode}
@@ -281,6 +288,15 @@ function DepartmentsPage() {
               required
               helperText="รองรับภาษาไทย อังกฤษ ตัวเลข และ . _ / -"
               label="ชื่อแผนก"
+              label={'ฝ่าย'}
+              value={form.divisionName}
+              onChange={(event) => handleFormChange('divisionName', normalizePlainName(event.target.value))}
+            />
+            <TextField
+              fullWidth
+              helperText="หากไม่ระบุ ระบบจะใช้ชื่อแผนกเป็นชื่อฝ่าย"
+              label="ฝ่าย"
+              label={'ชื่อแผนก'}
               value={form.departmentName}
               onChange={(event) => handleFormChange('departmentName', event.target.value)}
             />
@@ -310,6 +326,9 @@ function DepartmentsPage() {
             </Alert>
             <Typography sx={{ color: '#475569', fontSize: 14 }}>
               แผนก: {form.departmentName || '-'}
+            </Typography>
+            <Typography sx={{ color: '#475569', fontSize: 14 }}>
+              ฝ่าย: {form.divisionName || form.departmentName || '-'}
             </Typography>
             <Typography sx={{ color: '#475569', fontSize: 14 }}>
               รหัส: {form.departmentCode || '-'}

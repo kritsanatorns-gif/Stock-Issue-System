@@ -80,7 +80,6 @@ const defaultProductForm = {
   receiveHint: '',
   receiveUnit: 'แพ็ค',
   requestQty: '1',
-  supplierId: '',
 }
 
 const departmentSearchOptionValue = '__department_search__'
@@ -101,6 +100,7 @@ const getThailandTodayInputValue = () => {
 function normalizeDepartmentRow(row) {
   return {
     code: row.departmentCode ?? row.DepartmentCode ?? '',
+    divisionName: row.divisionName ?? row.DivisionName ?? '',
     id: row.departmentId ?? row.DepartmentId ?? '',
     name: row.departmentName ?? row.DepartmentName ?? '',
     status: Number(row.departmentStatus ?? row.DepartmentStatus ?? 1),
@@ -288,6 +288,7 @@ function InventoryWorkspace({ mode }) {
   const [requesterName, setRequesterName] = useState('')
   const [departmentSearchText, setDepartmentSearchText] = useState('')
   const [issueDepartment, setIssueDepartment] = useState('')
+  const [issueDivision, setIssueDivision] = useState('')
   const [issueDepartmentCode, setIssueDepartmentCode] = useState('')
   const [isIssueUrgent, setIsIssueUrgent] = useState(false)
   const [issueUrgentRemark, setIssueUrgentRemark] = useState('')
@@ -340,6 +341,15 @@ function InventoryWorkspace({ mode }) {
       `${department.code} ${department.name}`.toLowerCase().includes(keyword),
     )
   }, [departmentOptions, departmentSearchText])
+
+  const divisionOptions = useMemo(
+    () => [...new Set(
+      departmentOptions
+        .map((department) => String(department.divisionName ?? '').trim())
+        .filter(Boolean),
+    )].sort((left, right) => left.localeCompare(right, 'th')),
+    [departmentOptions],
+  )
 
   const loadInventoryItems = useCallback(async () => {
     setLoadError('')
@@ -423,10 +433,11 @@ function InventoryWorkspace({ mode }) {
   const selectIssueDepartment = (department) => {
     setDepartmentCodeText(department.code)
     setIssueDepartment(department.name)
+    setIssueDivision(department.divisionName ?? '')
     setIssueDepartmentCode(department.code)
   }
 
-  const selectRequesterDepartment = async (departmentName) => {
+  const selectRequesterDepartment = async (departmentName, divisionName = '') => {
     const normalizedDepartment = String(departmentName ?? '').trim()
     if (!normalizedDepartment) {
       clearIssueDepartment()
@@ -455,6 +466,7 @@ function InventoryWorkspace({ mode }) {
     setDepartmentCodeText('')
     setIssueDepartmentCode('')
     setIssueDepartment(normalizedDepartment)
+    setIssueDivision(String(divisionName ?? '').trim())
     setPendingDepartmentToCreate(normalizedDepartment)
   }
 
@@ -481,6 +493,7 @@ function InventoryWorkspace({ mode }) {
     const createdDepartment = await createDepartment({
       departmentCode: scannedDepartmentCode || pendingDepartmentToCreate,
       departmentName: pendingDepartmentToCreate,
+      divisionName: issueDivision || pendingDepartmentToCreate,
       departmentStatus: 1,
     })
     const normalizedCreatedDepartment = normalizeDepartmentRow(createdDepartment)
@@ -499,7 +512,10 @@ function InventoryWorkspace({ mode }) {
 
     try {
       const requester = await getHrEmployee(normalizedEmployeeId)
-      await selectRequesterDepartment(requester.department ?? requester.Department ?? '')
+      await selectRequesterDepartment(
+        requester.division ?? requester.Division ?? '',
+        requester.department ?? requester.Department ?? '',
+      )
       setRequesterName(String(requester.name ?? requester.Name ?? '').trim())
     } catch {
       setRequesterName('')
@@ -511,6 +527,7 @@ function InventoryWorkspace({ mode }) {
     setDepartmentCodeText('')
     setDepartmentSearchText('')
     setIssueDepartment('')
+    setIssueDivision('')
     setIssueDepartmentCode('')
   }
 
@@ -1040,11 +1057,9 @@ function InventoryWorkspace({ mode }) {
     name: !productForm.name.trim(),
     receiveUnit: !productForm.receiveUnit.trim(),
     requestQty: toPositiveNumber(productForm.requestQty) <= 0,
-    supplierId: !productForm.supplierId,
   }
   const canSaveNewProduct =
     !Object.values(productFormErrors).some(Boolean)
-    && Boolean(productForm.supplierId)
   const canOpenNewProductConfirm =
     canSaveNewProduct || (Boolean(existingDuplicateProduct) && !Object.entries(productFormErrors).some(([field, hasError]) => field !== duplicateProductField && hasError))
 
@@ -1195,7 +1210,6 @@ function InventoryWorkspace({ mode }) {
       {
         ...newItem,
         requestQty: toPositiveNumber(newItem.requestQty) || 1,
-        supplierId: Number(productForm.supplierId),
         unit: newItem.receiveUnit,
         unitCost: newItem.costLot,
       },
@@ -1211,7 +1225,11 @@ function InventoryWorkspace({ mode }) {
 
   const createTransactionPayload = (documentNo, createdAt) => ({
     createdAt: createdAt.toISOString(),
-    department: mode === 'issue' ? issueDepartment.trim() : '',
+    // StockHeader.Department เก็บฝ่าย, StockHeader.Division เก็บแผนก
+    department: mode === 'issue'
+      ? (departmentOptions.find((item) => item.name === issueDepartment.trim())?.divisionName ?? issueDivision)
+      : '',
+    division: mode === 'issue' ? issueDepartment.trim() : '',
     documentNo,
     poInvoiceNo: mode === 'receive' ? poInvoiceNo.trim() : '',
     employeeId,
@@ -1312,7 +1330,8 @@ function InventoryWorkspace({ mode }) {
       await savePendingDepartment()
 
       const savedRequest = await createRequisition({
-        department: issueDepartment.trim(),
+        department: departmentOptions.find((item) => item.name === issueDepartment.trim())?.divisionName ?? issueDivision,
+        division: issueDepartment.trim(),
         employeeId: Number(requesterEmployeeId),
         isUrgent: isIssueUrgent,
         requesterName: safeRequesterName,
@@ -1332,6 +1351,7 @@ function InventoryWorkspace({ mode }) {
       setSelectedItems([])
       setDepartmentCodeText('')
       setIssueDepartment('')
+      setIssueDivision('')
       setIssueDepartmentCode('')
       setRequesterName('')
       setRequesterEmployeeId('')
@@ -1923,8 +1943,9 @@ function InventoryWorkspace({ mode }) {
                         </Grid>
                       </Grid>
                       <Grid container spacing={1.25}>
-                        <Grid size={{ xs: 12, sm: 6 }}>
+                        <Grid size={{ xs: 12, sm: 4 }}>
                           <TextField
+                            disabled
                             fullWidth
                             label="ยิง QR แผนก"
                             placeholder="สแกนรหัสแผนก"
@@ -1943,8 +1964,9 @@ function InventoryWorkspace({ mode }) {
                             }}
                           />
                         </Grid>
-                        <Grid size={{ xs: 12, sm: 6 }}>
+                        <Grid size={{ xs: 12, sm: 4 }}>
                           <TextField
+                            disabled
                             fullWidth
                             required
                             select
@@ -2013,12 +2035,27 @@ function InventoryWorkspace({ mode }) {
                             )}
                           </TextField>
                         </Grid>
+                        <Grid size={{ xs: 12, sm: 4 }}>
+                          <TextField
+                            disabled
+                            fullWidth
+                            select
+                            label="ฝ่าย"
+                            size="small"
+                            value={issueDivision}
+                          >
+                            <MenuItem value="">เลือกฝ่าย</MenuItem>
+                            {divisionOptions.map((division) => (
+                              <MenuItem key={division} value={division}>{division}</MenuItem>
+                            ))}
+                          </TextField>
+                        </Grid>
                       </Grid>
                       <TextField
                         disabled
                         fullWidth
                         required
-                        helperText={issueDepartment ? `Code: ${issueDepartmentCode}` : 'ยิง QR หรือเลือกจากรายชื่อก่อนเบิก'}
+                        helperText={issueDepartment ? `Code: ${issueDepartmentCode}` : 'ระบบเลือกจากข้อมูลพนักงาน'}
                         label="ชื่อแผนกที่เลือก"
                         size="small"
                         value={issueDepartment}
@@ -2142,7 +2179,7 @@ function InventoryWorkspace({ mode }) {
 
     <Dialog
       fullWidth
-      maxWidth="sm"
+      maxWidth="md"
       open={Boolean(receiveDraftItem)}
       onClose={() => setReceiveDraftItem(null)}
     >
@@ -2159,9 +2196,13 @@ function InventoryWorkspace({ mode }) {
                   <Typography className="inventory-workspace__detail-label">รหัสสินค้า</Typography>
                   <Typography className="inventory-workspace__detail-value">{receiveDraftItem.code}</Typography>
                 </Grid>
-                <Grid size={{ xs: 12, sm: 8 }}>
+                <Grid size={{ xs: 12, sm: 4 }}>
                   <Typography className="inventory-workspace__detail-label">ชื่อสินค้า</Typography>
                   <Typography className="inventory-workspace__detail-value">{receiveDraftItem.name}</Typography>
+                </Grid>
+                <Grid size={{ xs: 12, sm: 4 }}>
+                  <Typography className="inventory-workspace__detail-label">หมวดหมู่</Typography>
+                  <Typography className="inventory-workspace__detail-value">{receiveDraftItem.category || '-'}</Typography>
                 </Grid>
                 <Grid size={{ xs: 12, sm: 4 }}>
                   <Typography className="inventory-workspace__detail-label">คงเหลือ</Typography>
@@ -2502,14 +2543,18 @@ function InventoryWorkspace({ mode }) {
             </Grid>
           </Grid>
 
-          <TextField
-            fullWidth
-            {...getProductFieldErrorProps('barcode', 'ใช้ยิงสแกน ถ้าไม่มีให้เว้นว่างได้')}
-            label="บาร์โค้ด"
-            value={productForm.barcode}
-            onChange={(event) => handleProductFormChange('barcode', normalizeBarcodeInput(event.target.value))}
-            onBlur={(event) => handleDuplicateProductCheck('barcode', event.target.value)}
-          />
+          <Grid container spacing={2}>
+            <Grid size={{ xs: 12, sm: 7 }}>
+              <TextField
+                fullWidth
+                {...getProductFieldErrorProps('barcode', 'ใช้ยิงสแกน ถ้าไม่มีให้เว้นว่างได้')}
+                label="บาร์โค้ด"
+                value={productForm.barcode}
+                onChange={(event) => handleProductFormChange('barcode', normalizeBarcodeInput(event.target.value))}
+                onBlur={(event) => handleDuplicateProductCheck('barcode', event.target.value)}
+              />
+            </Grid>
+          </Grid>
 
           <Grid container spacing={2}>
             <Grid size={{ xs: 12, sm: 2.4 }}>
@@ -2607,30 +2652,6 @@ function InventoryWorkspace({ mode }) {
 
           <Grid container spacing={2}>
             <Grid size={{ xs: 12, sm: 4 }}>
-              <TextField
-                select
-                fullWidth
-                required
-                error={isProductFormSubmitted && !productForm.supplierId}
-                helperText={
-                  isProductFormSubmitted && !productForm.supplierId
-                    ? 'กรุณาเลือกผู้ขายก่อนเพิ่มรายการรับเข้า'
-                    : 'ผู้ขายของล็อตราคานี้'
-                }
-                label="ผู้ขาย"
-                size="small"
-                value={productForm.supplierId}
-                onChange={(event) => handleProductFormChange('supplierId', event.target.value)}
-              >
-                <MenuItem value="">เลือกผู้ขาย</MenuItem>
-                {suppliers.map((supplier) => (
-                  <MenuItem key={supplier.supplierId} value={String(supplier.supplierId)}>
-                    {supplier.supplierName}
-                  </MenuItem>
-                ))}
-              </TextField>
-            </Grid>
-            <Grid size={{ xs: 12, sm: 3 }}>
               <TextField
                 fullWidth
                 {...getProductFieldErrorProps('costLot', 'ใช้คำนวณต้นทุนและ FIFO')}
