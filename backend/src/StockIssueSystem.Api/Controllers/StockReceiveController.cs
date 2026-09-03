@@ -93,10 +93,12 @@ public sealed class StockReceiveController(AppDbContext dbContext) : ControllerB
                 ReceiveUnit = string.IsNullOrWhiteSpace(item.ReceiveUnit) ? item.Unit.Trim() : item.ReceiveUnit.Trim(),
                 Unit = item.Unit.Trim(),
             }).ToList(),
+            Department = request.Department.Trim(),
+            Division = request.Division.Trim(),
             DocType = ReceiveDocType,
             PoInvoiceNo = request.PoInvoiceNo?.Trim() ?? string.Empty,
             EmployeeId = request.EmployeeId.ToString(),
-            Remark = request.Department.Trim(),
+            Remark = request.Division.Trim(),
             SupplierId = supplierIds.Count == 1 ? supplierIds[0] : null,
             Status = StockHeaderStatuses.Completed,
             TransactionDate = ThailandDateTime.FromClient(request.CreatedAt),
@@ -245,7 +247,6 @@ public sealed class StockReceiveController(AppDbContext dbContext) : ControllerB
                 product.ProductName = item.ProductName.Trim();
                 product.Barcode = item.Barcode.Trim();
                 product.CategoryName = string.IsNullOrWhiteSpace(item.Category) ? product.CategoryName : item.Category.Trim();
-
                 if (!string.IsNullOrWhiteSpace(item.ImageName))
                 {
                     product.Img = item.ImageName.Trim();
@@ -634,6 +635,7 @@ public sealed class StockReceiveController(AppDbContext dbContext) : ControllerB
             HeaderId = report.HeaderId,
             CreatedAt = report.TransactionDate,
             Department = report.Remark,
+            Division = report.Department,
             DocumentNo = string.IsNullOrWhiteSpace(report.ReceiveNo) ? report.HeaderId.ToString() : report.ReceiveNo,
             CancelNo = report.CancelNo,
             PoInvoiceNo = report.PoInvoiceNo,

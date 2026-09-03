@@ -41,7 +41,7 @@ public sealed class DepartmentController(AppDbContext dbContext) : ControllerBas
     [HttpPost]
     public async Task<ActionResult<DepartmentDto>> CreateDepartment(CreateDepartmentDto request)
     {
-        var validationError = ValidateDepartment(request.DepartmentCode, request.DepartmentName);
+        var validationError = ValidateDepartment(request.DepartmentCode, request.DepartmentName, request.DivisionName);
 
         if (validationError is not null)
         {
@@ -50,7 +50,8 @@ public sealed class DepartmentController(AppDbContext dbContext) : ControllerBas
 
         var departmentCode = request.DepartmentCode.Trim();
 
-        if (await dbContext.Departments.AnyAsync(department => department.DepartmentCode == departmentCode))
+        if (!string.IsNullOrWhiteSpace(departmentCode)
+            && await dbContext.Departments.AnyAsync(department => department.DepartmentCode == departmentCode))
         {
             return Conflict("Department code already exists.");
         }
@@ -59,6 +60,7 @@ public sealed class DepartmentController(AppDbContext dbContext) : ControllerBas
         {
             DepartmentCode = departmentCode,
             DepartmentName = request.DepartmentName.Trim(),
+            DivisionName = string.IsNullOrWhiteSpace(request.DivisionName) ? request.DepartmentName.Trim() : request.DivisionName.Trim(),
             DepartmentStatus = request.DepartmentStatus,
         };
 
@@ -74,7 +76,7 @@ public sealed class DepartmentController(AppDbContext dbContext) : ControllerBas
     [HttpPut("{departmentId:int}")]
     public async Task<ActionResult<DepartmentDto>> UpdateDepartment(int departmentId, UpdateDepartmentDto request)
     {
-        var validationError = ValidateDepartment(request.DepartmentCode, request.DepartmentName);
+        var validationError = ValidateDepartment(request.DepartmentCode, request.DepartmentName, request.DivisionName);
 
         if (validationError is not null)
         {
@@ -90,7 +92,7 @@ public sealed class DepartmentController(AppDbContext dbContext) : ControllerBas
 
         var departmentCode = request.DepartmentCode.Trim();
 
-        if (await dbContext.Departments.AnyAsync(item =>
+        if (!string.IsNullOrWhiteSpace(departmentCode) && await dbContext.Departments.AnyAsync(item =>
             item.DepartmentId != departmentId && item.DepartmentCode == departmentCode))
         {
             return Conflict("Department code already exists.");
@@ -98,6 +100,7 @@ public sealed class DepartmentController(AppDbContext dbContext) : ControllerBas
 
         department.DepartmentCode = departmentCode;
         department.DepartmentName = request.DepartmentName.Trim();
+        department.DivisionName = string.IsNullOrWhiteSpace(request.DivisionName) ? request.DepartmentName.Trim() : request.DivisionName.Trim();
         department.DepartmentStatus = request.DepartmentStatus;
 
         await dbContext.SaveChangesAsync();
@@ -105,14 +108,14 @@ public sealed class DepartmentController(AppDbContext dbContext) : ControllerBas
         return Ok(ToDto(department));
     }
 
-    private static string? ValidateDepartment(string departmentCode, string departmentName)
+    private static string? ValidateDepartment(string departmentCode, string departmentName, string divisionName)
     {
-        if (string.IsNullOrWhiteSpace(departmentCode) || string.IsNullOrWhiteSpace(departmentName))
+        if (string.IsNullOrWhiteSpace(departmentName) || string.IsNullOrWhiteSpace(divisionName))
         {
-            return "Department code and name are required.";
+            return "Division and department name are required.";
         }
 
-        if (!DepartmentCodePattern.IsMatch(departmentCode.Trim()))
+        if (!string.IsNullOrWhiteSpace(departmentCode) && !DepartmentCodePattern.IsMatch(departmentCode.Trim()))
         {
             return "Department code supports English letters, numbers, and . _ / - only.";
         }
@@ -132,6 +135,7 @@ public sealed class DepartmentController(AppDbContext dbContext) : ControllerBas
             DepartmentId = department.DepartmentId,
             DepartmentCode = department.DepartmentCode,
             DepartmentName = department.DepartmentName,
+            DivisionName = department.DivisionName,
             DepartmentStatus = department.DepartmentStatus,
         };
     }

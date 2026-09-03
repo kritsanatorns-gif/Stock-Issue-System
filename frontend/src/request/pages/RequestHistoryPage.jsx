@@ -14,6 +14,7 @@
   Typography,
 } from '@mui/material'
 import { ClipboardList, FileDown, Printer, RefreshCw, Zap } from 'lucide-react'
+import JsBarcode from 'jsbarcode'
 import { useCallback, useEffect, useState } from 'react'
 import { getRequisitions } from '../../api/api'
 import AppTable from '../../components/common/AppTable'
@@ -41,10 +42,14 @@ function normalizeRequisition(row) {
     }
   })
   const requestedQty = items.reduce((sum, item) => sum + item.quantity, 0)
+  // StockHeader.Department เก็บฝ่าย, StockHeader.Division เก็บแผนก
+  const department = row.division ?? row.Division ?? ''
+  const division = row.department ?? row.Department ?? ''
 
   return {
     createdAt: row.createdAt ?? row.CreatedAt ?? '',
-    department: row.department ?? row.Department ?? '',
+    department,
+    division,
     employeeId: Number(row.employeeId ?? row.EmployeeId ?? 0),
     employeeName: row.employeeName ?? row.EmployeeName ?? '',
     headerId: row.headerId ?? row.HeaderId ?? '',
@@ -190,6 +195,22 @@ function getRequestSlipStampColor(slipStamp) {
     : '#dc2626'
 }
 
+function createRequestBarcodeDataUrl(requestNo) {
+  const value = String(requestNo ?? '').trim()
+
+  if (!value) return ''
+
+  const canvas = document.createElement('canvas')
+  JsBarcode(canvas, value, {
+    displayValue: false,
+    height: 28,
+    margin: 0,
+    width: 1.4,
+  })
+
+  return canvas.toDataURL('image/png')
+}
+
 function printHistorySlipOld(row) {
   const requestRemark = getRequestSlipRemark(row)
   const items = (row.items ?? []).map((item) => ({
@@ -256,6 +277,7 @@ function printHistorySlipOld(row) {
           <div><div class="label">เลขที่คำขอ</div><div class="value">${row.requestNo || '-'}</div></div>
           <div><div class="label">วันที่พิมพ์</div><div class="value">${printedAt}</div></div>
           <div><div class="label">ผู้ขอเบิก</div><div class="value">${row.employeeName || '-'}</div></div>
+          <div><div class="label">ฝ่าย</div><div class="value">${row.division || '-'}</div></div>
           <div><div class="label">แผนก</div><div class="value">${row.department || '-'}</div></div>
           <div><div class="label">จำนวนรายการ</div><div class="value">${items.length} รายการ</div></div>
           <div><div class="label">จำนวนรวม</div><div class="value">${totalQty.toLocaleString('th-TH')} ชิ้น/หน่วย</div></div>
@@ -324,6 +346,7 @@ export function printHistorySlip(row) {
 
   const slipStamp = getRequestSlipStamp(row) || modeConfig.stampFallback
   const slipStampColor = getRequestSlipStampColor(slipStamp)
+  const barcodeImage = createRequestBarcodeDataUrl(row.requestNo)
   const rowsHtml = displayRows
     .map(
       (item, index) => `
@@ -376,6 +399,7 @@ export function printHistorySlip(row) {
             top: 5mm;
           }
           .document-no { position: absolute; right: 5mm; text-align: right; top: 5mm; }
+          .document-barcode { display: block; height: 28px; margin: 9px 0 0 auto; width: 145px; }
           .title { font-size: 28px; font-weight: 900; line-height: 1.1; margin-top: 20px; text-align: center; }
           .subtitle { margin-bottom: 4px; text-align: center; }
           .line { border-bottom: 1px solid #111; display: inline-block; min-height: 17px; padding: 0 5px 1px; vertical-align: bottom; }
@@ -420,7 +444,7 @@ export function printHistorySlip(row) {
       <body>
         <main class="sheet">
           <div class="urgent-stamp">${escapeHtml(slipStamp)}</div>
-          <div class="document-no">เลขที่เอกสาร <span class="line line-md">${escapeHtml(row.requestNo || '')}</span></div>
+          <div class="document-no">เลขที่เอกสาร <span class="line line-md">${escapeHtml(row.requestNo || '')}</span>${barcodeImage ? `<img class="document-barcode" src="${barcodeImage}" alt="${escapeHtml(row.requestNo)}" />` : ''}</div>
           <div class="title">ใบเบิกของ</div>
           <div class="subtitle">แผนกธุรการ ฝ่ายทรัพยากรบุคคล</div>
 
@@ -440,7 +464,7 @@ export function printHistorySlip(row) {
               <div class="field-row">ชื่อ-สกุล ผู้ขอเบิก <span class="line line-xl print-value">${escapeHtml(row.employeeName || '')}</span></div>
               <div class="field-row">
                 ฝ่าย
-                <span class="line line-md print-value">${escapeHtml(row.department || '')}</span>
+                <span class="line line-md print-value">${escapeHtml(row.division || '')}</span>
                 แผนก
                 <span class="line line-md print-value">${escapeHtml(row.department || '')}</span>
                 หน่วย
@@ -545,6 +569,7 @@ function buildRequestPdfHtml(row) {
 
   const slipStamp = getRequestSlipStamp(row) || modeConfig.stampFallback
   const slipStampColor = getRequestSlipStampColor(slipStamp)
+  const barcodeImage = createRequestBarcodeDataUrl(row.requestNo)
   const rowsHtml = displayRows
     .map(
       (item, index) => `
@@ -599,6 +624,7 @@ function buildRequestPdfHtml(row) {
         top: 19px;
       }
       .request-pdf-docno { position: absolute; right: 19px; text-align: right; top: 19px; }
+      .request-pdf-barcode { display: block; height: 28px; margin: 9px 0 0 auto; width: 145px; }
       .request-pdf-title { font-size: 28px; font-weight: 900; line-height: 1.1; margin-top: 20px; text-align: center; }
       .request-pdf-subtitle { margin-bottom: 4px; text-align: center; }
       .request-pdf-line {
@@ -649,7 +675,7 @@ function buildRequestPdfHtml(row) {
     </style>
     <main class="request-pdf-sheet">
       <div class="request-pdf-urgent">${escapeHtml(slipStamp)}</div>
-      <div class="request-pdf-docno">เลขที่เอกสาร <span class="request-pdf-line request-pdf-md">${escapeHtml(row.requestNo || '')}</span></div>
+      <div class="request-pdf-docno">เลขที่เอกสาร <span class="request-pdf-line request-pdf-md">${escapeHtml(row.requestNo || '')}</span>${barcodeImage ? `<img class="request-pdf-barcode" src="${barcodeImage}" alt="${escapeHtml(row.requestNo)}" />` : ''}</div>
       <div class="request-pdf-title">ใบเบิกของ</div>
       <div class="request-pdf-subtitle">แผนกธุรการ ฝ่ายทรัพยากรบุคคล</div>
 
@@ -669,7 +695,7 @@ function buildRequestPdfHtml(row) {
           <div class="request-pdf-row">ชื่อ-สกุล ผู้ขอเบิก <span class="request-pdf-line request-pdf-xl request-pdf-value">${escapeHtml(row.employeeName || '')}</span></div>
           <div class="request-pdf-row">
             ฝ่าย
-            <span class="request-pdf-line request-pdf-md request-pdf-value">${escapeHtml(row.department || '')}</span>
+            <span class="request-pdf-line request-pdf-md request-pdf-value">${escapeHtml(row.division || '')}</span>
             แผนก
             <span class="request-pdf-line request-pdf-md request-pdf-value">${escapeHtml(row.department || '')}</span>
             หน่วย
@@ -879,6 +905,8 @@ function RequestHistoryPage() {
       sortValue: (row) => Number(row.headerId ?? 0),
     },
     { key: 'requestNo', label: 'เลขที่คำขอ', width: 150 },
+    { key: 'division', label: 'ฝ่าย', width: 120, align: 'center' },
+    { key: 'department', label: 'แผนก', width: 120, align: 'center' },
     {
       key: 'isUrgent',
       label: 'เบิกด่วน',
@@ -985,7 +1013,6 @@ function RequestHistoryPage() {
       </Stack>
 
       {loadError ? <Alert severity="error" sx={{ mb: 2 }}>{loadError}</Alert> : null}
-
       <Grid container spacing={2} sx={{ mb: 2 }}>
         {requestStatusCards.map((card) => (
           <Grid key={card.label} size={{ xs: 12, md: 2.4 }}>
@@ -1036,6 +1063,10 @@ function RequestHistoryPage() {
                 <Grid size={{ xs: 12, md: 3 }}>
                   <Typography sx={{ color: '#64748b', fontSize: 12, fontWeight: 800 }}>แผนก</Typography>
                   <Typography sx={{ fontWeight: 900 }}>{selectedRow.department || '-'}</Typography>
+                </Grid>
+                <Grid size={{ xs: 12, md: 3 }}>
+                  <Typography sx={{ color: '#64748b', fontSize: 12, fontWeight: 800 }}>ฝ่าย</Typography>
+                  <Typography sx={{ fontWeight: 900 }}>{selectedRow.division || '-'}</Typography>
                 </Grid>
                 <Grid size={{ xs: 12, md: 3 }}>
                   <Typography sx={{ color: '#64748b', fontSize: 12, fontWeight: 800 }}>สถานะ</Typography>

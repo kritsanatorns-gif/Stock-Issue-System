@@ -108,6 +108,7 @@ public sealed class RequisitionsController(
             CreateBy = requester,
             CreateDate = DateTime.Now,
             Department = request.Department.Trim(),
+            Division = request.Division.Trim(),
             DocType = RequisitionDocType,
             EmployeeId = requester,
             IsUrgent = request.IsUrgent,
@@ -148,6 +149,7 @@ public sealed class RequisitionsController(
             EmployeeId = request.EmployeeId,
             EmployeeName = header.RequesterName,
             Department = header.Department,
+            Division = header.Division,
         });
 
         return CreatedAtAction(nameof(GetRequisition), new { headerId = header.HeaderId }, new
@@ -216,9 +218,10 @@ public sealed class RequisitionsController(
             CreateBy = request.EmployeeId.ToString(),
             CreateDate = DateTime.Now,
             Department = GetRequisitionDepartment(requisition),
+            Division = requisition.Division,
             DocType = IssueDocType,
             EmployeeId = request.EmployeeId.ToString(),
-            Remark = GetRequisitionDepartment(requisition),
+            Remark = requisition.Division,
             SourceRequisitionId = requisition.HeaderId,
             Status = StockHeaderStatuses.Completed,
             TransactionDate = DateTime.Now,
@@ -375,10 +378,8 @@ public sealed class RequisitionsController(
             return "Urgent reason is required.";
         }
 
-        if (request.EmployeeId > 0 && !await dbContext.Employees.AnyAsync(employee => employee.EmployeeId == request.EmployeeId && employee.Status == 1))
-        {
-            return "Employee is not active or does not exist.";
-        }
+        // ผู้ขอเบิกตรวจสอบจากฐานข้อมูล HR ตั้งแต่หน้า Login แล้ว
+        // จึงไม่บังคับให้มีรายการพนักงานซ้ำอยู่ในตาราง Employee ของระบบสต๊อก
 
         var products = await GetProducts(request.Items);
 
@@ -524,6 +525,7 @@ public sealed class RequisitionsController(
             header.RequestNo,
             CreatedAt = header.TransactionDate,
             Department = department,
+            Division = header.Division,
             EmployeeId = employeeId,
             // ชื่อที่กรอกในใบคำขอคือผู้ขอเบิกจริง จึงต้องมีลำดับสูงกว่าข้อมูลพนักงานเดิม
             EmployeeName = requesterName ?? employee?.EmployeeName ?? header.EmployeeId,

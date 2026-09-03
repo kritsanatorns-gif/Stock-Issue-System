@@ -212,7 +212,8 @@ function normalizeBacklogRequest(row) {
   })
 
   return {
-    department: row.department ?? row.Department ?? '',
+    // StockHeader.Division เก็บแผนก
+    department: row.division ?? row.Division ?? '',
     employeeId: Number(row.employeeId ?? row.EmployeeId ?? 0),
     headerId: Number(row.headerId ?? row.HeaderId ?? 0),
     items,
@@ -261,7 +262,7 @@ async function getCarryOverBacklogItems({ currentHeaderId, department, employeeI
   }
 }
 
-function printRequestSlip({ department, isUrgent = false, items, remark, requesterName, requestNo = '' }) {
+function printRequestSlip({ department, division = '', isUrgent = false, items, remark, requesterName, requestNo = '' }) {
   const escapeHtml = (value) =>
     String(value ?? '')
       .replaceAll('&', '&amp;')
@@ -586,7 +587,7 @@ function printRequestSlip({ department, isUrgent = false, items, remark, request
               <div class="field-row">ชื่อ-สกุล ผู้ขอเบิก <span class="line line-xl print-value">${escapeHtml(requesterName)}</span></div>
               <div class="field-row">
                 ฝ่าย
-                <span class="line line-md print-value">${escapeHtml(department)}</span>
+                <span class="line line-md print-value">${escapeHtml(division)}</span>
                 แผนก
                 <span class="line line-md print-value">${escapeHtml(department)}</span>
                 หน่วย
@@ -689,6 +690,7 @@ function RequestPage() {
   const employeeId = Number(getEmployeeValue(employee, ['id', 'employeeId', 'EmployeeId'], 0))
   const requesterName = getEmployeeValue(employee, ['employeeName', 'EmployeeName', 'name', 'username', 'Username'], 'ผู้ใช้งาน')
   const department = getEmployeeValue(employee, ['department', 'Department', 'employeeDepartment', 'EmployeeDepartment'], 'HR')
+  const division = getEmployeeValue(employee, ['division', 'Division'], '')
   const isSessionActive = isAuthenticated && expiresAt && expiresAt > Date.now()
 
   useEffect(() => {
@@ -822,7 +824,9 @@ function RequestPage() {
     try {
       const submittedItems = selectedItems.map((item) => ({ ...item }))
       const savedRequest = await createRequisition({
-        department,
+        // StockHeader.Department เก็บฝ่าย, StockHeader.Division เก็บแผนก
+        department: division,
+        division: department,
         employeeId,
         isUrgent,
         requesterName,
@@ -855,6 +859,7 @@ function RequestPage() {
       if (printResult.isConfirmed) {
         printRequestSlip({
           department,
+          division,
           isUrgent,
           items: submittedItems,
           remark: isUrgent ? urgentRemark.trim() : '',
@@ -889,7 +894,11 @@ function RequestPage() {
       <Card sx={{ mb: 2 }}>
         <CardContent>
           <Grid container spacing={2}>
-            <Grid size={{ xs: 12, md: 6 }}>
+            <Grid size={{ xs: 12, md: 3 }}>
+              <Typography sx={{ color: '#64748b', fontSize: 12, fontWeight: 800 }}>ฝ่าย</Typography>
+              <Typography sx={{ fontWeight: 900 }}>{division || '-'}</Typography>
+            </Grid>
+            <Grid size={{ xs: 12, md: 3 }}>
               <Typography sx={{ color: '#64748b', fontSize: 12, fontWeight: 800 }}>ผู้ขอเบิก</Typography>
               <Typography sx={{ fontWeight: 900 }}>{requesterName}</Typography>
             </Grid>

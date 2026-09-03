@@ -17,6 +17,7 @@
     "@mui/material": "^9.2.0",
     "axios": "^1.18.1",
     "dayjs": "^1.11.21",
+    "exceljs": "^4.4.0",
     "file-saver": "^2.0.5",
     "html2canvas": "^1.4.1",
     "jsbarcode": "^3.12.3",
@@ -29,6 +30,7 @@
     "react-router-dom": "^7.18.1",
     "sweetalert2": "^11.26.25",
     "xlsx": "^0.18.5",
+    "xlsx-js-style": "^1.2.0",
     "zustand": "^5.0.14"
   },
   "devDependencies": {

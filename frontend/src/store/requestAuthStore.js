@@ -12,10 +12,11 @@ export const useRequestAuthStore = create(
       isAuthenticated: false,
       token: '',
 
-      login: async ({ username, department, employeeCode, employeeName, unitRef }) => {
+      login: async ({ username, department, division, employeeCode, employeeName, unitRef }) => {
         const expiresAt = Date.now() + SESSION_DURATION_MS
         const safeUsername = username.trim()
         const safeDepartment = department.trim()
+        const safeDivision = String(division ?? '').trim()
         const safeEmployeeCode = String(employeeCode ?? '').trim()
         const safeEmployeeName = String(employeeName ?? safeUsername).trim()
 
@@ -24,6 +25,7 @@ export const useRequestAuthStore = create(
         set({
           employee: {
             department: safeDepartment,
+            division: safeDivision,
             employeeCode: safeEmployeeCode,
             employeeId: Number(safeEmployeeCode) || 0,
             employeeName: safeEmployeeName,

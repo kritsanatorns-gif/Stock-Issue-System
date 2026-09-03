@@ -318,6 +318,7 @@ public sealed class StockAdjustController(AppDbContext dbContext, FifoCostServic
             HeaderId = report.HeaderId,
             CreatedAt = report.TransactionDate,
             Department = report.Remark,
+            Division = report.Department,
             DocumentNo = string.IsNullOrWhiteSpace(report.AdjustNo) ? report.HeaderId.ToString() : report.AdjustNo,
             EmployeeId = parsedEmployeeId,
             EmployeeDepartment = employee?.Department ?? "HR",

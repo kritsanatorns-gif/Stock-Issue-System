@@ -55,6 +55,8 @@ app.MapHub<NotificationHub>("/hubs/notifications");
 
 app.Logger.LogInformation("Preparing database schema: employee department");
 await EnsureEmployeeDepartmentColumn(app);
+app.Logger.LogInformation("Preparing database schema: department division");
+await EnsureDepartmentDivisionColumn(app);
 app.Logger.LogInformation("Preparing database schema: stock header remarks");
 await EnsureStockHeaderSeparatedRemarkColumns(app);
 app.Logger.LogInformation("Preparing stored requisition document numbers");
@@ -75,6 +77,8 @@ app.Logger.LogInformation("Preparing database schema: document statuses");
 await EnsureStockHeaderStatuses(app);
 app.Logger.LogInformation("Preparing database schema: product remarks");
 await EnsureProductRemarkColumn(app);
+app.Logger.LogInformation("Removing retired product size data");
+await RemoveProductSizeColumn(app);
 app.Logger.LogInformation("Preparing database schema: product minimum quantity");
 await EnsureProductMinQtyColumn(app);
 app.Logger.LogInformation("Preparing database schema: stock adjustment menu");
@@ -110,6 +114,37 @@ static async Task EnsureAuditLogTable(WebApplication app)
             CREATE INDEX IX_AuditLog_EmployeeId ON dbo.AuditLog (EmployeeId);
         END
         """);
+}
+
+static async Task EnsureDepartmentDivisionColumn(WebApplication app)
+{
+    await using var scope = app.Services.CreateAsyncScope();
+    var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+    await dbContext.Database.ExecuteSqlRawAsync("""
+        IF COL_LENGTH(N'dbo.Department', N'DivisionName') IS NULL
+        BEGIN
+            ALTER TABLE dbo.Department
+            ADD DivisionName nvarchar(100) NOT NULL
+                CONSTRAINT DF_Department_DivisionName DEFAULT N'';
+        END
+    """);
+
+    await dbContext.Database.ExecuteSqlRawAsync("""
+        UPDATE dbo.Department
+        SET DivisionName = DepartmentName
+        WHERE ISNULL(DivisionName, N'') = N'';
+    """);
+
+    await dbContext.Database.ExecuteSqlRawAsync("""
+        IF EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'dbo.Department') AND name = N'IX_Department_DepartmentCode' AND is_unique = 1)
+            DROP INDEX IX_Department_DepartmentCode ON dbo.Department;
+
+        IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'dbo.Department') AND name = N'UX_Department_DepartmentCode_NotEmpty')
+            CREATE UNIQUE INDEX UX_Department_DepartmentCode_NotEmpty
+                ON dbo.Department(DepartmentCode)
+                WHERE DepartmentCode <> N'';
+    """);
 }
 
 static async Task EnsureEmployeeDepartmentColumn(WebApplication app)
@@ -352,6 +387,19 @@ static async Task EnsureStockHeaderSeparatedRemarkColumns(WebApplication app)
             ALTER TABLE dbo.StockHeader
             ADD Department nvarchar(50) NOT NULL
                 CONSTRAINT DF_StockHeader_Department DEFAULT N''
+        END
+
+        IF NOT EXISTS (
+            SELECT 1
+            FROM sys.columns columns
+            INNER JOIN sys.tables tables ON columns.object_id = tables.object_id
+            INNER JOIN sys.schemas schemas ON tables.schema_id = schemas.schema_id
+            WHERE schemas.name = N'dbo' AND tables.name = N'StockHeader' AND columns.name = N'Division'
+        )
+        BEGIN
+            ALTER TABLE dbo.StockHeader
+            ADD Division nvarchar(100) NOT NULL
+                CONSTRAINT DF_StockHeader_Division DEFAULT N''
         END
 
         IF NOT EXISTS (
@@ -643,6 +691,30 @@ static async Task EnsureProductRemarkColumn(WebApplication app)
             ALTER TABLE dbo.Product
             ADD ProductRemark nvarchar(500) NOT NULL
                 CONSTRAINT DF_Product_ProductRemark DEFAULT N''
+        END
+    """);
+}
+
+static async Task RemoveProductSizeColumn(WebApplication app)
+{
+    await using var scope = app.Services.CreateAsyncScope();
+    var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+    await dbContext.Database.ExecuteSqlRawAsync("""
+        IF COL_LENGTH(N'dbo.Product', N'Size') IS NOT NULL
+        BEGIN
+            DECLARE @constraintName nvarchar(128);
+            SELECT @constraintName = dc.name
+            FROM sys.default_constraints dc
+            INNER JOIN sys.columns c
+                ON c.default_object_id = dc.object_id
+            WHERE dc.parent_object_id = OBJECT_ID(N'dbo.Product')
+                AND c.name = N'Size';
+
+            IF @constraintName IS NOT NULL
+                EXEC(N'ALTER TABLE dbo.Product DROP CONSTRAINT [' + @constraintName + N']');
+
+            ALTER TABLE dbo.Product DROP COLUMN Size;
         END
     """);
 }

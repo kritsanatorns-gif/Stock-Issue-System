@@ -5,6 +5,7 @@ public sealed class StockIssueDto
     public int HeaderId { get; set; }
     public DateTime CreatedAt { get; set; }
     public string Department { get; set; } = string.Empty;
+    public string Division { get; set; } = string.Empty;
     public string DocumentNo { get; set; } = string.Empty;
     public string CancelNo { get; set; } = string.Empty;
     public int? RequestHeaderId { get; set; }

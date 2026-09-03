@@ -10,11 +10,12 @@ import {
   DialogContent,
   DialogTitle,
   Grid,
+  InputAdornment,
   Stack,
   TextField,
   Typography,
 } from '@mui/material'
-import { Ban, CheckCircle2, ClipboardCheck, FileDown, Printer, RefreshCw, Zap, XCircle } from 'lucide-react'
+import { Ban, Barcode, CheckCircle2, ClipboardCheck, FileDown, Printer, RefreshCw, Zap, XCircle } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Swal from 'sweetalert2'
 import {
@@ -60,7 +61,9 @@ function normalizeRequisition(row) {
 
   return {
     createdAt: row.createdAt ?? row.CreatedAt ?? '',
-    department: row.department ?? row.Department ?? '',
+    // StockHeader.Department เก็บฝ่าย, StockHeader.Division เก็บแผนก
+    department: row.division ?? row.Division ?? '',
+    division: row.department ?? row.Department ?? '',
     employeeId: row.employeeId ?? row.EmployeeId ?? '',
     employeeName: row.employeeName ?? row.EmployeeName ?? '',
     headerId: row.headerId ?? row.HeaderId ?? '',
@@ -103,6 +106,8 @@ function ApprovalsPage() {
   const [selectedRow, setSelectedRow] = useState(null)
   const [itemRemarks, setItemRemarks] = useState({})
   const [fulfillmentDraft, setFulfillmentDraft] = useState({})
+  const [scanRequestNo, setScanRequestNo] = useState('')
+  const [scanError, setScanError] = useState('')
   const employeeId = getEmployeeId(employee)
 
   const loadRows = useCallback(async () => {
@@ -172,6 +177,23 @@ function ApprovalsPage() {
       .filter((item) => item.remark)
       .map((item) => [item.detailId, item.remark])))
     setSelectedRow(row)
+  }
+
+  const openScannedRequest = () => {
+    const requestNo = scanRequestNo.trim()
+
+    if (!requestNo) return
+
+    const matchedRow = rows.find((row) => row.requestNo.toUpperCase() === requestNo.toUpperCase())
+
+    if (!matchedRow) {
+      setScanError(`ไม่พบใบเบิกเลขที่ ${requestNo} ในรายการรอจัด/ค้าง`)
+      return
+    }
+
+    setScanError('')
+    setScanRequestNo('')
+    openDetail(matchedRow)
   }
 
   const handlePrintSelectedRow = () => {
@@ -293,6 +315,7 @@ function ApprovalsPage() {
       setFulfillmentDraft({})
       setItemRemarks({})
       await loadRows()
+      window.dispatchEvent(new CustomEvent('stock-issue:requisition-updated'))
       Swal.fire('สำเร็จ', willBacklog ? 'บันทึกจ่ายบางส่วนและเก็บยอดค้างแล้ว' : 'บันทึกจ่ายครบแล้ว', 'success')
     } catch (error) {
       Swal.fire('ไม่สำเร็จ', error?.response?.data ?? 'บันทึกการจ่ายสินค้าไม่สำเร็จ', 'error')
@@ -329,6 +352,7 @@ function ApprovalsPage() {
       setFulfillmentDraft({})
       setItemRemarks({})
       await loadRows()
+      window.dispatchEvent(new CustomEvent('stock-issue:requisition-updated'))
       Swal.fire('สำเร็จ', 'บันทึกเป็นรายการค้างแล้ว', 'success')
     } catch (error) {
       Swal.fire('ไม่สำเร็จ', error?.response?.data ?? 'ไม่สามารถเก็บเป็นรายการค้างได้', 'error')
@@ -366,6 +390,7 @@ function ApprovalsPage() {
       setFulfillmentDraft({})
       setItemRemarks({})
       await loadRows()
+      window.dispatchEvent(new CustomEvent('stock-issue:requisition-updated'))
       Swal.fire({
         customClass: {
           container: 'stock-swal-container',
@@ -436,6 +461,7 @@ function ApprovalsPage() {
         </Typography>
       ),
     },
+    { key: 'division', label: 'ฝ่าย', width: 100 },
     { key: 'department', label: 'แผนก', width: 100 },
     { key: 'employeeName', label: 'ผู้ขอเบิก', width: 170 },
     { key: 'totalItems', label: 'จำนวนรายการ', width: 110, align: 'center' },
@@ -562,6 +588,40 @@ function ApprovalsPage() {
       </Stack>
 
       {loadError ? <Alert severity="error" sx={{ mb: 2 }}>{loadError}</Alert> : null}
+      {scanError ? <Alert severity="warning" sx={{ mb: 2 }} onClose={() => setScanError('')}>{scanError}</Alert> : null}
+
+      <Card sx={{ mb: 2 }}>
+        <CardContent sx={{ py: '14px !important' }}>
+          <Stack alignItems={{ xs: 'stretch', sm: 'center' }} direction={{ xs: 'column', sm: 'row' }} spacing={1.25}>
+            <TextField
+              autoComplete="off"
+              fullWidth
+              label="สแกนบาร์โค้ดใบเบิก"
+              placeholder="คลิกช่องนี้ แล้วสแกนเลขที่ใบเบิก"
+              size="small"
+              value={scanRequestNo}
+              onChange={(event) => {
+                setScanRequestNo(event.target.value)
+                setScanError('')
+              }}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  event.preventDefault()
+                  openScannedRequest()
+                }
+              }}
+              slotProps={{
+                input: {
+                  startAdornment: <InputAdornment position="start"><Barcode size={18} /></InputAdornment>,
+                },
+              }}
+            />
+            <Button disabled={!scanRequestNo.trim()} variant="contained" onClick={openScannedRequest} sx={{ minWidth: 120 }}>
+              แสดงเอกสาร
+            </Button>
+          </Stack>
+        </CardContent>
+      </Card>
 
       <Grid container spacing={2} sx={{ mb: 2 }}>
         <Grid size={{ xs: 12, md: 3 }}>
@@ -665,6 +725,10 @@ function ApprovalsPage() {
                 <Grid size={{ xs: 12, md: 3 }}>
                   <Typography sx={{ color: '#64748b', fontSize: 12, fontWeight: 800 }}>แผนก</Typography>
                   <Typography sx={{ fontWeight: 900 }}>{selectedRow.department}</Typography>
+                </Grid>
+                <Grid size={{ xs: 12, md: 3 }}>
+                  <Typography sx={{ color: '#64748b', fontSize: 12, fontWeight: 800 }}>ฝ่าย</Typography>
+                  <Typography sx={{ fontWeight: 900 }}>{selectedRow.division || '-'}</Typography>
                 </Grid>
                 <Grid size={{ xs: 12, md: 3 }}>
                   <Typography sx={{ color: '#64748b', fontSize: 12, fontWeight: 800 }}>วันที่ส่งคำขอ</Typography>

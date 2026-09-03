@@ -32,6 +32,10 @@ public sealed class StockHeader
     [MaxLength(50)]
     public string Department { get; set; } = string.Empty;
 
+    // แผนกของผู้ขอเบิก (ข้อมูลจาก HR.Division)
+    [MaxLength(100)]
+    public string Division { get; set; } = string.Empty;
+
     [MaxLength(100)]
     public string RequesterName { get; set; } = string.Empty;
 
