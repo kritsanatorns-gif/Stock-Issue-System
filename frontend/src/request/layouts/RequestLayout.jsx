@@ -45,10 +45,12 @@ function getInitials(name) {
 }
 
 function getNotificationMeta(statusId) {
-  if (statusId === 7) return { label: 'HR จ่ายสินค้าให้ครบแล้ว', color: 'success' }
   if (statusId === 8) return { label: 'HR จ่ายสินค้าแล้วบางส่วน มีรายการค้าง', color: 'warning' }
-  if (statusId === 9) return { label: 'HR ไม่อนุมัติคำขอเบิก', color: 'error' }
   return null
+}
+
+function isRequestActionable(statusId) {
+  return statusId === 6 || statusId === 8
 }
 
 function RequestLayout() {
@@ -90,11 +92,19 @@ function RequestLayout() {
   const checkRequestStatuses = useCallback(async () => {
     try {
       const requests = (await getRequisitions()).filter(matchesCurrentRequester)
-      setNotCompletedRequestCount(requests.filter((request) => Number(request.statusId ?? request.StatusId ?? 0) !== 7).length)
+      setNotCompletedRequestCount(requests.filter((request) => isRequestActionable(Number(request.statusId ?? request.StatusId ?? 0))).length)
       const previousStatuses = JSON.parse(localStorage.getItem(statusStorageKey) || '{}')
       const storedNotifications = JSON.parse(localStorage.getItem(notificationStorageKey) || '[]')
       const nextStatuses = {}
-      const nextNotifications = [...storedNotifications]
+      const actionableHeaderIds = new Set(
+        requests
+          .filter((request) => isRequestActionable(Number(request.statusId ?? request.StatusId ?? 0)))
+          .map((request) => String(request.headerId ?? request.HeaderId ?? '')),
+      )
+      const nextNotifications = storedNotifications.filter((item) => {
+        const headerId = String(item.id ?? '').split('-')[0]
+        return item.statusId === 8 && actionableHeaderIds.has(headerId)
+      })
 
       requests.forEach((request) => {
         const headerId = String(request.headerId ?? request.HeaderId ?? '')
@@ -164,12 +174,23 @@ function RequestLayout() {
             previousStatuses[headerId] = statusId
             localStorage.setItem(statusStorageKey, JSON.stringify(previousStatuses))
             setNotCompletedRequestCount((current) => {
-              if (statusId === 7 && previousStatusId !== 7) return Math.max(0, current - 1)
-              if (statusId !== 7 && previousStatusId === 7) return current + 1
+              const wasActionable = isRequestActionable(previousStatusId)
+              const isActionable = isRequestActionable(statusId)
+              if (wasActionable && !isActionable) return Math.max(0, current - 1)
+              if (!wasActionable && isActionable) return current + 1
               return current
             })
 
-            if (!meta || previousStatusId === statusId) return
+            if (!meta || previousStatusId === statusId) {
+              if (!isRequestActionable(statusId)) {
+                setNotifications((current) => {
+                  const nextNotifications = current.filter((item) => !String(item.id ?? '').startsWith(`${headerId}-`))
+                  localStorage.setItem(notificationStorageKey, JSON.stringify(nextNotifications))
+                  return nextNotifications
+                })
+              }
+              return
+            }
 
             const notificationId = `${headerId}-${statusId}`
             setNotifications((current) => {
@@ -276,10 +297,14 @@ function RequestLayout() {
             alignItems: 'center',
             bgcolor: 'background.paper',
             borderBottom: '1px solid #dbe4f0',
+            boxShadow: '0 8px 24px rgba(15, 23, 42, 0.04)',
             display: 'flex',
             gap: 2,
             minHeight: 72,
             px: 3,
+            position: 'sticky',
+            top: 0,
+            zIndex: 20,
           }}
         >
           <IconButton

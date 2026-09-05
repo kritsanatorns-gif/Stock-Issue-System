@@ -112,7 +112,7 @@ const purchaseColumns = [
 
 const supplierPurchaseDetailColumns = [
   { key: 'receivedAt', label: 'วันที่รับเข้า', width: 150, value: (row) => formatDisplayDate(row.receivedAt), sortValue: (row) => getDateSortValue(row.receivedAt) },
-  { key: 'poInvoiceNo', label: 'เลขที่ PO / Invoice', width: 170, value: (row) => row.poInvoiceNo || '-' },
+  { key: 'poInvoiceNo', label: 'เลขที่ Invoice', width: 170, value: (row) => row.poInvoiceNo || '-' },
   { key: 'productCode', label: 'รหัสสินค้า', width: 140 },
   { key: 'productName', label: 'สินค้า', minWidth: 220 },
   { key: 'quantity', label: 'จำนวนรับเข้า', width: 140, align: 'center', render: (row) => `${Number(row.quantity ?? 0).toLocaleString('th-TH')} ${row.unit ?? ''}`.trim() },

@@ -216,7 +216,7 @@ const pageConfig = {
   },
   receive: {
     actionLabel: 'บันทึกรับเข้า',
-    documentLabel: 'เลขที่ PO / Invoice',
+    documentLabel: 'เลขที่ Invoice',
     emptyText: 'ยังไม่มีรายการรับเข้า',
     icon: Boxes,
     scanPlaceholder: 'สแกนหรือพิมพ์รหัสสินค้า / บาร์โค้ด สำหรับรับเข้า',
@@ -266,10 +266,16 @@ function InventoryWorkspace({ mode }) {
   const [isSupplierDialogOpen, setIsSupplierDialogOpen] = useState(false)
   const [isSupplierManagementOpen, setIsSupplierManagementOpen] = useState(false)
   const [supplierName, setSupplierName] = useState('')
+  const [supplierAccountId, setSupplierAccountId] = useState('')
+  const [supplierShortName, setSupplierShortName] = useState('')
+  const [supplierAddress, setSupplierAddress] = useState('')
   const [isSavingSupplier, setIsSavingSupplier] = useState(false)
   const [updatingSupplierId, setUpdatingSupplierId] = useState(null)
   const [editingSupplier, setEditingSupplier] = useState(null)
   const [editingSupplierName, setEditingSupplierName] = useState('')
+  const [editingSupplierAccountId, setEditingSupplierAccountId] = useState('')
+  const [editingSupplierShortName, setEditingSupplierShortName] = useState('')
+  const [editingSupplierAddress, setEditingSupplierAddress] = useState('')
   const [favoriteProductCodes, setFavoriteProductCodes] = useState([])
   const [loadError, setLoadError] = useState('')
   const [isProductDialogOpen, setIsProductDialogOpen] = useState(false)
@@ -1400,9 +1406,18 @@ function InventoryWorkspace({ mode }) {
     setIsSavingSupplier(true)
 
     try {
-      const createdSupplier = await createSupplier({ supplierName: normalizedName })
+      const createdSupplier = await createSupplier({
+        supplierName: normalizedName,
+        accountId: supplierAccountId.trim(),
+        shortName: supplierShortName.trim(),
+        accountName: normalizedName,
+        address: supplierAddress.trim(),
+      })
       await loadSuppliers()
       setSupplierName('')
+      setSupplierAccountId('')
+      setSupplierShortName('')
+      setSupplierAddress('')
       setIsSupplierDialogOpen(false)
       toast.success('เพิ่มผู้ขายสำเร็จ')
     } catch (error) {
@@ -1444,7 +1459,10 @@ function InventoryWorkspace({ mode }) {
 
   const handleOpenSupplierEdit = (supplier) => {
     setEditingSupplier(supplier)
-    setEditingSupplierName(supplier.supplierName ?? '')
+    setEditingSupplierName(supplier.accountName || supplier.supplierName || '')
+    setEditingSupplierAccountId(supplier.accountId ?? '')
+    setEditingSupplierShortName(supplier.shortName ?? '')
+    setEditingSupplierAddress(supplier.address ?? '')
   }
 
   const handleUpdateSupplier = async () => {
@@ -1456,7 +1474,13 @@ function InventoryWorkspace({ mode }) {
 
     setIsSavingSupplier(true)
     try {
-      await updateSupplier(editingSupplier.supplierId, normalizedName)
+      await updateSupplier(editingSupplier.supplierId, {
+        supplierName: normalizedName,
+        accountId: editingSupplierAccountId.trim(),
+        shortName: editingSupplierShortName.trim(),
+        accountName: normalizedName,
+        address: editingSupplierAddress.trim(),
+      })
       await loadSuppliers()
       setEditingSupplier(null)
       toast.success('แก้ไขผู้ขายสำเร็จ')
@@ -1764,7 +1788,7 @@ function InventoryWorkspace({ mode }) {
           </Stack>
         </Grid>
 
-        <Grid size={{ xs: 12, lg: 5 }}>
+        <Grid className="inventory-workspace__side-column" size={{ xs: 12, lg: 5 }}>
           <Stack spacing={2}>
             <Card className="inventory-workspace__panel-card" elevation={0}>
               <CardContent sx={{ p: 2 }}>
@@ -1786,7 +1810,7 @@ function InventoryWorkspace({ mode }) {
                           value={poInvoiceNo}
                           onChange={(event) => setPoInvoiceNo(event.target.value)}
                           inputProps={{ maxLength: 100 }}
-                          helperText="เลขที่เอกสารรับเข้า ใช้กับรายการรับเข้าชุดนี้"
+                          helperText="เลขที่ Invoice สำหรับรายการรับเข้าชุดนี้"
                         />
                       </Grid>
                       <Grid size={{ xs: 12, sm: 4 }}>
@@ -2809,24 +2833,26 @@ function InventoryWorkspace({ mode }) {
     <Dialog
       open={isSupplierDialogOpen}
       fullWidth
-      maxWidth="xs"
+      maxWidth="sm"
       onClose={() => !isSavingSupplier && setIsSupplierDialogOpen(false)}
     >
       <DialogTitle>เพิ่มผู้ขาย</DialogTitle>
       <DialogContent>
-        <TextField
-          autoFocus
-          fullWidth
-          label="ชื่อผู้ขาย"
-          margin="dense"
-          value={supplierName}
-          onChange={(event) => setSupplierName(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter') {
-              handleCreateSupplier()
-            }
-          }}
-        />
+        <Stack spacing={1.5} sx={{ pt: 1 }}>
+          <TextField autoFocus fullWidth label="รหัสผู้ขาย" value={supplierAccountId} onChange={(event) => setSupplierAccountId(event.target.value)} />
+          <TextField fullWidth label="ชื่อย่อ" value={supplierShortName} onChange={(event) => setSupplierShortName(event.target.value)} />
+          <TextField
+            fullWidth
+            label="ชื่อผู้ขาย"
+            required
+            value={supplierName}
+            onChange={(event) => setSupplierName(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') handleCreateSupplier()
+            }}
+          />
+          <TextField fullWidth label="ที่อยู่" multiline minRows={2} value={supplierAddress} onChange={(event) => setSupplierAddress(event.target.value)} />
+        </Stack>
         <Button
           fullWidth
           variant="outlined"
@@ -2851,10 +2877,28 @@ function InventoryWorkspace({ mode }) {
         <AppTable
           columns={[
             {
-              key: 'supplierName',
-              label: 'ชื่อผู้ขาย',
+              key: 'accountId',
+              label: 'AccountId',
+              minWidth: 120,
+              value: (supplier) => supplier.accountId || '-',
+            },
+            {
+              key: 'shortName',
+              label: 'ShortName',
+              minWidth: 150,
+              value: (supplier) => supplier.shortName || '-',
+            },
+            {
+              key: 'accountName',
+              label: 'AccountName',
               minWidth: 230,
-              value: (supplier) => supplier.supplierName,
+              value: (supplier) => supplier.accountName || supplier.supplierName,
+            },
+            {
+              key: 'address',
+              label: 'Address',
+              minWidth: 220,
+              value: (supplier) => supplier.address || '-',
             },
             {
               key: 'supplierStatus',
@@ -2919,20 +2963,15 @@ function InventoryWorkspace({ mode }) {
         <Button onClick={() => setIsSupplierManagementOpen(false)}>ปิด</Button>
       </DialogActions>
     </Dialog>
-    <Dialog open={Boolean(editingSupplier)} fullWidth maxWidth="xs" onClose={() => !isSavingSupplier && setEditingSupplier(null)}>
+    <Dialog open={Boolean(editingSupplier)} fullWidth maxWidth="sm" onClose={() => !isSavingSupplier && setEditingSupplier(null)}>
       <DialogTitle>แก้ไขผู้ขาย</DialogTitle>
       <DialogContent>
-        <TextField
-          autoFocus
-          fullWidth
-          label="ชื่อผู้ขาย"
-          margin="dense"
-          value={editingSupplierName}
-          onChange={(event) => setEditingSupplierName(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter') handleUpdateSupplier()
-          }}
-        />
+        <Stack spacing={1.5} sx={{ pt: 1 }}>
+          <TextField autoFocus fullWidth label="รหัสผู้ขาย" value={editingSupplierAccountId} onChange={(event) => setEditingSupplierAccountId(event.target.value)} />
+          <TextField fullWidth label="ชื่อย่อ" value={editingSupplierShortName} onChange={(event) => setEditingSupplierShortName(event.target.value)} />
+          <TextField fullWidth label="ชื่อผู้ขาย" required value={editingSupplierName} onChange={(event) => setEditingSupplierName(event.target.value)} />
+          <TextField fullWidth label="ที่อยู่" multiline minRows={2} value={editingSupplierAddress} onChange={(event) => setEditingSupplierAddress(event.target.value)} />
+        </Stack>
       </DialogContent>
       <DialogActions sx={{ px: 3, pb: 2 }}>
         <Button disabled={isSavingSupplier} onClick={() => setEditingSupplier(null)}>ยกเลิก</Button>

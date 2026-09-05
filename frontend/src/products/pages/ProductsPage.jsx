@@ -15,7 +15,7 @@ import {
   TextField,
   Typography,
 } from '@mui/material'
-import { AlertTriangle, CircleCheck, Download, FolderCog, Package, PackageX, Pencil, Plus, Save, Upload } from 'lucide-react'
+import { AlertTriangle, CircleCheck, Download, FileDown, FileSpreadsheet, FolderCog, Package, PackageX, Pencil, Plus, Printer, Save, Upload } from 'lucide-react'
 import dayjs from 'dayjs'
 import { useEffect, useMemo, useState } from 'react'
 import toast from 'react-hot-toast'
@@ -1022,6 +1022,91 @@ function ProductsPage() {
     },
   ]
 
+  const handleExportCostLotsExcel = () => {
+    if (!costLotsData) return
+
+    const workbook = XLSX.utils.book_new()
+    const summarySheet = XLSX.utils.aoa_to_sheet([
+      ['รายละเอียดต้นทุน FIFO'],
+      ['สินค้า', costLotsData.productName || '-'],
+      ['รหัสสินค้า', costLotsData.productId || '-'],
+      ['หน่วยเบิก', costLotsData.issueUnit || '-'],
+      ['จำนวนล็อตที่เหลือ', Number(costLotsData.totalLots ?? 0)],
+      ['จำนวนคงเหลือ', Number(costLotsData.totalRemainingQty ?? 0)],
+      ['ต้นทุนเฉลี่ยรวม/หน่วย', Number(costLotsData.averageUnitCost ?? 0)],
+      ['มูลค่าต้นทุนรวม', Number(costLotsData.totalRemainingCostValue ?? 0)],
+    ])
+    const supplierSheet = XLSX.utils.json_to_sheet((costLotsData.supplierSummaries ?? []).map((row) => ({
+      ผู้ขาย: row.supplierName || '-',
+      จำนวนล็อต: Number(row.totalLots ?? 0),
+      จำนวนคงเหลือ: Number(row.totalRemainingQty ?? 0),
+      'ต้นทุนเฉลี่ย/หน่วย': Number(row.averageUnitCost ?? 0),
+      ราคาซื้อล่าสุด: Number(row.latestUnitCost ?? 0),
+      รับเข้าล่าสุด: row.latestReceiveDateText || '-',
+      มูลค่าต้นทุนรวม: Number(row.totalRemainingCostValue ?? 0),
+    })))
+    const lotSheet = XLSX.utils.json_to_sheet((costLotsData.lots ?? []).map((row) => ({
+      วันที่รับเข้า: row.receiveDateText || '-',
+      ผู้ขาย: row.supplierName || '-',
+      จำนวนเริ่มต้น: Number(row.originalQty ?? 0),
+      จำนวนคงเหลือ: Number(row.remainingQty ?? 0),
+      'ต้นทุน/หน่วย': Number(row.unitCost ?? 0),
+      มูลค่าต้นทุนรวม: Number(row.remainingCostValue ?? 0),
+    })))
+    XLSX.utils.book_append_sheet(workbook, summarySheet, 'สรุป FIFO')
+    XLSX.utils.book_append_sheet(workbook, supplierSheet, 'แยกตามผู้ขาย')
+    XLSX.utils.book_append_sheet(workbook, lotSheet, 'ล็อต FIFO')
+    XLSX.writeFile(workbook, `fifo-cost-${costLotsData.productId || 'product'}-${dayjs().format('YYYYMMDD-HHmm')}.xlsx`)
+  }
+
+  const printCostLotsReport = (autoPrint = true) => {
+    if (!costLotsData) return
+    const escapeHtml = (value) => String(value ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;')
+    const money = (value) => Number(value ?? 0).toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    const supplierRows = (costLotsData.supplierSummaries ?? []).map((row, index) => `<tr><td>${index + 1}</td><td>${escapeHtml(row.supplierName || '-')}</td><td>${Number(row.totalLots ?? 0).toLocaleString('th-TH')}</td><td>${Number(row.totalRemainingQty ?? 0).toLocaleString('th-TH')}</td><td>${money(row.averageUnitCost)}</td><td>${money(row.totalRemainingCostValue)}</td></tr>`).join('') || '<tr><td colspan="6">ไม่มีข้อมูล</td></tr>'
+    const lotRows = (costLotsData.lots ?? []).map((row, index) => `<tr><td>${index + 1}</td><td>${escapeHtml(row.receiveDateText || '-')}</td><td>${escapeHtml(row.supplierName || '-')}</td><td>${Number(row.originalQty ?? 0).toLocaleString('th-TH')}</td><td>${Number(row.remainingQty ?? 0).toLocaleString('th-TH')}</td><td>${money(row.unitCost)}</td><td>${money(row.remainingCostValue)}</td></tr>`).join('') || '<tr><td colspan="7">ไม่มีข้อมูล</td></tr>'
+    const reportWindow = window.open('', '_blank', 'width=1100,height=800')
+    if (!reportWindow) return
+    reportWindow.document.write(`<!doctype html><html lang="th"><head><meta charset="utf-8"/><title>รายละเอียดต้นทุน FIFO</title><style>@page{size:A4 landscape;margin:10mm}body{font-family:Tahoma,Arial,sans-serif;color:#111827;font-size:12px}h1{text-align:center;margin:0}h2{font-size:15px;margin:20px 0 8px}.meta{text-align:center;margin:7px 0 18px}table{width:100%;border-collapse:collapse}th,td{border:1px solid #111;padding:6px;text-align:center}th{background:#fffec8}.cards{display:flex;gap:8px;margin:14px 0}.card{border:1px solid #94a3b8;padding:8px;flex:1}.card b{display:block;font-size:18px;margin-top:4px}</style></head><body><h1>รายละเอียดต้นทุน FIFO</h1><div class="meta">สินค้า: ${escapeHtml(costLotsData.productName || '-')} | รหัสสินค้า: ${escapeHtml(costLotsData.productId || '-')} | หน่วยเบิก: ${escapeHtml(costLotsData.issueUnit || '-')}</div><div class="cards"><div class="card">จำนวนล็อตที่เหลือ<b>${Number(costLotsData.totalLots ?? 0).toLocaleString('th-TH')}</b></div><div class="card">จำนวนคงเหลือ<b>${Number(costLotsData.totalRemainingQty ?? 0).toLocaleString('th-TH')}</b></div><div class="card">ต้นทุนเฉลี่ยรวม/หน่วย<b>${money(costLotsData.averageUnitCost)}</b></div><div class="card">มูลค่าต้นทุนรวม<b>${money(costLotsData.totalRemainingCostValue)}</b></div></div><h2>สรุปต้นทุนแยกตามผู้ขาย</h2><table><thead><tr><th>ลำดับ</th><th>ผู้ขาย</th><th>จำนวนล็อต</th><th>จำนวนคงเหลือ</th><th>ต้นทุนเฉลี่ย/หน่วย</th><th>มูลค่าต้นทุนรวม</th></tr></thead><tbody>${supplierRows}</tbody></table><h2>รายละเอียดล็อต FIFO</h2><table><thead><tr><th>ลำดับ</th><th>วันที่รับเข้า</th><th>ผู้ขาย</th><th>จำนวนเริ่มต้น</th><th>จำนวนคงเหลือ</th><th>ต้นทุน/หน่วย</th><th>มูลค่าต้นทุนรวม</th></tr></thead><tbody>${lotRows}</tbody></table>${autoPrint ? '<script>window.onload=()=>window.print()</script>' : ''}</body></html>`)
+    reportWindow.document.close()
+    return reportWindow
+  }
+
+  const handleDownloadCostLotsPdf = async () => {
+    const reportWindow = printCostLotsReport(false)
+    if (!reportWindow) return
+
+    try {
+      const [{ jsPDF }, html2canvasModule] = await Promise.all([import('jspdf'), import('html2canvas')])
+      const html2canvas = html2canvasModule.default
+      if (reportWindow.document.readyState !== 'complete') {
+        await new Promise((resolve) => { reportWindow.onload = resolve })
+      }
+      const canvas = await html2canvas(reportWindow.document.body, { backgroundColor: '#ffffff', scale: 2, useCORS: true })
+      const pdf = new jsPDF('l', 'mm', 'a4')
+      const pageWidth = 281
+      const pageHeight = 194
+      const imageHeight = (canvas.height * pageWidth) / canvas.width
+      const imageData = canvas.toDataURL('image/png')
+      let position = 8
+      let remainingHeight = imageHeight
+
+      while (remainingHeight > 0) {
+        pdf.addImage(imageData, 'PNG', 8, position, pageWidth, imageHeight)
+        remainingHeight -= pageHeight
+        if (remainingHeight > 0) {
+          pdf.addPage()
+          position -= pageHeight
+        }
+      }
+      pdf.save(`fifo-cost-${costLotsData.productId || 'product'}-${dayjs().format('YYYYMMDD-HHmm')}.pdf`)
+    } catch (error) {
+      toast.error('ไม่สามารถสร้างไฟล์ PDF ได้')
+    } finally {
+      reportWindow.close()
+    }
+  }
+
   return (
     <Stack spacing={2.5}>
       <Stack spacing={2} sx={{ width: '100%' }}>
@@ -1905,6 +1990,15 @@ function ProductsPage() {
           </Stack>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2.5 }}>
+          <Button startIcon={<FileSpreadsheet size={17} />} variant="outlined" onClick={handleExportCostLotsExcel}>
+            ดาวน์โหลด Excel
+          </Button>
+          <Button startIcon={<FileDown size={17} />} variant="outlined" onClick={handleDownloadCostLotsPdf}>
+            ดาวน์โหลด PDF
+          </Button>
+          <Button startIcon={<Printer size={17} />} variant="outlined" onClick={printCostLotsReport}>
+            พิมพ์รายงาน
+          </Button>
           <Button variant="contained" onClick={() => setCostLotsData(null)}>
             ปิด
           </Button>

@@ -329,8 +329,8 @@ export async function updateSupplierStatus(supplierId, supplierStatus) {
   return response.data
 }
 
-export async function updateSupplier(supplierId, supplierName) {
-  const response = await api.put(`/suppliers/${supplierId}`, { supplierName })
+export async function updateSupplier(supplierId, supplier) {
+  const response = await api.put(`/suppliers/${supplierId}`, supplier)
 
   return response.data
 }

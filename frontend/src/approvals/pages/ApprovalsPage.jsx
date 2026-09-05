@@ -316,7 +316,8 @@ function ApprovalsPage() {
       setItemRemarks({})
       await loadRows()
       window.dispatchEvent(new CustomEvent('stock-issue:requisition-updated'))
-      Swal.fire('สำเร็จ', willBacklog ? 'บันทึกจ่ายบางส่วนและเก็บยอดค้างแล้ว' : 'บันทึกจ่ายครบแล้ว', 'success')
+      await Swal.fire('สำเร็จ', willBacklog ? 'บันทึกจ่ายบางส่วนและเก็บยอดค้างแล้ว' : 'บันทึกจ่ายครบแล้ว', 'success')
+      window.location.reload()
     } catch (error) {
       Swal.fire('ไม่สำเร็จ', error?.response?.data ?? 'บันทึกการจ่ายสินค้าไม่สำเร็จ', 'error')
     }
@@ -353,7 +354,8 @@ function ApprovalsPage() {
       setItemRemarks({})
       await loadRows()
       window.dispatchEvent(new CustomEvent('stock-issue:requisition-updated'))
-      Swal.fire('สำเร็จ', 'บันทึกเป็นรายการค้างแล้ว', 'success')
+      await Swal.fire('สำเร็จ', 'บันทึกเป็นรายการค้างแล้ว', 'success')
+      window.location.reload()
     } catch (error) {
       Swal.fire('ไม่สำเร็จ', error?.response?.data ?? 'ไม่สามารถเก็บเป็นรายการค้างได้', 'error')
     }
@@ -391,7 +393,7 @@ function ApprovalsPage() {
       setItemRemarks({})
       await loadRows()
       window.dispatchEvent(new CustomEvent('stock-issue:requisition-updated'))
-      Swal.fire({
+      await Swal.fire({
         customClass: {
           container: 'stock-swal-container',
         },
@@ -399,6 +401,7 @@ function ApprovalsPage() {
         text: 'บันทึกสถานะไม่ให้เบิกแล้ว',
         title: 'สำเร็จ',
       })
+      window.location.reload()
     } catch (error) {
       Swal.fire({
         customClass: {

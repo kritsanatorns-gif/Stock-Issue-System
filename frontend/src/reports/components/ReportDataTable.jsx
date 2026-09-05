@@ -71,7 +71,7 @@ function createColumns(onViewDocument) {
     },
     {
       key: 'poInvoiceNo',
-      label: 'PO / Invoice',
+      label: 'Invoice',
       width: 150,
       align: 'center',
       render: (row) => row.documentType === 'RECEIVE' ? (row.poInvoiceNo || '-') : '-',

@@ -29,6 +29,30 @@
   border-radius: 8px;
 }
 
+.inventory-workspace__side-column {
+  align-self: flex-start;
+  position: sticky;
+  top: 92px;
+}
+
+.inventory-workspace__panel-card {
+  max-height: calc(100vh - 100px);
+  overflow-y: auto;
+}
+
+@media (max-width: 1199px) {
+  .inventory-workspace__side-column {
+    align-self: stretch;
+    position: static;
+  }
+
+  .inventory-workspace__panel-card {
+    max-height: none;
+    overflow: visible;
+    position: static;
+  }
+}
+
 .inventory-workspace__product-area {
   background: #ffffff;
   border: 1px solid #d9e0ea;

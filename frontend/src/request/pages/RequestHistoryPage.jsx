@@ -173,6 +173,7 @@ function getRequestSlipStamp(row) {
   const statusText = String(row.status ?? row.Status ?? '').replace(/\s/g, '')
   const isUrgent = Boolean(row.isUrgent ?? row.IsUrgent)
   const isBacklog = Number(row.statusId ?? row.StatusId ?? 0) === 8 || statusText.includes('ค้าง')
+  const isDenied = Number(row.statusId ?? row.StatusId ?? 0) === 9 || statusText.includes('ไม่ให้เบิก')
   const isComplete = statusText.includes('ได้ของครบ') || statusText.includes('ครบ') || statusText.includes('งานจบ')
   const parts = []
 
@@ -180,7 +181,9 @@ function getRequestSlipStamp(row) {
     parts.push('ด่วน')
   }
 
-  if (isBacklog) {
+  if (isDenied) {
+    parts.push('ไม่ให้เบิก')
+  } else if (isBacklog) {
     parts.push('ค้าง')
   } else if (isComplete) {
     parts.push('ได้ของครบ')
@@ -335,6 +338,7 @@ export function printHistorySlip(row) {
   const modeConfig = getSlipModeConfig()
   const isBacklogDocument = Number(row.statusId ?? row.StatusId ?? 0) === 8
     || String(row.status ?? row.Status ?? '').includes('ค้าง')
+  const documentTitle = 'ใบเบิกของ'
   const displayRows = getSlipRowsForMode(slipRows, isBacklogDocument)
   const showBacklogColumns = isBacklogDocument
   const fixedRowCount = 25
@@ -379,7 +383,7 @@ export function printHistorySlip(row) {
     <html lang="th">
       <head>
         <meta charset="utf-8" />
-        <title>ใบเบิกของ</title>
+        <title>${documentTitle}</title>
         <style>
           @page { size: A4 portrait; margin: 5mm; }
           * { box-sizing: border-box; }
@@ -445,7 +449,7 @@ export function printHistorySlip(row) {
         <main class="sheet">
           <div class="urgent-stamp">${escapeHtml(slipStamp)}</div>
           <div class="document-no">เลขที่เอกสาร <span class="line line-md">${escapeHtml(row.requestNo || '')}</span>${barcodeImage ? `<img class="document-barcode" src="${barcodeImage}" alt="${escapeHtml(row.requestNo)}" />` : ''}</div>
-          <div class="title">ใบเบิกของ</div>
+          <div class="title">${documentTitle}</div>
           <div class="subtitle">แผนกธุรการ ฝ่ายทรัพยากรบุคคล</div>
 
           <section class="top-section">
@@ -560,6 +564,7 @@ function buildRequestPdfHtml(row) {
   const modeConfig = getSlipModeConfig()
   const isBacklogDocument = Number(row.statusId ?? row.StatusId ?? 0)
     === 8 || String(row.status ?? row.Status ?? '').includes('ค้าง')
+  const documentTitle = 'ใบเบิกของ'
   const displayRows = getSlipRowsForMode(slipRows, isBacklogDocument)
   const showBacklogColumns = isBacklogDocument
 
@@ -676,7 +681,7 @@ function buildRequestPdfHtml(row) {
     <main class="request-pdf-sheet">
       <div class="request-pdf-urgent">${escapeHtml(slipStamp)}</div>
       <div class="request-pdf-docno">เลขที่เอกสาร <span class="request-pdf-line request-pdf-md">${escapeHtml(row.requestNo || '')}</span>${barcodeImage ? `<img class="request-pdf-barcode" src="${barcodeImage}" alt="${escapeHtml(row.requestNo)}" />` : ''}</div>
-      <div class="request-pdf-title">ใบเบิกของ</div>
+      <div class="request-pdf-title">${documentTitle}</div>
       <div class="request-pdf-subtitle">แผนกธุรการ ฝ่ายทรัพยากรบุคคล</div>
 
       <section class="request-pdf-top">
