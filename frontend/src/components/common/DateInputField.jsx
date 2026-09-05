@@ -20,7 +20,7 @@ function parseDate(value) {
   return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
 }
 
-function DateInputField({ helperText, label, onChange, value, ...props }) {
+function DateInputField({ disabled = false, helperText, label, onChange, value, ...props }) {
   const nativeInputRef = useRef(null)
   const [displayValue, setDisplayValue] = useState(() => formatDate(value))
 
@@ -44,6 +44,7 @@ function DateInputField({ helperText, label, onChange, value, ...props }) {
   }
 
   const openPicker = () => {
+    if (disabled) return
     const input = nativeInputRef.current
     if (!input) return
     if (typeof input.showPicker === 'function') input.showPicker()
@@ -54,6 +55,7 @@ function DateInputField({ helperText, label, onChange, value, ...props }) {
     <>
       <TextField
         {...props}
+        disabled={disabled}
         fullWidth={props.fullWidth ?? true}
         helperText={helperText}
         label={label}
@@ -77,6 +79,9 @@ function DateInputField({ helperText, label, onChange, value, ...props }) {
         aria-hidden="true"
         tabIndex={-1}
         type="date"
+        disabled={disabled}
+        min={props.min}
+        max={props.max}
         value={value ?? ''}
         onChange={(event) => onChange(event.target.value)}
         style={{ height: 1, opacity: 0, pointerEvents: 'none', position: 'fixed', width: 1 }}

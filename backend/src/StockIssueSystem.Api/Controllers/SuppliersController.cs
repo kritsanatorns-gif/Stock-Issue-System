@@ -19,6 +19,10 @@ public sealed class SuppliersController(AppDbContext dbContext) : ControllerBase
             {
                 SupplierId = supplier.SupplierId,
                 SupplierName = supplier.SupplierName,
+                AccountId = supplier.AccountId,
+                ShortName = supplier.ShortName,
+                AccountName = supplier.AccountName,
+                Address = supplier.Address,
                 SupplierStatus = supplier.SupplierStatus,
             }).ToListAsync();
 
@@ -29,11 +33,23 @@ public sealed class SuppliersController(AppDbContext dbContext) : ControllerBase
     public async Task<ActionResult<SupplierDto>> CreateSupplier(CreateSupplierDto request)
     {
         var name = request.SupplierName.Trim();
+        var shortName = request.ShortName.Trim();
         if (string.IsNullOrWhiteSpace(name)) return BadRequest("Supplier name is required.");
         if (name.Length > 150) return BadRequest("Supplier name must not exceed 150 characters.");
-        if (await dbContext.Suppliers.AnyAsync(supplier => supplier.SupplierName == name)) return Conflict("Supplier name already exists.");
+        if (await dbContext.Suppliers.AnyAsync(supplier => supplier.SupplierName == name)) return Conflict("ชื่อผู้ขายนี้มีในระบบแล้ว");
+        if (!string.IsNullOrWhiteSpace(shortName) && await dbContext.Suppliers.AnyAsync(supplier => supplier.ShortName == shortName))
+        {
+            return Conflict("ชื่อย่อนี้มีในระบบแล้ว");
+        }
 
-        var supplier = new Supplier { SupplierName = name };
+        var supplier = new Supplier
+        {
+            SupplierName = name,
+            AccountId = request.AccountId.Trim(),
+            ShortName = shortName,
+            AccountName = request.AccountName.Trim(),
+            Address = request.Address.Trim(),
+        };
         dbContext.Suppliers.Add(supplier);
         await dbContext.SaveChangesAsync();
 
@@ -41,6 +57,10 @@ public sealed class SuppliersController(AppDbContext dbContext) : ControllerBase
         {
             SupplierId = supplier.SupplierId,
             SupplierName = supplier.SupplierName,
+            AccountId = supplier.AccountId,
+            ShortName = supplier.ShortName,
+            AccountName = supplier.AccountName,
+            Address = supplier.Address,
             SupplierStatus = supplier.SupplierStatus,
         });
     }
@@ -63,6 +83,10 @@ public sealed class SuppliersController(AppDbContext dbContext) : ControllerBase
         {
             SupplierId = supplier.SupplierId,
             SupplierName = supplier.SupplierName,
+            AccountId = supplier.AccountId,
+            ShortName = supplier.ShortName,
+            AccountName = supplier.AccountName,
+            Address = supplier.Address,
             SupplierStatus = supplier.SupplierStatus,
         });
     }
@@ -71,23 +95,36 @@ public sealed class SuppliersController(AppDbContext dbContext) : ControllerBase
     public async Task<ActionResult<SupplierDto>> UpdateSupplier(int supplierId, UpdateSupplierDto request)
     {
         var name = request.SupplierName.Trim();
+        var shortName = request.ShortName.Trim();
         if (string.IsNullOrWhiteSpace(name)) return BadRequest("Supplier name is required.");
         if (name.Length > 150) return BadRequest("Supplier name must not exceed 150 characters.");
         if (await dbContext.Suppliers.AnyAsync(supplier => supplier.SupplierId != supplierId && supplier.SupplierName == name))
         {
-            return Conflict("Supplier name already exists.");
+            return Conflict("ชื่อผู้ขายนี้มีในระบบแล้ว");
+        }
+        if (!string.IsNullOrWhiteSpace(shortName) && await dbContext.Suppliers.AnyAsync(supplier => supplier.SupplierId != supplierId && supplier.ShortName == shortName))
+        {
+            return Conflict("ชื่อย่อนี้มีในระบบแล้ว");
         }
 
         var supplier = await dbContext.Suppliers.FindAsync(supplierId);
         if (supplier is null) return NotFound("Supplier not found.");
 
         supplier.SupplierName = name;
+        supplier.AccountId = request.AccountId.Trim();
+        supplier.ShortName = shortName;
+        supplier.AccountName = request.AccountName.Trim();
+        supplier.Address = request.Address.Trim();
         await dbContext.SaveChangesAsync();
 
         return Ok(new SupplierDto
         {
             SupplierId = supplier.SupplierId,
             SupplierName = supplier.SupplierName,
+            AccountId = supplier.AccountId,
+            ShortName = supplier.ShortName,
+            AccountName = supplier.AccountName,
+            Address = supplier.Address,
             SupplierStatus = supplier.SupplierStatus,
         });
     }

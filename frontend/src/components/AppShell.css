@@ -76,13 +76,16 @@
 }
 
 .app-sidebar {
-  align-self: stretch;
+  align-self: flex-start;
   background-color: #111827;
   border-right: 1px solid #d9e0ea;
   color: #f9fafb;
   flex-shrink: 0;
+  height: 100vh;
   min-height: 100vh;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
+  position: sticky;
   top: 0;
   transition: width 180ms ease;
   width: 272px;

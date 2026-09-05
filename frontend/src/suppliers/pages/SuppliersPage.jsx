@@ -1,7 +1,9 @@
-import { Box, Button, Card, CardContent, Chip, Dialog, DialogActions, DialogContent, DialogTitle, Grid, MenuItem, Stack, TextField, Typography } from '@mui/material'
+import { Box, Button, Card, CardContent, Checkbox, Chip, Dialog, DialogActions, DialogContent, DialogTitle, FormControlLabel, Grid, MenuItem, Stack, TextField, Typography } from '@mui/material'
 import dayjs from 'dayjs'
 import { Pencil, Plus, Save } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import toast from 'react-hot-toast'
+import Swal from 'sweetalert2'
 import { createSupplier, getPurchasesBySupplier, getSupplierPurchaseItems, getSuppliers, updateSupplier, updateSupplierStatus } from '../../api/api'
 import AppTable from '../../components/common/AppTable'
 import DateInputField from '../../components/common/DateInputField'
@@ -15,6 +17,7 @@ const money = (value) => Number(value ?? 0).toLocaleString('th-TH', {
 function SuppliersPage() {
   const [startDate, setStartDate] = useState(() => dayjs().startOf('month').format('YYYY-MM-DD'))
   const [endDate, setEndDate] = useState(() => dayjs().format('YYYY-MM-DD'))
+  const [showAllDates, setShowAllDates] = useState(false)
   const [purchaseRows, setPurchaseRows] = useState([])
   const [expandedSupplierId, setExpandedSupplierId] = useState(null)
   const [purchaseItemsBySupplier, setPurchaseItemsBySupplier] = useState({})
@@ -23,10 +26,50 @@ function SuppliersPage() {
   const [isManageOpen, setIsManageOpen] = useState(false)
   const [supplierRows, setSupplierRows] = useState([])
   const [supplierForm, setSupplierForm] = useState('')
+  const [supplierAccountId, setSupplierAccountId] = useState('')
+  const [supplierShortName, setSupplierShortName] = useState('')
+  const [supplierAddress, setSupplierAddress] = useState('')
   const [supplierStatus, setSupplierStatus] = useState(1)
   const [editingSupplier, setEditingSupplier] = useState(null)
   const [isSavingSupplier, setIsSavingSupplier] = useState(false)
-  const purchaseRangeKey = `${startDate || 'all'}:${endDate || 'all'}`
+  const purchaseRangeKey = showAllDates ? 'all' : `${startDate || 'all'}:${endDate || 'all'}`
+
+  const supplierDisplayRows = useMemo(() => {
+    const purchaseBySupplierId = new Map(
+      purchaseRows.map((row) => [Number(row.supplierId), row]),
+    )
+
+    if (!showAllDates) {
+      return purchaseRows.map((purchase) => {
+        const supplier = supplierRows.find(
+          (item) => Number(item.supplierId) === Number(purchase.supplierId),
+        )
+
+        return { ...purchase, ...supplier }
+      })
+    }
+
+    const supplierIds = new Set()
+    const rows = supplierRows.map((supplier) => {
+      const supplierId = Number(supplier.supplierId)
+      supplierIds.add(supplierId)
+      const purchase = purchaseBySupplierId.get(supplierId)
+
+      return {
+        ...purchase,
+        ...supplier,
+        documentCount: Number(purchase?.documentCount ?? 0),
+        itemCount: Number(purchase?.itemCount ?? 0),
+        totalQty: Number(purchase?.totalQty ?? 0),
+        totalPurchase: Number(purchase?.totalPurchase ?? 0),
+      }
+    })
+
+    return [
+      ...rows,
+      ...purchaseRows.filter((row) => !supplierIds.has(Number(row.supplierId))),
+    ]
+  }, [purchaseRows, showAllDates, supplierRows])
 
   const loadSupplierRows = async () => {
     try {
@@ -37,27 +80,103 @@ function SuppliersPage() {
     }
   }
 
+  const handleStartDateChange = (nextStartDate) => {
+    const today = dayjs().format('YYYY-MM-DD')
+    if (nextStartDate && nextStartDate > today) {
+      toast.error('วันเริ่มต้นต้องไม่เกินวันปัจจุบัน')
+      return
+    }
+    setStartDate(nextStartDate)
+    if (nextStartDate && endDate && nextStartDate > endDate) {
+      setEndDate(nextStartDate)
+    }
+  }
+
+  const handleEndDateChange = (nextEndDate) => {
+    if (nextEndDate && startDate && nextEndDate < startDate) {
+      toast.error('วันสิ้นสุดต้องไม่น้อยกว่าวันเริ่มต้น')
+      return
+    }
+    setEndDate(nextEndDate)
+  }
+
   const handleSaveSupplier = async () => {
     const name = supplierForm.trim()
+    const shortName = supplierShortName.trim()
     if (!name) return
+
+    const isSameSupplier = (supplier) => Number(supplier.supplierId) === Number(editingSupplier?.supplierId)
+    const normalizedName = name.toLocaleLowerCase()
+    const normalizedShortName = shortName.toLocaleLowerCase()
+    if (supplierRows.some((supplier) => !isSameSupplier(supplier) && String(supplier.accountName || supplier.supplierName || '').trim().toLocaleLowerCase() === normalizedName)) {
+      toast.error('ชื่อผู้ขายนี้มีในระบบแล้ว')
+      return
+    }
+    if (shortName && supplierRows.some((supplier) => !isSameSupplier(supplier) && String(supplier.shortName || '').trim().toLocaleLowerCase() === normalizedShortName)) {
+      toast.error('ชื่อย่อนี้มีในระบบแล้ว')
+      return
+    }
+
+    const confirmation = await Swal.fire({
+      title: editingSupplier ? 'ยืนยันการแก้ไข' : 'ยืนยันการบันทึก',
+      text: `${editingSupplier ? 'ต้องการแก้ไขข้อมูล' : 'ต้องการบันทึก'}ผู้ขาย ${name} ใช่หรือไม่`,
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonText: editingSupplier ? 'แก้ไข' : 'บันทึก',
+      cancelButtonText: 'ยกเลิก',
+      customClass: { container: 'stock-swal-container' },
+    })
+
+    if (!confirmation.isConfirmed) return
 
     setIsSavingSupplier(true)
     try {
       if (editingSupplier) {
-        await updateSupplier(editingSupplier.supplierId, name)
+        await updateSupplier(editingSupplier.supplierId, {
+          supplierName: name,
+          accountId: supplierAccountId.trim(),
+          shortName: supplierShortName.trim(),
+          accountName: name,
+          address: supplierAddress.trim(),
+        })
         if (Number(editingSupplier.supplierStatus ?? 1) !== Number(supplierStatus)) {
           await updateSupplierStatus(editingSupplier.supplierId, Number(supplierStatus))
         }
       } else {
-        const createdSupplier = await createSupplier({ supplierName: name })
+        const createdSupplier = await createSupplier({
+          supplierName: name,
+          accountId: supplierAccountId.trim(),
+          shortName: supplierShortName.trim(),
+          accountName: name,
+          address: supplierAddress.trim(),
+        })
         if (Number(supplierStatus) !== 1) {
           await updateSupplierStatus(createdSupplier.supplierId, Number(supplierStatus))
         }
       }
       setSupplierForm('')
+      setSupplierAccountId('')
+      setSupplierShortName('')
+      setSupplierAddress('')
       setSupplierStatus(1)
       setEditingSupplier(null)
       await loadSupplierRows()
+      await Swal.fire({
+        title: 'สำเร็จ',
+        text: editingSupplier ? 'แก้ไขผู้ขายสำเร็จ' : 'บันทึกผู้ขายสำเร็จ',
+        icon: 'success',
+        confirmButtonText: 'ตกลง',
+        customClass: { container: 'stock-swal-container' },
+      })
+      setIsManageOpen(false)
+    } catch (error) {
+      await Swal.fire({
+        title: 'ไม่สำเร็จ',
+        text: error?.response?.data ?? 'บันทึกข้อมูลผู้ขายไม่สำเร็จ',
+        icon: 'error',
+        confirmButtonText: 'ตกลง',
+        customClass: { container: 'stock-swal-container' },
+      })
     } finally {
       setIsSavingSupplier(false)
     }
@@ -69,7 +188,7 @@ function SuppliersPage() {
     setExpandedSupplierId(null)
     setPurchaseItemsBySupplier({})
 
-    getPurchasesBySupplier({ startDate, endDate })
+    getPurchasesBySupplier(showAllDates ? {} : { startDate, endDate })
       .then((rows) => active && setPurchaseRows(Array.isArray(rows) ? rows : []))
       .catch(() => active && setPurchaseRows([]))
       .finally(() => active && setIsLoading(false))
@@ -79,7 +198,7 @@ function SuppliersPage() {
       .catch(() => active && setSupplierRows([]))
 
     return () => { active = false }
-  }, [endDate, startDate])
+  }, [endDate, showAllDates, startDate])
 
   const toggleSupplier = async (supplier) => {
     if (expandedSupplierId === supplier.supplierId) {
@@ -95,7 +214,10 @@ function SuppliersPage() {
 
     setIsLoadingItems(true)
     try {
-      const rows = await getSupplierPurchaseItems(supplier.supplierId, { startDate, endDate })
+      const rows = await getSupplierPurchaseItems(
+        supplier.supplierId,
+        showAllDates ? {} : { startDate, endDate },
+      )
       setPurchaseItemsBySupplier((current) => ({
         ...current,
         [cacheKey]: Array.isArray(rows) ? rows : [],
@@ -119,13 +241,33 @@ function SuppliersPage() {
         <Button startIcon={<Pencil size={16} />} size="small" variant="outlined" onClick={() => {
           const supplier = supplierRows.find((item) => item.supplierId === row.supplierId) ?? row
           setEditingSupplier(supplier)
-          setSupplierForm(supplier.supplierName ?? '')
+          setSupplierForm(supplier.accountName || supplier.supplierName || '')
+          setSupplierAccountId(supplier.accountId ?? '')
+          setSupplierShortName(supplier.shortName ?? '')
+          setSupplierAddress(supplier.address ?? '')
           setSupplierStatus(Number(supplier.supplierStatus ?? 1))
           setIsManageOpen(true)
         }}>แก้ไข</Button>
       ),
     },
-    { key: 'supplierName', label: 'ผู้ขาย', minWidth: 240 },
+    {
+      key: 'accountName',
+      label: 'ชื่อผู้ขาย',
+      minWidth: 240,
+      value: (row) => row.accountName || row.supplierName || '-',
+    },
+    {
+      key: 'shortName',
+      label: 'ชื่อย่อ',
+      minWidth: 130,
+      value: (row) => row.shortName || '-',
+    },
+    {
+      key: 'address',
+      label: 'ที่อยู่',
+      minWidth: 280,
+      value: (row) => row.address || '-',
+    },
     { key: 'documentCount', label: 'ใบรับเข้า', width: 110, align: 'center' },
     { key: 'itemCount', label: 'รายการ', width: 100, align: 'center' },
     { key: 'totalQty', label: 'จำนวนที่ซื้อ', width: 130, align: 'center' },
@@ -144,7 +286,7 @@ function SuppliersPage() {
   ]
   const itemColumns = [
     { key: 'receivedAt', label: 'วันที่รับเข้า', width: 130, value: (row) => formatDisplayDate(row.receivedAt), sortValue: (row) => getDateSortValue(row.receivedAt) },
-    { key: 'poInvoiceNo', label: 'PO / Invoice', width: 160, value: (row) => row.poInvoiceNo || '-' },
+    { key: 'poInvoiceNo', label: 'Invoice', width: 160, value: (row) => row.poInvoiceNo || '-' },
     { key: 'productCode', label: 'รหัสสินค้า', width: 130 },
     { key: 'productName', label: 'สินค้า', minWidth: 230 },
     { key: 'quantity', label: 'จำนวน', width: 100, align: 'center', render: (row) => `${Number(row.quantity ?? 0).toLocaleString('th-TH')} ${row.unit ?? ''}` },
@@ -165,21 +307,30 @@ function SuppliersPage() {
 
       <Box sx={{ display: 'flex', justifyContent: 'flex-end', width: '100%' }}>
         <Stack direction="row" spacing={1}>
+          <FormControlLabel
+            control={<Checkbox checked={showAllDates} onChange={(event) => setShowAllDates(event.target.checked)} />}
+            label="ทั้งหมด"
+            sx={{ ml: 0, mr: 0.5, whiteSpace: 'nowrap' }}
+          />
           <DateInputField
+            disabled={showAllDates}
             label="วันที่เริ่มต้น"
             size="small"
             sx={{ width: 180 }}
+            max={dayjs().format('YYYY-MM-DD')}
             value={startDate}
-            onChange={setStartDate}
+            onChange={handleStartDateChange}
           />
           <DateInputField
+            disabled={showAllDates}
             label="วันที่สิ้นสุด"
             size="small"
             sx={{ width: 180 }}
+            min={startDate}
             value={endDate}
-            onChange={setEndDate}
+            onChange={handleEndDateChange}
           />
-          <Button startIcon={<Plus size={18} />} variant="contained" onClick={() => { setEditingSupplier(null); setSupplierForm(''); setSupplierStatus(1); setIsManageOpen(true) }}>
+          <Button startIcon={<Plus size={18} />} variant="contained" onClick={() => { setEditingSupplier(null); setSupplierForm(''); setSupplierAccountId(''); setSupplierShortName(''); setSupplierAddress(''); setSupplierStatus(1); setIsManageOpen(true) }}>
             เพิ่มผู้ขาย
           </Button>
         </Stack>
@@ -189,7 +340,7 @@ function SuppliersPage() {
         <CardContent sx={{ p: 2 }}>
           <AppTable
             columns={supplierColumns}
-            rows={purchaseRows}
+            rows={supplierDisplayRows}
             rowKey="supplierId"
             isLoading={isLoading}
             noDataText="ยังไม่มีข้อมูลการซื้อจากผู้ขาย"
@@ -220,12 +371,21 @@ function SuppliersPage() {
       <Dialog fullWidth maxWidth="sm" open={isManageOpen} onClose={() => !isSavingSupplier && setIsManageOpen(false)}>
         <DialogTitle>{editingSupplier ? 'แก้ไขผู้ขาย' : 'เพิ่มผู้ขาย'}</DialogTitle>
         <DialogContent>
-          <Stack spacing={2} sx={{ pt: 1 }}>
+          <Stack spacing={2.25} sx={{ pt: 1 }}>
             <Grid container spacing={2}>
-              <Grid size={8}>
-                <TextField autoFocus fullWidth required label="ชื่อผู้ขาย" value={supplierForm} onChange={(event) => setSupplierForm(event.target.value)} />
+              <Grid size={{ xs: 12, sm: 6 }}>
+                <TextField autoFocus fullWidth label="รหัสผู้ขาย" value={supplierAccountId} onChange={(event) => setSupplierAccountId(event.target.value)} />
               </Grid>
-              <Grid size={4}>
+              <Grid size={{ xs: 12, sm: 6 }}>
+                <TextField fullWidth label="ชื่อย่อ" value={supplierShortName} onChange={(event) => setSupplierShortName(event.target.value)} />
+              </Grid>
+              <Grid size={12}>
+                <TextField fullWidth required label="ชื่อผู้ขาย" value={supplierForm} onChange={(event) => setSupplierForm(event.target.value)} />
+              </Grid>
+              <Grid size={12}>
+                <TextField fullWidth label="ที่อยู่" multiline minRows={3} value={supplierAddress} onChange={(event) => setSupplierAddress(event.target.value)} />
+              </Grid>
+              <Grid size={{ xs: 12, sm: 6 }}>
                 <TextField fullWidth select label="สถานะ" value={supplierStatus} onChange={(event) => setSupplierStatus(Number(event.target.value))}>
                   <MenuItem value={1}>ใช้งาน</MenuItem>
                   <MenuItem value={0}>ยกเลิกใช้งาน</MenuItem>

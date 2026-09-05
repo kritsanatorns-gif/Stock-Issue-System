@@ -827,10 +827,26 @@ static async Task EnsureSupplierWorkflow(WebApplication app)
             CREATE TABLE dbo.Supplier (
                 SupplierId int IDENTITY(1,1) NOT NULL CONSTRAINT PK_Supplier PRIMARY KEY,
                 SupplierName nvarchar(150) NOT NULL,
+                AccountId nvarchar(50) NOT NULL CONSTRAINT DF_Supplier_AccountId DEFAULT N'',
+                ShortName nvarchar(150) NOT NULL CONSTRAINT DF_Supplier_ShortName DEFAULT N'',
+                AccountName nvarchar(250) NOT NULL CONSTRAINT DF_Supplier_AccountName DEFAULT N'',
+                Address nvarchar(500) NOT NULL CONSTRAINT DF_Supplier_Address DEFAULT N'',
                 SupplierStatus int NOT NULL CONSTRAINT DF_Supplier_SupplierStatus DEFAULT 1,
                 CreatedDate datetime2 NOT NULL CONSTRAINT DF_Supplier_CreatedDate DEFAULT GETDATE()
             );
         END
+
+        IF COL_LENGTH(N'dbo.Supplier', N'AccountId') IS NULL
+            ALTER TABLE dbo.Supplier ADD AccountId nvarchar(50) NOT NULL CONSTRAINT DF_Supplier_AccountId DEFAULT N'';
+
+        IF COL_LENGTH(N'dbo.Supplier', N'ShortName') IS NULL
+            ALTER TABLE dbo.Supplier ADD ShortName nvarchar(150) NOT NULL CONSTRAINT DF_Supplier_ShortName DEFAULT N'';
+
+        IF COL_LENGTH(N'dbo.Supplier', N'AccountName') IS NULL
+            ALTER TABLE dbo.Supplier ADD AccountName nvarchar(250) NOT NULL CONSTRAINT DF_Supplier_AccountName DEFAULT N'';
+
+        IF COL_LENGTH(N'dbo.Supplier', N'Address') IS NULL
+            ALTER TABLE dbo.Supplier ADD Address nvarchar(500) NOT NULL CONSTRAINT DF_Supplier_Address DEFAULT N'';
 
         IF COL_LENGTH(N'dbo.StockHeader', N'SupplierId') IS NULL
         BEGIN

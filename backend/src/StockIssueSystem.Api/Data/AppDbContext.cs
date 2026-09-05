@@ -74,6 +74,10 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
         {
             entity.ToTable("Supplier", "dbo");
             entity.HasKey(supplier => supplier.SupplierId);
+            entity.Property(supplier => supplier.AccountId).HasMaxLength(50).HasDefaultValue(string.Empty);
+            entity.Property(supplier => supplier.ShortName).HasMaxLength(150).HasDefaultValue(string.Empty);
+            entity.Property(supplier => supplier.AccountName).HasMaxLength(250).HasDefaultValue(string.Empty);
+            entity.Property(supplier => supplier.Address).HasMaxLength(500).HasDefaultValue(string.Empty);
             entity.Property(supplier => supplier.SupplierName).HasMaxLength(150).IsRequired();
             entity.Property(supplier => supplier.SupplierStatus).HasDefaultValue(1);
             entity.Property(supplier => supplier.CreatedDate).HasDefaultValueSql("GETDATE()");

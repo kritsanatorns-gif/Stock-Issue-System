@@ -251,7 +251,21 @@ public sealed class ProductsController(AppDbContext dbContext) : ControllerBase
             return remark[(cancelIndex + "Cancel:".Length)..].Trim();
         }
 
-        return remark.Trim();
+        // ใบขอเบิกเก็บฝ่ายและผู้เบิกไว้ใน Remark เพื่อรองรับข้อมูลเดิมของระบบ
+        // แต่ข้อมูลสองส่วนนี้ไม่ใช่ "หมายเหตุ" ที่ผู้ใช้พิมพ์ จึงไม่ควรแสดงในกล่องหมายเหตุสินค้า
+        var parts = remark.Split('|', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+        var userRemark = parts.FirstOrDefault(part => part.StartsWith("Remark:", StringComparison.OrdinalIgnoreCase));
+
+        if (userRemark is not null)
+        {
+            return userRemark["Remark:".Length..].Trim();
+        }
+
+        var visibleParts = parts.Where(part =>
+            !part.StartsWith("Department:", StringComparison.OrdinalIgnoreCase)
+            && !part.StartsWith("Requester:", StringComparison.OrdinalIgnoreCase));
+
+        return string.Join(" | ", visibleParts).Trim();
     }
 
     [HttpGet("{productId}/cost-lots")]

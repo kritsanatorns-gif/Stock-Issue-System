@@ -16,6 +16,7 @@
   Typography,
 } from '@mui/material'
 import { Camera, CheckCircle2, PackageCheck, Search, Send, Trash2 } from 'lucide-react'
+import JsBarcode from 'jsbarcode'
 import { useEffect, useMemo, useState } from 'react'
 import { Navigate } from 'react-router-dom'
 import Swal from 'sweetalert2'
@@ -100,6 +101,21 @@ const stockStatusOptions = [
 ]
 
 const MAX_ITEMS_PER_REQUEST = 25
+
+function createRequestBarcodeDataUrl(requestNo) {
+  const value = String(requestNo ?? '').trim()
+  if (!value) return ''
+
+  const canvas = document.createElement('canvas')
+  JsBarcode(canvas, value, {
+    displayValue: false,
+    height: 28,
+    margin: 0,
+    width: 1.4,
+  })
+
+  return canvas.toDataURL('image/png')
+}
 
 function printRequestSlipOld({ department, items, remark, requesterName, requestNo = 'รอเลขคำขอ' }) {
   const printedAt = formatDisplayDateTime(new Date())
@@ -280,6 +296,7 @@ function printRequestSlip({ department, division = '', isUrgent = false, items, 
   const printItems = items
   const fixedRowCount = 25
   const stampText = isUrgent ? 'ด่วน' : ''
+  const barcodeImage = createRequestBarcodeDataUrl(requestNo)
   const rows = printItems
     .map(
       (item, index) => `
@@ -360,6 +377,13 @@ function printRequestSlip({ department, division = '', isUrgent = false, items, 
             right: 5mm;
             text-align: right;
             top: 5mm;
+          }
+
+          .document-barcode {
+            display: block;
+            height: 28px;
+            margin: 9px 0 0 auto;
+            width: 145px;
           }
 
           .title {
@@ -567,7 +591,7 @@ function printRequestSlip({ department, division = '', isUrgent = false, items, 
       <body>
         <main class="sheet">
           <div class="urgent-stamp">${escapeHtml(stampText)}</div>
-          <div class="document-no">เลขที่เอกสาร <span class="line line-md">${escapeHtml(requestNo)}</span></div>
+          <div class="document-no">เลขที่เอกสาร <span class="line line-md">${escapeHtml(requestNo)}</span>${barcodeImage ? `<img class="document-barcode" src="${barcodeImage}" alt="${escapeHtml(requestNo)}" />` : ''}</div>
           <div class="title">ใบเบิกของ</div>
           <div class="subtitle">แผนกธุรการ ฝ่ายทรัพยากรบุคคล</div>
 
@@ -1113,8 +1137,20 @@ function RequestPage() {
             </CardContent>
           </Card>
         </Grid>
-        <Grid size={{ xs: 12, lg: 5 }}>
-          <Card>
+        <Grid
+          size={{ xs: 12, lg: 5 }}
+          sx={{
+            alignSelf: { lg: 'flex-start' },
+            position: { lg: 'sticky' },
+            top: { lg: 92 },
+          }}
+        >
+          <Card
+            sx={{
+              maxHeight: { lg: 'calc(100vh - 100px)' },
+              overflowY: { lg: 'auto' },
+            }}
+          >
             <CardContent>
               <Stack direction="row" justifyContent="space-between" sx={{ mb: 2 }}>
                 <Stack direction="row" spacing={1}>

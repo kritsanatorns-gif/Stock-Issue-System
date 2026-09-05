@@ -159,7 +159,7 @@ function getReportTypeLabel(reportType) {
 }
 
 function getDetailColumnLabel(reportType) {
-  if (reportType === 'stockReceive') return 'PO / Invoice'
+  if (reportType === 'stockReceive' || reportType === 'stockIssue') return 'Invoice'
   if (reportType === 'cancellation') return 'เลขที่ใบที่ถอยยอด'
   return 'รายละเอียด'
 }
@@ -168,6 +168,7 @@ function printSummaryReport({ detailRows, endDate, reportType, startDate, summar
   const printWindow = window.open('', '_blank')
   const isReceiveReport = reportType === 'stockReceive'
   const isAdjustReport = reportType === 'stockAdjust'
+  const showDetailColumn = reportType !== 'stockAdjust' && reportType !== 'stockIssue'
   const needsSignaturePage = detailRows.length > 35
   const printPageCount = Math.max(1, Math.ceil(detailRows.length / 35))
 
@@ -187,11 +188,11 @@ function printSummaryReport({ detailRows, endDate, reportType, startDate, summar
     </table>
   ` : ''
   const detailRowsHtml = detailRows.map((row, index) => `
-    <tr class="${index > 0 && index % 35 === 0 ? 'page-break-row' : ''}"><td>${index + 1}</td><td>${escapeHtml(formatDisplayDateTime(row.createdAt))}</td><td>${escapeHtml(row.employeeName)}</td><td>${escapeHtml(row.productName)}</td>${isAdjustReport ? `<td>${escapeHtml(`${Number(row.beforeQty ?? 0).toLocaleString('th-TH')} ${row.unit}`)}</td><td>${escapeHtml(`${Number(row.quantity).toLocaleString('th-TH')} ${row.unit}`)}</td>` : `<td>${escapeHtml(`${Number(row.quantity).toLocaleString('th-TH')} ${row.unit}`)}</td>${isReceiveReport ? `<td>${escapeHtml(formatMoney(row.unitCost))}</td><td>${escapeHtml(formatMoney(row.totalCost))}</td>` : ''}<td>${escapeHtml(row.reason || '-')}</td>`}</tr>
+    <tr class="${index > 0 && index % 35 === 0 ? 'page-break-row' : ''}"><td>${index + 1}</td><td>${escapeHtml(formatDisplayDateTime(row.createdAt))}</td><td>${escapeHtml(row.employeeName)}</td><td>${escapeHtml(row.productName)}</td>${isAdjustReport ? `<td>${escapeHtml(`${Number(row.beforeQty ?? 0).toLocaleString('th-TH')} ${row.unit}`)}</td><td>${escapeHtml(`${Number(row.quantity).toLocaleString('th-TH')} ${row.unit}`)}</td>` : `<td>${escapeHtml(`${Number(row.quantity).toLocaleString('th-TH')} ${row.unit}`)}</td>${isReceiveReport ? `<td>${escapeHtml(formatMoney(row.unitCost))}</td><td>${escapeHtml(formatMoney(row.totalCost))}</td>` : ''}${showDetailColumn ? `<td>${escapeHtml(row.reason || '-')}</td>` : ''}`}</tr>
   `).join('')
   const detailSection = reportType !== 'all' ? `
     <h3>รายละเอียด${escapeHtml(getReportTypeLabel(reportType))}</h3>
-    <table class="detail-table${isAdjustReport ? ' adjust-detail-table' : reportType === 'cancellation' ? ' cancel-detail-table' : ''}"><thead><tr><th>ลำดับ</th><th>วันเวลา</th><th>ผู้ทำรายการ</th><th>สินค้า</th>${isAdjustReport ? '<th>จำนวนก่อนปรับ</th><th>จำนวนที่ปรับ</th>' : `<th>จำนวน</th>${isReceiveReport ? '<th>ต้นทุน/หน่วย</th><th>ต้นทุนรวม</th>' : ''}<th>${escapeHtml(getDetailColumnLabel(reportType))}</th>`}</tr></thead><tbody>${detailRowsHtml}</tbody></table>
+    <table class="detail-table${isAdjustReport ? ' adjust-detail-table' : reportType === 'cancellation' ? ' cancel-detail-table' : ''}"><thead><tr><th>ลำดับ</th><th>วันเวลา</th><th>ผู้ทำรายการ</th><th>สินค้า</th>${isAdjustReport ? '<th>จำนวนก่อนปรับ</th><th>จำนวนที่ปรับ</th>' : `<th>จำนวน</th>${isReceiveReport ? '<th>ต้นทุน/หน่วย</th><th>ต้นทุนรวม</th>' : ''}${showDetailColumn ? `<th>${escapeHtml(getDetailColumnLabel(reportType))}</th>` : ''}`}</tr></thead><tbody>${detailRowsHtml}</tbody></table>
   ` : ''
 
   printWindow.document.write(`<!doctype html>
@@ -694,7 +695,7 @@ function buildReceiveSummaryContentHtml(report) {
             <th>จำนวน</th>
             <th>ต้นทุน/หน่วย</th>
             <th>ต้นทุนรวม</th>
-            <th>PO / Invoice</th>
+            <th>Invoice</th>
           </tr>
         </thead>
         <tbody>${rows}</tbody>
@@ -1074,7 +1075,7 @@ function ReportsPage() {
         ? (report.poInvoiceNo ?? report.PoInvoiceNo ?? '-')
         : report.documentType === 'ADJUST'
         ? (report.department ?? report.Department ?? '-')
-        : (report.poInvoiceNo ?? report.PoInvoiceNo ?? report.department ?? report.Department ?? '-'),
+        : (report.poInvoiceNo ?? report.PoInvoiceNo ?? '-'),
       rowKey: `${report.documentNo}-${item.detailId ?? item.DetailId ?? index}`,
       unit: item.unit ?? item.Unit ?? '',
     })))
@@ -1306,7 +1307,7 @@ function ReportsPage() {
               { header: 'ต้นทุนรวม', value: (row) => formatMoney(row.totalCost) },
             ]
           : []),
-        ...(reportType === 'stockAdjust' ? [] : [{ header: getDetailColumnLabel(reportType), value: (row) => row.reason || '-' }]),
+        ...(['stockAdjust', 'stockIssue'].includes(reportType) ? [] : [{ header: getDetailColumnLabel(reportType), value: (row) => row.reason || '-' }]),
       ],
       `${reportType}-report-${dayjs().format('YYYYMMDD-HHmm')}.xlsx`,
       { reportContext },
@@ -1591,7 +1592,7 @@ function ReportsPage() {
                           <TableCell align="center" sx={{ fontWeight: 900, width: 75 }}>ต้นทุนรวม</TableCell>
                         </>
                       )}
-                      {reportType !== 'stockAdjust' && (
+                      {!['stockAdjust', 'stockIssue'].includes(reportType) && (
                         <TableCell align="center" sx={{ fontWeight: 900, whiteSpace: 'nowrap', width: reportType === 'stockReceive' ? 75 : reportType === 'cancellation' ? 122 : undefined }}>{getDetailColumnLabel(reportType)}</TableCell>
                       )}
                     </TableRow>
@@ -1619,7 +1620,7 @@ function ReportsPage() {
                             <TableCell align="right">{formatMoney(row.totalCost)}</TableCell>
                           </>
                         )}
-                        {reportType !== 'stockAdjust' && <TableCell align="center">{row.reason || '-'}</TableCell>}
+                        {!['stockAdjust', 'stockIssue'].includes(reportType) && <TableCell align="center">{row.reason || '-'}</TableCell>}
                       </TableRow>
                     ))}
                   </TableBody>
@@ -1721,7 +1722,7 @@ function ReportsPage() {
                 </Grid>
                 {selectedReport.documentType === 'RECEIVE' && (
                   <Grid size={3}>
-                    <Typography sx={{ color: '#64748b', fontSize: 12, fontWeight: 700 }}>เลขที่ PO / Invoice</Typography>
+                    <Typography sx={{ color: '#64748b', fontSize: 12, fontWeight: 700 }}>เลขที่ Invoice</Typography>
                     <Typography sx={{ color: '#0f172a', fontSize: 14, fontWeight: 800 }}>
                       {selectedReport.poInvoiceNo || '-'}
                     </Typography>
