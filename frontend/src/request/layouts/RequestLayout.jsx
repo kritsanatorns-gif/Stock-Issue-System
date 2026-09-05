@@ -72,10 +72,6 @@ function RequestLayout() {
   const isNotificationOpen = Boolean(notificationAnchor)
   const employeeId = Number(employee?.employeeId ?? employee?.EmployeeId ?? employee?.id ?? 0)
 
-  if (!isSessionActive) {
-    return <Navigate to="/request-login" replace />
-  }
-
   const requesterName = employee?.employeeName || employee?.name || employee?.username || 'ผู้ขอเบิก'
   const department = employee?.department || '-'
   const notificationStorageKey = `stock-issue-request-notifications-v3-${employeeId || requesterName}`
@@ -135,6 +131,10 @@ function RequestLayout() {
   }, [matchesCurrentRequester, notificationStorageKey, statusStorageKey])
 
   useEffect(() => {
+    if (!isSessionActive) {
+      return undefined
+    }
+
     setNotifications(JSON.parse(localStorage.getItem(notificationStorageKey) || '[]'))
     checkRequestStatuses()
     let statusCheckInterval
@@ -221,7 +221,11 @@ function RequestLayout() {
       stopFallbackStatusCheck()
       connection?.stop()
     }
-  }, [checkRequestStatuses, employeeId, notificationStorageKey, statusStorageKey])
+  }, [checkRequestStatuses, employeeId, isSessionActive, notificationStorageKey, statusStorageKey])
+
+  if (!isSessionActive) {
+    return <Navigate to="/request-login" replace />
+  }
 
   const unreadNotificationCount = notifications.filter((item) => !item.read).length
   const handleOpenNotifications = (event) => {

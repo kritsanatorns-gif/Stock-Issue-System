@@ -160,9 +160,24 @@ function StockAdjustPage() {
     return ''
   }, [remark, selectedItems])
 
+  const hasQuantityIncrease = selectedItems.some((item) => Number(item.newQty) > Number(item.currentQty))
   const canSave = !validationMessage && !isSaving
 
   const handleSave = async () => {
+    if (hasQuantityIncrease) {
+      await Swal.fire({
+        title: 'ไม่สามารถปรับเพิ่มได้',
+        text: 'ไม่สามารถปรับเพิ่มจำนวนสินค้าได้ กรุณารับเข้าใหม่',
+        icon: 'warning',
+        customClass: {
+          container: 'stock-swal-container',
+        },
+        confirmButtonText: 'ตกลง',
+      })
+
+      return
+    }
+
     if (!canSave) {
       await Swal.fire({
         title: 'ข้อมูลยังไม่ครบ',

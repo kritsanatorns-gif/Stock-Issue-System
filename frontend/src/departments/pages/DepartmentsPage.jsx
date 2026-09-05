@@ -287,16 +287,14 @@ function DepartmentsPage() {
               fullWidth
               required
               helperText="รองรับภาษาไทย อังกฤษ ตัวเลข และ . _ / -"
-              label="ชื่อแผนก"
-              label={'ฝ่าย'}
+              label="ฝ่าย"
               value={form.divisionName}
               onChange={(event) => handleFormChange('divisionName', normalizePlainName(event.target.value))}
             />
             <TextField
               fullWidth
               helperText="หากไม่ระบุ ระบบจะใช้ชื่อแผนกเป็นชื่อฝ่าย"
-              label="ฝ่าย"
-              label={'ชื่อแผนก'}
+              label="ชื่อแผนก"
               value={form.departmentName}
               onChange={(event) => handleFormChange('departmentName', event.target.value)}
             />

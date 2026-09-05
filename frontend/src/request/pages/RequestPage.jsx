@@ -890,6 +890,9 @@ function RequestPage() {
           requesterName,
           requestNo: savedRequest?.requestNo ?? savedRequest?.RequestNo ?? 'รอเลขคำขอ',
         })
+
+        // โหลดหน้าใหม่เพื่อให้ตัวเลขและสถานะที่หน้าประวัติคำขออัปเดตทันที
+        window.location.assign('/request/history')
       }
     } catch (error) {
       Swal.fire('ไม่สำเร็จ', error?.response?.data ?? 'ส่งคำขอเบิกไม่สำเร็จ', 'error')

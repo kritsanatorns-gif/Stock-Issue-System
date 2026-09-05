@@ -122,7 +122,7 @@ public sealed class StockAdjustController(AppDbContext dbContext, FifoCostServic
 
         if (details.Any(detail => detail.Qty > 0))
         {
-            return BadRequest("Stock adjustment cannot increase quantity because a FIFO cost lot is required. Please use stock receive instead.");
+            return BadRequest("ไม่สามารถปรับเพิ่มจำนวนสินค้าได้ กรุณารับเข้าใหม่");
         }
 
         var fifoValidationError = await fifoCostService.ValidateAvailabilityAsync(

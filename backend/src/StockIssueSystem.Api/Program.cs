@@ -77,8 +77,6 @@ app.Logger.LogInformation("Preparing database schema: document statuses");
 await EnsureStockHeaderStatuses(app);
 app.Logger.LogInformation("Preparing database schema: product remarks");
 await EnsureProductRemarkColumn(app);
-app.Logger.LogInformation("Removing retired product size data");
-await RemoveProductSizeColumn(app);
 app.Logger.LogInformation("Preparing database schema: product minimum quantity");
 await EnsureProductMinQtyColumn(app);
 app.Logger.LogInformation("Preparing database schema: stock adjustment menu");
@@ -691,30 +689,6 @@ static async Task EnsureProductRemarkColumn(WebApplication app)
             ALTER TABLE dbo.Product
             ADD ProductRemark nvarchar(500) NOT NULL
                 CONSTRAINT DF_Product_ProductRemark DEFAULT N''
-        END
-    """);
-}
-
-static async Task RemoveProductSizeColumn(WebApplication app)
-{
-    await using var scope = app.Services.CreateAsyncScope();
-    var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-
-    await dbContext.Database.ExecuteSqlRawAsync("""
-        IF COL_LENGTH(N'dbo.Product', N'Size') IS NOT NULL
-        BEGIN
-            DECLARE @constraintName nvarchar(128);
-            SELECT @constraintName = dc.name
-            FROM sys.default_constraints dc
-            INNER JOIN sys.columns c
-                ON c.default_object_id = dc.object_id
-            WHERE dc.parent_object_id = OBJECT_ID(N'dbo.Product')
-                AND c.name = N'Size';
-
-            IF @constraintName IS NOT NULL
-                EXEC(N'ALTER TABLE dbo.Product DROP CONSTRAINT [' + @constraintName + N']');
-
-            ALTER TABLE dbo.Product DROP COLUMN Size;
         END
     """);
 }
