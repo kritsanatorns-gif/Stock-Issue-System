@@ -245,6 +245,11 @@ export async function approveRequisition(headerId, payload) {
   return response.data
 }
 
+export async function acceptRequisition(headerId, payload) {
+  const response = await api.post(`/requisitions/${headerId}/accept`, payload)
+  return response.data
+}
+
 export async function rejectRequisition(headerId, payload) {
   const response = await api.post(`/requisitions/${headerId}/reject`, payload)
 
@@ -259,6 +264,12 @@ export async function keepRequisitionBacklog(headerId, payload) {
 
 export async function denyRequisition(headerId, payload) {
   const response = await api.post(`/requisitions/${headerId}/deny`, payload)
+
+  return response.data
+}
+
+export async function denyRequisitionItem(headerId, detailId, payload) {
+  const response = await api.post(`/requisitions/${headerId}/items/${detailId}/deny`, payload)
 
   return response.data
 }

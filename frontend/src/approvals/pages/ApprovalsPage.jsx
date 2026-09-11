@@ -20,19 +20,20 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import Swal from 'sweetalert2'
 import {
   approveRequisition,
+  acceptRequisition,
+  denyRequisitionItem,
   denyRequisition,
   getRequisitions,
   keepRequisitionBacklog,
 } from '../../api/api'
 import AppTable from '../../components/common/AppTable'
+import { getRequisitionItemQuantities, getRequisitionStatusLabel, isPartiallyAllowedRequisition } from '../../utils/requisitionStatus'
 import { downloadHistorySlipPdf, printHistorySlip } from '../../request/pages/RequestHistoryPage'
 import { useAuthStore } from '../../store/authStore'
 import { formatDisplayDateTime, getElapsedDuration } from '../../utils/dateUtils'
 
-function normalizeItem(item) {
-  const quantity = Number(item.quantity ?? item.Quantity ?? 0)
-  const fulfilledQty = Number(item.fulfilledQty ?? item.FulfilledQty ?? 0)
-  const backlogQty = Number(item.backlogQty ?? item.BacklogQty ?? Math.max(0, quantity - fulfilledQty))
+function normalizeItem(item, statusId) {
+  const { quantity, fulfilledQty, deniedQty, backlogQty } = getRequisitionItemQuantities(item, statusId)
 
   return {
     availableQty: Number(item.availableQty ?? item.AvailableQty ?? 0),
@@ -40,7 +41,9 @@ function normalizeItem(item) {
     barcode: item.barcode ?? item.Barcode ?? '',
     category: item.category ?? item.Category ?? '',
     code: item.code ?? item.Code ?? '',
-    detailId: Number(item.detailId ?? item.DetailId ?? 0),
+      detailId: Number(item.detailId ?? item.DetailId ?? 0),
+      deniedQty,
+      denyRemark: item.denyRemark ?? item.DenyRemark ?? '',
     fulfilledQty,
     lineNo: item.lineNo ?? item.LineNo ?? '',
     productName: item.productName ?? item.ProductName ?? '',
@@ -51,7 +54,7 @@ function normalizeItem(item) {
 }
 
 function normalizeRequisition(row) {
-  const items = (row.items ?? row.Items ?? []).map(normalizeItem)
+  const items = (row.items ?? row.Items ?? []).map((item) => normalizeItem(item, row.statusId ?? row.StatusId))
   const urgentRemark = row.urgentRemark ?? row.UrgentRemark ?? ''
   const isUrgent = Boolean(row.isUrgent ?? row.IsUrgent ?? urgentRemark)
   const productSummary = items
@@ -60,6 +63,7 @@ function normalizeRequisition(row) {
     .join(', ')
 
   return {
+    approvedAt: row.approvedAt ?? row.ApprovedAt ?? null,
     createdAt: row.createdAt ?? row.CreatedAt ?? '',
     // StockHeader.Department เก็บฝ่าย, StockHeader.Division เก็บแผนก
     department: row.division ?? row.Division ?? '',
@@ -92,6 +96,14 @@ function buildPrintableRowWithBacklog(row) {
 }
 
 function getStatusColor(statusId) {
+  if (statusId === 10) {
+    return 'secondary'
+  }
+
+  if (statusId === 6) {
+    return 'primary'
+  }
+
   if (statusId === 8) {
     return 'warning'
   }
@@ -119,7 +131,7 @@ function ApprovalsPage() {
       setRows(
         (data ?? [])
           .map(normalizeRequisition)
-          .filter((row) => row.statusId === 6 || row.statusId === 8)
+          .filter((row) => [10, 6, 8].includes(row.statusId))
           .sort((left, right) => {
             const urgentDiff = Number(right.isUrgent) - Number(left.isUrgent)
 
@@ -169,7 +181,7 @@ function ApprovalsPage() {
     const draft = {}
 
     row.items.forEach((item) => {
-      draft[item.detailId] = Math.min(item.backlogQty, Math.max(0, item.availableQty))
+      draft[item.detailId] = row.statusId === 10 ? 0 : Math.min(item.backlogQty, Math.max(0, item.availableQty))
     })
 
     setFulfillmentDraft(draft)
@@ -187,7 +199,7 @@ function ApprovalsPage() {
     const matchedRow = rows.find((row) => row.requestNo.toUpperCase() === requestNo.toUpperCase())
 
     if (!matchedRow) {
-      setScanError(`ไม่พบใบเบิกเลขที่ ${requestNo} ในรายการรอจัด/ค้าง`)
+      setScanError(`ไม่พบใบเบิกเลขที่ ${requestNo} ในรายการรออนุมัติ/รอจัด/ค้าง`)
       return
     }
 
@@ -241,8 +253,33 @@ function ApprovalsPage() {
     setItemRemarks((current) => ({ ...current, [detailId]: value }))
   }
 
+  const handleAccept = async (row) => {
+    if (row?.statusId !== 10) return
+      const result = await Swal.fire({
+        title: 'ยืนยันอนุมัติคำขอเบิก',
+        text: 'เปลี่ยนเป็นรอจัดของ และเริ่มนับระยะเวลารอจากเวลาอนุมัติ',
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonText: 'อนุมัติ',
+        cancelButtonText: 'ยกเลิก',
+        customClass: { container: 'stock-swal-container' },
+      })
+      if (!result.isConfirmed) return
+      try {
+        await acceptRequisition(row.headerId, { employeeId })
+        setSelectedRow(null)
+        await loadRows()
+        window.dispatchEvent(new CustomEvent('stock-issue:requisition-updated'))
+        await Swal.fire('สำเร็จ', 'อนุมัติแล้ว สถานะรอจัดของ', 'success')
+      } catch (error) {
+        await Swal.fire('ไม่สำเร็จ', error?.response?.data ?? 'อนุมัติไม่สำเร็จ', 'error')
+      }
+  }
+
   const handleApprove = async () => {
-    if (!selectedRow) {
+    if (!selectedRow) return
+    if (selectedRow.statusId === 10) {
+      await handleAccept(selectedRow)
       return
     }
 
@@ -414,7 +451,55 @@ function ApprovalsPage() {
     }
   }
 
+  const handleDenyItem = async (item) => {
+    if (!selectedRow || Number(item.backlogQty ?? 0) <= 0) return
+
+    const result = await Swal.fire({
+      cancelButtonText: 'ยกเลิก',
+      confirmButtonColor: '#dc2626',
+      confirmButtonText: 'ไม่ให้เบิกสินค้า',
+      customClass: { container: 'stock-swal-container' },
+      icon: 'warning',
+      input: 'textarea',
+      inputLabel: 'หมายเหตุ (ถ้ามี)',
+      inputPlaceholder: 'ระบุเหตุผลที่ไม่ให้เบิกสินค้า',
+      showCancelButton: true,
+      text: `สินค้า “${item.productName}” จำนวน ${Number(item.backlogQty).toLocaleString('th-TH')} ${item.unit} จะไม่สามารถจ่ายได้`,
+      title: 'ยืนยันไม่ให้เบิกสินค้า',
+    })
+    if (!result.isConfirmed) return
+
+    try {
+      await denyRequisitionItem(selectedRow.headerId, item.detailId, {
+        employeeId,
+        itemRemark: itemRemarks[item.detailId]?.trim() ?? '',
+        remark: result.value ?? '',
+      })
+      setSelectedRow(null)
+      setFulfillmentDraft({})
+      setItemRemarks({})
+      await loadRows()
+      window.dispatchEvent(new CustomEvent('stock-issue:requisition-updated'))
+      await Swal.fire('สำเร็จ', 'บันทึกไม่ให้เบิกสินค้ารายการนี้แล้ว', 'success')
+    } catch (error) {
+      await Swal.fire('ไม่สำเร็จ', error?.response?.data ?? 'ไม่สามารถบันทึกการไม่ให้เบิกสินค้าได้', 'error')
+    }
+  }
+
   const columns = [
+    {
+      key: 'approval',
+      label: 'อนุมัติ',
+      width: 85,
+      align: 'center',
+      searchable: false,
+      sortable: false,
+      render: (row) => row.statusId === 10 ? (
+        <Button size="small" variant="contained" onClick={() => handleAccept(row)}>
+          อนุมัติ
+        </Button>
+      ) : null,
+    },
     {
       key: 'createdAt',
       label: 'วันที่ส่งคำขอ',
@@ -425,16 +510,17 @@ function ApprovalsPage() {
     { key: 'requestNo', label: 'เลขที่คำขอ', width: 120 },
     {
       key: 'isUrgent',
+      headerNoWrap: true,
       label: 'เบิกด่วน',
-      width: 90,
+      width: 105,
       align: 'center',
-      value: (row) => (row.isUrgent ? 'เบิกด่วน' : ''),
+      value: (row) => (row.isUrgent ? 'ด่วน' : ''),
       render: (row) => (
         row.isUrgent ? (
           <Chip
             color="error"
             icon={<Zap size={14} />}
-            label="เบิกด่วน"
+            label="ด่วน"
             size="small"
             sx={{ fontWeight: 900 }}
           />
@@ -443,46 +529,27 @@ function ApprovalsPage() {
         )
       ),
     },
-    {
-      key: 'productSummary',
-      label: 'ชื่อสินค้า',
-      width: 230,
-      value: (row) => row.productSummary,
-      render: (row) => (
-        <Typography
-          title={row.productSummary}
-          sx={{
-            fontSize: 13,
-            fontWeight: 700,
-            maxWidth: 230,
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
-          }}
-        >
-          {row.productSummary || '-'}
-        </Typography>
-      ),
-    },
     { key: 'division', label: 'ฝ่าย', width: 100 },
     { key: 'department', label: 'แผนก', width: 100 },
+    { key: 'employeeId', label: 'รหัสพนักงาน', width: 130, align: 'center' },
     { key: 'employeeName', label: 'ผู้ขอเบิก', width: 170 },
-    { key: 'totalItems', label: 'จำนวนรายการ', width: 110, align: 'center' },
-    { key: 'totalQty', label: 'ยอดที่ยังต้องจ่าย', width: 130, align: 'center' },
+    { key: 'totalItems', label: 'รายการ', width: 110, align: 'center' },
+    { key: 'totalQty', label: 'ยอดที่ต้องจ่าย', width: 130, align: 'center' },
     {
       key: 'waitingDuration',
       label: 'ระยะเวลารอ',
       width: 125,
       align: 'center',
-      value: (row) => ([6, 8].includes(row.statusId) ? getElapsedDuration(row.createdAt).label : '-'),
-      sortValue: (row) => ([6, 8].includes(row.statusId) ? getElapsedDuration(row.createdAt).days * 24 + getElapsedDuration(row.createdAt).hours : -1),
-      render: (row) => ([6, 8].includes(row.statusId) ? getElapsedDuration(row.createdAt).label : '-'),
+      value: (row) => (([6, 8].includes(row.statusId) && row.approvedAt) ? getElapsedDuration(row.approvedAt).label : '-'),
+      sortValue: (row) => (([6, 8].includes(row.statusId) && row.approvedAt) ? getElapsedDuration(row.approvedAt).days * 24 + getElapsedDuration(row.approvedAt).hours : -1),
+      render: (row) => (([6, 8].includes(row.statusId) && row.approvedAt) ? getElapsedDuration(row.approvedAt).label : '-'),
     },
     {
       key: 'status',
-      label: 'สถานะคำขอ',
+      label: 'สถานะ',
       width: 110,
-      render: (row) => <Chip color={getStatusColor(row.statusId)} label={row.status} size="small" />,
+      value: (row) => getRequisitionStatusLabel(row),
+      render: (row) => <Chip color={isPartiallyAllowedRequisition(row) ? 'info' : getStatusColor(row.statusId)} label={getRequisitionStatusLabel(row)} size="small" sx={{ height: 'auto', '& .MuiChip-label': { whiteSpace: 'normal', py: 0.5 } }} />,
     },
     {
       key: 'actions',
@@ -499,12 +566,54 @@ function ApprovalsPage() {
   ]
 
   const detailColumns = [
-    { key: 'lineNo', label: 'ลำดับ', width: 60 },
-    { key: 'code', label: 'รหัสสินค้า', width: 130 },
-    { key: 'productName', label: 'ชื่อสินค้า', width: 220 },
-    { key: 'category', label: 'หมวดหมู่', width: 100 },
-    { key: 'quantity', label: 'ขอเบิก', width: 85, align: 'center' },
-    { key: 'backlogQty', label: 'ยังค้าง', width: 85, align: 'center' },
+    {
+      key: 'denyItem',
+      label: 'ไม่ให้เบิก',
+      width: 105,
+      align: 'center',
+      searchable: false,
+      sortable: false,
+      render: (row) => row.deniedQty > 0 ? (
+        <Typography sx={{ color: '#64748b', fontSize: 12 }}>{row.denyRemark || '-'}</Typography>
+      ) : (
+        <Button
+          color="error"
+          disabled={Number(row.backlogQty ?? 0) <= 0}
+          size="small"
+          sx={{ minWidth: 80, px: 0.75, whiteSpace: 'nowrap' }}
+          variant="outlined"
+          onClick={() => handleDenyItem(row)}
+        >
+          ไม่ให้เบิก
+        </Button>
+      ),
+    },
+    { key: 'code', label: 'รหัสสินค้า', width: 175, headerNoWrap: true },
+    {
+      key: 'productName',
+      label: 'ชื่อสินค้า',
+      width: 210,
+      wrap: true,
+      render: (row) => (
+        <Box sx={{ lineHeight: 1.45, overflowWrap: 'anywhere', py: 0.5, textAlign: 'left', wordBreak: 'break-word' }}>
+          {row.productName || '-'}
+        </Box>
+      ),
+    },
+    { key: 'category', label: 'หมวดหมู่', width: 120 },
+    { key: 'quantity', label: 'ขอเบิก', width: 85, align: 'center', headerNoWrap: true },
+    { key: 'fulfilledQty', label: 'จ่ายแล้ว', width: 85, align: 'center' },
+    { key: 'backlogQty', label: 'ยังค้าง', width: 85, align: 'center', headerNoWrap: true },
+    {
+      key: 'availableQty',
+      label: 'คงเหลือ',
+      width: 95,
+      align: 'center',
+      render: (row) => {
+        const availableQty = Number(row.availableQty ?? 0)
+        return <Box sx={{ color: availableQty <= 0 ? '#dc2626' : '#15803d', fontWeight: 800 }}>{availableQty.toLocaleString('th-TH')}</Box>
+      },
+    },
     {
       key: 'projectedStockQty',
       label: 'คงเหลือหลังจ่าย',
@@ -520,7 +629,7 @@ function ApprovalsPage() {
     {
       key: 'issueNow',
       label: 'จ่ายครั้งนี้',
-      width: 120,
+      width: 100,
       searchable: false,
       sortable: false,
       render: (row) => {
@@ -529,7 +638,9 @@ function ApprovalsPage() {
 
         return (
           <TextField
-          disabled={row.backlogQty <= 0 || row.availableQty <= 0}
+          fullWidth
+          sx={{ '& input': { textAlign: 'center', px: 1 } }}
+          disabled={selectedRow?.statusId === 10 || row.backlogQty <= 0 || row.availableQty <= 0}
           error={isOverRequested}
           helperText={isOverRequested ? `ห้ามใส่เกินจำนวนที่ขอเบิก (${Number(row.backlogQty).toLocaleString('th-TH')})` : ''}
           inputProps={{ min: 0, max: Math.min(row.backlogQty, row.availableQty) }}
@@ -546,7 +657,7 @@ function ApprovalsPage() {
         )
       },
     },
-    { key: 'unit', label: 'หน่วย', width: 80 },
+    { key: 'unit', label: 'หน่วย', width: 85, headerNoWrap: true },
     {
       key: 'itemRemark',
       label: 'หมายเหตุรายการ',
@@ -626,17 +737,17 @@ function ApprovalsPage() {
         </CardContent>
       </Card>
 
-      <Grid container spacing={2} sx={{ mb: 2 }}>
+      <Grid container spacing={2} sx={{ alignItems: 'stretch', mb: 2 }}>
         <Grid size={{ xs: 12, md: 3 }}>
-          <Card sx={{ border: '1px solid #bfdbfe', background: 'linear-gradient(135deg, #eff6ff 0%, #ffffff 100%)' }}>
+          <Card sx={{ border: '1px solid #bfdbfe', background: 'linear-gradient(135deg, #eff6ff 0%, #ffffff 100%)', height: '100%' }}>
             <CardContent>
-              <Typography sx={{ color: '#475569', fontSize: 13, fontWeight: 800 }}>รายการรอจัด/ค้าง</Typography>
+              <Typography sx={{ color: '#475569', fontSize: 13, fontWeight: 800 }}>รายการรออนุมัติ/รอจัด/ค้าง</Typography>
               <Typography sx={{ fontSize: 28, fontWeight: 900 }}>{summary.documents}</Typography>
             </CardContent>
           </Card>
         </Grid>
         <Grid size={{ xs: 12, md: 3 }}>
-          <Card sx={{ border: '1px solid #bbf7d0', background: 'linear-gradient(135deg, #f0fdf4 0%, #ffffff 100%)' }}>
+          <Card sx={{ border: '1px solid #bbf7d0', background: 'linear-gradient(135deg, #f0fdf4 0%, #ffffff 100%)', height: '100%' }}>
             <CardContent>
               <Typography sx={{ color: '#475569', fontSize: 13, fontWeight: 800 }}>รอจัดของ</Typography>
               <Typography sx={{ fontSize: 28, fontWeight: 900 }}>{summary.pending}</Typography>
@@ -644,7 +755,7 @@ function ApprovalsPage() {
           </Card>
         </Grid>
         <Grid size={{ xs: 12, md: 3 }}>
-          <Card sx={{ border: '1px solid #fed7aa', background: 'linear-gradient(135deg, #fff7ed 0%, #ffffff 100%)' }}>
+          <Card sx={{ border: '1px solid #fed7aa', background: 'linear-gradient(135deg, #fff7ed 0%, #ffffff 100%)', height: '100%' }}>
             <CardContent>
               <Typography sx={{ color: '#475569', fontSize: 13, fontWeight: 800 }}>งานค้าง</Typography>
               <Typography sx={{ fontSize: 28, fontWeight: 900 }}>{summary.backlog}</Typography>
@@ -652,7 +763,7 @@ function ApprovalsPage() {
           </Card>
         </Grid>
         <Grid size={{ xs: 12, md: 3 }}>
-          <Card sx={{ border: '1px solid #fecaca', background: 'linear-gradient(135deg, #fef2f2 0%, #ffffff 100%)' }}>
+          <Card sx={{ border: '1px solid #fecaca', background: 'linear-gradient(135deg, #fef2f2 0%, #ffffff 100%)', height: '100%' }}>
             <CardContent>
               <Typography sx={{ color: '#475569', fontSize: 13, fontWeight: 800 }}>เบิกด่วน</Typography>
               <Typography sx={{ fontSize: 28, fontWeight: 900 }}>{summary.urgent}</Typography>
@@ -670,7 +781,7 @@ function ApprovalsPage() {
             prioritySortValue={(row) => Number(row.isUrgent)}
             fitToWidth
             maxHeight="calc(100vh - 380px)"
-            noDataText="ไม่มีรายการรอจัดหรือรายการค้าง"
+            noDataText="ไม่มีรายการรออนุมัติ รอจัดของ หรือรายการค้าง"
             rows={rows}
             showGlobalSearch
           />
@@ -678,6 +789,7 @@ function ApprovalsPage() {
       </Card>
 
       <Dialog
+        disableEnforceFocus
         fullWidth
         maxWidth={false}
         open={Boolean(selectedRow)}
@@ -702,14 +814,14 @@ function ApprovalsPage() {
               variant="outlined"
               onClick={handlePrintSelectedRow}
             >
-              พิมพ์ใบคำขอ
+              {selectedRow?.statusId === 8 ? 'พิมพ์ใบค้าง' : 'พิมพ์ใบคำขอ'}
             </Button>
             <Button
               startIcon={<FileDown size={18} />}
               variant="outlined"
               onClick={handleDownloadSelectedRowPdf}
             >
-              ดาวน์โหลด PDF
+              {selectedRow?.statusId === 8 ? 'ดาวน์โหลด PDF ใบค้าง' : 'ดาวน์โหลด PDF'}
             </Button>
           </Stack>
         </DialogTitle>
@@ -763,13 +875,16 @@ function ApprovalsPage() {
               ) : null}
               {selectedRow.remark ? <Alert severity="info">{selectedRow.remark}</Alert> : null}
               <Alert severity="info">
-                ถ้าของไม่พอ ให้กรอกจำนวนที่จ่ายได้จริงในช่อง “จ่ายครั้งนี้” ระบบจะตัดสต๊อกเฉพาะจำนวนนั้น และเก็บส่วนที่เหลือเป็นรายการค้างเพื่อรอจ่ายต่อ
+                {selectedRow.statusId === 10
+                  ? 'รอ HR อนุมัติคำขอเบิก เมื่ออนุมัติจะเปลี่ยนเป็นรอจัดของและเริ่มนับระยะเวลารอ โดยยังไม่ตัดสต๊อก'
+                  : 'ถ้าของไม่พอ ให้กรอกจำนวนที่จ่ายได้จริงในช่อง “จ่ายครั้งนี้” ระบบจะตัดสต๊อกเฉพาะจำนวนนั้น และเก็บส่วนที่เหลือเป็นรายการค้างเพื่อรอจ่ายต่อ'}
               </Alert>
               <AppTable
                 columns={detailColumns}
                 fitToWidth
                 initialRowsPerPage={25}
                 maxHeight={380}
+                minTableWidth={1600}
                 noDataText="ไม่มีรายการสินค้า"
                 rows={selectedRow.items}
                 rowKey="detailId"
@@ -779,14 +894,14 @@ function ApprovalsPage() {
           ) : null}
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2.5 }}>
-          <Button color="warning" startIcon={<XCircle size={18} />} variant="outlined" onClick={handleReject}>
+          <Button disabled={selectedRow?.statusId === 10} color="warning" startIcon={<XCircle size={18} />} variant="outlined" onClick={handleReject}>
             ยังไม่จ่าย
           </Button>
           <Button color="error" startIcon={<Ban size={18} />} variant="outlined" onClick={handleDeny}>
             ไม่ให้เบิก
           </Button>
           <Button startIcon={<CheckCircle2 size={18} />} variant="contained" onClick={handleApprove}>
-            บันทึกการจ่ายสินค้า
+            {selectedRow?.statusId === 10 ? 'อนุมัติคำขอเบิก' : 'บันทึกการจ่ายสินค้า'}
           </Button>
           <Button color="inherit" sx={{ ml: 'auto' }} onClick={() => setSelectedRow(null)}>
             ปิด

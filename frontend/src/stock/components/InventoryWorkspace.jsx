@@ -15,6 +15,8 @@
   IconButton,
   InputAdornment,
   MenuItem,
+  Radio,
+  RadioGroup,
   Stack,
   TextField,
   Typography,
@@ -142,9 +144,7 @@ function normalizeCompareText(value) {
 }
 
 function getReceiveStockQty(item) {
-  const conversionQty = shouldUseSameUnitConversion(item.unit ?? item.receiveUnit, item.issueUnit)
-    ? 1
-    : Math.max(toPositiveNumber(item.conversionQty), 1)
+  const conversionQty = toPositiveNumber(item.conversionQty)
 
   return toPositiveNumber(item.requestQty) * conversionQty
 }
@@ -158,9 +158,7 @@ function shouldUseSameUnitConversion(receiveUnit, issueUnit) {
 }
 
 function getDisplayConversionQty(item) {
-  return shouldUseSameUnitConversion(item.unit ?? item.receiveUnit, item.issueUnit)
-    ? 1
-    : Math.max(toPositiveNumber(item.conversionQty), 1)
+  return toPositiveNumber(item.conversionQty)
 }
 
 function getConversionHelperText(item) {
@@ -168,7 +166,7 @@ function getConversionHelperText(item) {
   const receiveUnit = item.unit ?? item.receiveUnit ?? ''
   const issueUnit = item.issueUnit ?? ''
 
-  if (shouldUseSameUnitConversion(receiveUnit, issueUnit)) {
+  if (shouldUseSameUnitConversion(receiveUnit, issueUnit) && getDisplayConversionQty(item) === 1) {
     return `${receiveQty} ${receiveUnit} = ${receiveQty} ${issueUnit}`
   }
 
@@ -296,7 +294,8 @@ function InventoryWorkspace({ mode }) {
   const [issueDepartment, setIssueDepartment] = useState('')
   const [issueDivision, setIssueDivision] = useState('')
   const [issueDepartmentCode, setIssueDepartmentCode] = useState('')
-  const [isIssueUrgent, setIsIssueUrgent] = useState(false)
+  const [issueRequestType, setIssueRequestType] = useState('')
+  const isIssueUrgent = issueRequestType === 'urgent'
   const [issueUrgentRemark, setIssueUrgentRemark] = useState('')
   const [issueUrgentTouched, setIssueUrgentTouched] = useState(false)
   const [isDepartmentSelectOpen, setIsDepartmentSelectOpen] = useState(false)
@@ -614,7 +613,7 @@ function InventoryWorkspace({ mode }) {
 
   const createSelectedItem = (item) => {
     const unit = mode === 'receive' ? item.receiveUnit : item.issueUnit
-    const conversionQty = shouldUseSameUnitConversion(unit, item.issueUnit) ? 1 : (item.conversionQty ?? 1)
+    const conversionQty = item.conversionQty ?? 1
 
     return {
       ...item,
@@ -634,9 +633,7 @@ function InventoryWorkspace({ mode }) {
 
     setReceiveDraftItem({
       ...draftItem,
-      conversionQty: shouldUseSameUnitConversion(draftItem.unit, draftItem.issueUnit)
-        ? 1
-        : draftItem.conversionQty,
+      conversionQty: draftItem.conversionQty,
     })
   }
 
@@ -659,9 +656,6 @@ function InventoryWorkspace({ mode }) {
         [field]: nextValue,
       }
 
-        if (shouldUseSameUnitConversion(next.unit, next.issueUnit)) {
-          next.conversionQty = '1'
-        }
 
       return next
     })
@@ -1245,13 +1239,7 @@ function InventoryWorkspace({ mode }) {
       barcode: item.barcode ?? '',
       category: String(item.category ?? '').trim() || 'General',
       code: item.code ?? '',
-      conversionQty: mode === 'receive'
-        ? (
-            shouldUseSameUnitConversion(item.unit ?? item.receiveUnit, item.issueUnit)
-              ? 1
-              : toPositiveNumber(item.conversionQty)
-          )
-        : 1,
+      conversionQty: mode === 'receive' ? toPositiveNumber(item.conversionQty) : 1,
       costLot: mode === 'receive' ? String(item.unitCost ?? '') : String(item.costLot ?? ''),
       imageName: item.imageName ?? '',
       lineNo: index + 1,
@@ -1267,6 +1255,17 @@ function InventoryWorkspace({ mode }) {
   })
 
   const handleSubmitTransaction = async () => {
+    if (mode === 'issue' && !issueRequestType) {
+      await Swal.fire({
+        title: 'กรุณาเลือกประเภทการเบิก',
+        text: 'กรุณาเลือกเบิกปกติหรือเบิกด่วนก่อนส่งคำขอ',
+        icon: 'warning',
+        confirmButtonText: 'ตกลง',
+        customClass: { container: 'stock-swal-container' },
+      })
+      return
+    }
+
     if (!canSubmit) {
       return
     }
@@ -1362,7 +1361,7 @@ function InventoryWorkspace({ mode }) {
       setRequesterName('')
       setRequesterEmployeeId('')
       setPendingDepartmentToCreate('')
-      setIsIssueUrgent(false)
+      setIssueRequestType('')
       setIssueUrgentRemark('')
       setIssueUrgentTouched(false)
       await loadInventoryItems()
@@ -1800,6 +1799,49 @@ function InventoryWorkspace({ mode }) {
                     <Chip label={mode === 'issue' ? `${selectedItems.length}/${MAX_ISSUE_ITEMS_PER_REQUEST} รายการ` : `${selectedItems.length} รายการ`} size="small" />
                   </Stack>
 
+                  {mode === 'issue' ? (
+                    <Box
+                      sx={{
+                        bgcolor: issueRequestType === 'urgent' ? '#fff7ed' : '#f8fafc',
+                        border: `1px solid ${issueRequestType === 'urgent' ? '#fed7aa' : '#dbe4f0'}`,
+                        borderRadius: 2,
+                        p: 1.25,
+                      }}
+                    >
+                      <Typography sx={{ color: '#0f172a', fontSize: 14, fontWeight: 900 }}>ประเภทการเบิก *</Typography>
+                      <RadioGroup
+                        row
+                        value={issueRequestType}
+                        onChange={(event) => {
+                          const nextType = event.target.value
+                          setIssueRequestType(nextType)
+                          setIssueUrgentTouched(false)
+                          if (nextType !== 'urgent') setIssueUrgentRemark('')
+                        }}
+                      >
+                        <FormControlLabel control={<Radio size="small" />} label="เบิกปกติ" value="normal" />
+                        <FormControlLabel control={<Radio color="error" size="small" />} label="เบิกด่วน" value="urgent" />
+                      </RadioGroup>
+                      <Typography sx={{ color: '#64748b', fontSize: 12, mb: isIssueUrgent ? 1 : 0 }}>
+                        เลือกเบิกด่วนเฉพาะกรณีที่ต้องการให้จัดของก่อนรายการทั่วไป
+                      </Typography>
+                      {isIssueUrgent ? (
+                        <TextField
+                          error={issueUrgentTouched && !issueUrgentRemark.trim()}
+                          fullWidth
+                          helperText={issueUrgentTouched && !issueUrgentRemark.trim() ? 'กรุณาระบุเหตุผลเบิกด่วน' : 'เหตุผลนี้จะแสดงในรายการคำขอ'}
+                          label="เหตุผลเบิกด่วน *"
+                          minRows={2}
+                          multiline
+                          size="small"
+                          value={issueUrgentRemark}
+                          onBlur={() => setIssueUrgentTouched(true)}
+                          onChange={(event) => setIssueUrgentRemark(event.target.value)}
+                        />
+                      ) : null}
+                    </Box>
+                  ) : null}
+
                   {mode === 'receive' ? (
                     <Grid container spacing={1.25}>
                       <Grid size={{ xs: 12, sm: 4 }}>
@@ -1913,10 +1955,7 @@ function InventoryWorkspace({ mode }) {
                                   <Typography sx={{ color: '#64748b', fontSize: 11 }}>แปลงหน่วย</Typography>
                                   <Typography sx={{ color: '#0f172a', fontSize: 13, fontWeight: 800 }}>
                                     1 {item.unit} = {
-                                      (shouldUseSameUnitConversion(item.unit, item.issueUnit)
-                                        ? 1
-                                        : Number(item.conversionQty ?? 1)
-                                      ).toLocaleString('th-TH')
+                                      getDisplayConversionQty(item).toLocaleString('th-TH')
                                     } {item.issueUnit}
                                   </Typography>
                                 </Grid>
@@ -2089,50 +2128,6 @@ function InventoryWorkspace({ mode }) {
                           },
                         }}
                       />
-                      <Box
-                        sx={{
-                          bgcolor: isIssueUrgent ? '#fff7ed' : '#ffffff',
-                          border: `1px solid ${isIssueUrgent ? '#fed7aa' : '#e2e8f0'}`,
-                          borderRadius: 2,
-                          p: 1.25,
-                        }}
-                      >
-                        <FormControlLabel
-                          control={(
-                            <Checkbox
-                              checked={isIssueUrgent}
-                              color="error"
-                              onChange={(event) => {
-                                setIsIssueUrgent(event.target.checked)
-                                setIssueUrgentTouched(false)
-                                if (!event.target.checked) {
-                                  setIssueUrgentRemark('')
-                                }
-                              }}
-                            />
-                          )}
-                          label="เบิกด่วน"
-                          sx={{ fontWeight: 800, m: 0 }}
-                        />
-                        {isIssueUrgent ? (
-                          <TextField
-                            error={issueUrgentTouched && !issueUrgentRemark.trim()}
-                            fullWidth
-                            helperText={
-                              issueUrgentTouched && !issueUrgentRemark.trim()
-                                ? 'กรุณาระบุเหตุผลเบิกด่วน'
-                                : 'เหตุผลนี้จะแสดงให้ HR เห็นในรายการคำขอ'
-                            }
-                            label="เหตุผลเบิกด่วน *"
-                            minRows={2}
-                            multiline
-                            size="small"
-                            value={issueUrgentRemark}
-                            onBlur={() => setIssueUrgentTouched(true)}
-                            onChange={(event) => setIssueUrgentRemark(event.target.value)}
-                          />
-                        ) : null}
-                      </Box>
                     </Stack>
                   )}
 
@@ -2147,7 +2142,20 @@ function InventoryWorkspace({ mode }) {
                     startIcon={<CheckSquare size={18} />}
                     sx={{ minHeight: 44, fontWeight: 800 }}
                     variant="contained"
-                    onClick={() => setIsConfirmSaveOpen(true)}
+                    onClick={() => {
+                      if (mode === 'issue' && !issueRequestType) {
+                        Swal.fire({
+                          title: 'กรุณาเลือกประเภทการเบิก',
+                          text: 'กรุณาเลือกเบิกปกติหรือเบิกด่วนก่อนส่งคำขอ',
+                          icon: 'warning',
+                          confirmButtonText: 'ตกลง',
+                          customClass: { container: 'stock-swal-container' },
+                        })
+                        return
+                      }
+
+                      setIsConfirmSaveOpen(true)
+                    }}
                   >
                     {config.actionLabel}
                   </Button>
@@ -2203,7 +2211,7 @@ function InventoryWorkspace({ mode }) {
 
     <Dialog
       fullWidth
-      maxWidth="md"
+      maxWidth="lg"
       open={Boolean(receiveDraftItem)}
       onClose={() => setReceiveDraftItem(null)}
     >
@@ -2214,8 +2222,24 @@ function InventoryWorkspace({ mode }) {
       <DialogContent>
         {receiveDraftItem ? (
           <Stack spacing={2} sx={{ pt: 1 }}>
-            <Box className="inventory-workspace__scan-product-detail">
-              <Grid container spacing={1.5}>
+            <Box className="inventory-workspace__scan-product-detail" sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 3, alignItems: { xs: 'center', sm: 'flex-start' } }}>
+              <Box sx={{ width: 180, height: 180, flexShrink: 0, bgcolor: '#fff', border: '1px solid #dbe3ef', borderRadius: 2, display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', overflow: 'hidden' }}>
+                <Stack alignItems="center" spacing={1} sx={{ color: '#94a3b8' }}>
+                  <Camera size={36} />
+                  <Typography variant="caption">ไม่มีรูปสินค้า</Typography>
+                </Stack>
+                {getImageUrl(receiveDraftItem.imageName) ? (
+                  <Box
+                    key={receiveDraftItem.imageName}
+                    component="img"
+                    src={getImageUrl(receiveDraftItem.imageName)}
+                    alt={receiveDraftItem.name}
+                    sx={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain', bgcolor: '#fff', p: 1 }}
+                    onError={(event) => { event.currentTarget.style.display = 'none' }}
+                  />
+                ) : null}
+              </Box>
+              <Grid container spacing={1.5} sx={{ flex: 1, minWidth: 0, width: '100%' }}>
                 <Grid size={{ xs: 12, sm: 4 }}>
                   <Typography className="inventory-workspace__detail-label">รหัสสินค้า</Typography>
                   <Typography className="inventory-workspace__detail-value">{receiveDraftItem.code}</Typography>
@@ -2248,15 +2272,15 @@ function InventoryWorkspace({ mode }) {
             <Grid container spacing={2}>
               <Grid size={{ xs: 12, sm: 2.4 }}>
                 <TextField
-                  autoFocus
+                  disabled
                   fullWidth
                   label="รับเข้าเป็น"
                   value={receiveDraftItem.unit}
-                  onChange={(event) => handleReceiveDraftChange('unit', event.target.value)}
                 />
               </Grid>
               <Grid size={{ xs: 12, sm: 2.4 }}>
                 <TextField
+                  autoFocus
                   error={!String(receiveDraftItem.requestQty ?? '').trim() || toPositiveNumber(receiveDraftItem.requestQty) <= 0}
                   fullWidth
                   helperText={
@@ -2291,25 +2315,21 @@ function InventoryWorkspace({ mode }) {
               </Grid>
               <Grid size={{ xs: 12, sm: 2.4 }}>
                 <TextField
+                  disabled
                   fullWidth
                   helperText="หน่วยที่พนักงานใช้ตอนเบิก"
                   label="เบิกออกเป็น"
                   value={receiveDraftItem.issueUnit}
-                  onChange={(event) => handleReceiveDraftChange('issueUnit', event.target.value)}
                 />
               </Grid>
               <Grid size={{ xs: 12, sm: 4.4 }}>
                 <TextField
-                  disabled={shouldUseSameUnitConversion(receiveDraftItem.unit, receiveDraftItem.issueUnit)}
                   error={
-                    !shouldUseSameUnitConversion(receiveDraftItem.unit, receiveDraftItem.issueUnit)
-                    && (!String(receiveDraftItem.conversionQty ?? '').trim() || toPositiveNumber(receiveDraftItem.conversionQty) <= 0)
+                    !String(receiveDraftItem.conversionQty ?? '').trim() || toPositiveNumber(receiveDraftItem.conversionQty) <= 0
                   }
                   fullWidth
                   helperText={
-                    shouldUseSameUnitConversion(receiveDraftItem.unit, receiveDraftItem.issueUnit)
-                      ? 'หน่วยรับเข้าและหน่วยเบิกเหมือนกัน ช่องนี้จะถูกปิด และระบบแปลง 1 ต่อ 1 ให้อัตโนมัติ'
-                      : !String(receiveDraftItem.conversionQty ?? '').trim() || toPositiveNumber(receiveDraftItem.conversionQty) <= 0
+                    !String(receiveDraftItem.conversionQty ?? '').trim() || toPositiveNumber(receiveDraftItem.conversionQty) <= 0
                         ? 'กรอกจำนวนแปลงมากกว่า 0'
                       : `กรอกจำนวน ${receiveDraftItem.issueUnit || 'หน่วยเบิก'} ต่อ 1 ${receiveDraftItem.unit || 'หน่วยรับเข้า'} เช่น 1 แพ็ค = 100 ชิ้น`
                   }
@@ -2319,11 +2339,7 @@ function InventoryWorkspace({ mode }) {
                       : `จำนวน${receiveDraftItem.issueUnit || 'หน่วยเบิก'}ต่อ 1 ${receiveDraftItem.unit || 'หน่วยรับเข้า'}`
                   }
                   type="number"
-                  value={
-                    shouldUseSameUnitConversion(receiveDraftItem.unit, receiveDraftItem.issueUnit)
-                      ? 1
-                      : receiveDraftItem.conversionQty ?? 1
-                  }
+                  value={receiveDraftItem.conversionQty ?? 1}
                   onChange={(event) => handleReceiveDraftChange('conversionQty', event.target.value)}
                   slotProps={{
                     htmlInput: {

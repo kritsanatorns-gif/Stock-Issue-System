@@ -82,9 +82,10 @@ function AppTable({
   defaultSortDirection = 'desc',
   globalSearchPlaceholder = 'ค้นหา / กรองข้อมูล',
   isLoading = false,
-  initialRowsPerPage = 10,
+  initialRowsPerPage = 25,
   rowsPerPageOptions = [10, 25, 50, 100],
   maxHeight = 'calc(100vh - 310px)',
+  minTableWidth,
   noDataText = 'No records found',
   expandable = false,
   fitToWidth = false,
@@ -93,6 +94,7 @@ function AppTable({
   prioritySortValue,
   renderExpandedRow,
   rowKey,
+  getRowSx,
   showColumnFilters = true,
   showGlobalSearch = false,
   showPagination = true,
@@ -236,8 +238,8 @@ function AppTable({
           stickyHeader
           size="small"
           sx={{
-            tableLayout: fitToWidth ? 'fixed' : 'auto',
-            minWidth: '100%',
+            tableLayout: 'fixed',
+            minWidth: minTableWidth ?? '100%',
             width: fitToWidth ? '100%' : 'max-content',
             '& .MuiTableCell-root': {
               borderBottom: '1px solid #cbd5e1',
@@ -271,7 +273,10 @@ function AppTable({
                     fontSize: 12,
                     fontWeight: 800,
                     minWidth: fitToWidth ? 0 : column.width,
+                    overflowWrap: 'normal',
+                    whiteSpace: 'nowrap',
                     width: column.width,
+                    wordBreak: 'normal',
                     '& .MuiTableSortLabel-icon': {
                       opacity: 0.55,
                     },
@@ -352,7 +357,7 @@ function AppTable({
 
               return (
                 <Fragment key={key}>
-                  <TableRow key={key} hover>
+                  <TableRow key={key} hover sx={getRowSx?.(row)}>
                     {expandable ? (
                       <TableCell align="center" sx={{ width: 44 }}>
                         <IconButton
@@ -387,7 +392,12 @@ function AppTable({
                         sx={{
                           color: '#0f172a',
                           fontSize: 13,
-                          whiteSpace: column.wrap ? 'normal' : 'nowrap',
+                          lineHeight: 1.45,
+                          overflow: 'hidden',
+                          overflowWrap: 'anywhere',
+                          verticalAlign: 'middle',
+                          whiteSpace: 'normal',
+                          wordBreak: 'break-word',
                         }}
                       >
                         {column.render ? column.render(row) : getCellValue(row, column)}

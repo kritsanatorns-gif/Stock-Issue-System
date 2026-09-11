@@ -83,12 +83,38 @@ app.Logger.LogInformation("Preparing database schema: stock adjustment menu");
 await EnsureStockAdjustMenu(app);
 app.Logger.LogInformation("Preparing database schema: requisition workflow");
 await EnsureRequisitionWorkflow(app);
+await EnsureRequisitionApproval(app);
+await EnsureRequisitionItemDenial(app);
 app.Logger.LogInformation("Preparing database schema: supplier workflow");
 await EnsureSupplierWorkflow(app);
 await EnsureAuditLogTable(app);
 app.Logger.LogInformation("Database schema preparation completed.");
 
 app.Run();
+
+static async Task EnsureRequisitionApproval(WebApplication app)
+{
+    await using var scope = app.Services.CreateAsyncScope();
+    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    await db.Database.ExecuteSqlRawAsync("""
+        IF COL_LENGTH(N'dbo.StockHeader', N'ApprovedAt') IS NULL
+            ALTER TABLE dbo.StockHeader ADD ApprovedAt datetime2 NULL;
+        IF COL_LENGTH(N'dbo.StockHeader', N'ApprovedBy') IS NULL
+            ALTER TABLE dbo.StockHeader ADD ApprovedBy int NULL;
+        """);
+}
+
+static async Task EnsureRequisitionItemDenial(WebApplication app)
+{
+    await using var scope = app.Services.CreateAsyncScope();
+    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    await db.Database.ExecuteSqlRawAsync("""
+        IF COL_LENGTH(N'dbo.StockDetail', N'DeniedQty') IS NULL
+            ALTER TABLE dbo.StockDetail ADD DeniedQty int NULL;
+        IF COL_LENGTH(N'dbo.StockDetail', N'DenyRemark') IS NULL
+            ALTER TABLE dbo.StockDetail ADD DenyRemark nvarchar(500) NOT NULL CONSTRAINT DF_StockDetail_DenyRemark DEFAULT N'';
+        """);
+}
 
 static async Task EnsureAuditLogTable(WebApplication app)
 {
@@ -661,6 +687,7 @@ static async Task EnsureRequisitionWorkflow(WebApplication app)
             );
     """);
 
+    await UpsertStatus(dbContext, RequisitionStatuses.AwaitingApproval, "รออนุมัติ", "Requisition", 10);
     await UpsertStatus(dbContext, RequisitionStatuses.Pending, "รอจัดของ", "Requisition", 6);
     await UpsertStatus(dbContext, RequisitionStatuses.Approved, "ได้ของครบ", "Requisition", 7);
     await UpsertStatus(dbContext, RequisitionStatuses.Backlog, "ค้าง", "Requisition", 8);

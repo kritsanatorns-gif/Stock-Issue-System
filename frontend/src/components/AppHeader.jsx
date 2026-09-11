@@ -42,7 +42,7 @@ function AppHeader({ onToggleSidebar, sidebarCollapsed }) {
       try {
         const requests = await getRequisitions()
         const activeRequestIds = new Set((requests ?? [])
-          .filter((request) => [6, 8].includes(Number(request.statusId ?? request.StatusId ?? 0)))
+          .filter((request) => [10, 6, 8].includes(Number(request.statusId ?? request.StatusId ?? 0)))
           .map((request) => `new-request-${String(request.headerId ?? request.HeaderId ?? '')}`))
         setNotifications((current) => {
           const nextNotifications = current.filter((item) => activeRequestIds.has(item.id))

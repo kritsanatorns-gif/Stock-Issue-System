@@ -26,14 +26,14 @@ import '../../layouts/MainLayout.css'
 
 const requestNavigationItems = [
   {
-    icon: PackageCheck,
-    label: 'เบิกสินค้า',
-    path: '/request',
-  },
-  {
     icon: History,
     label: 'ประวัติของฉัน',
     path: '/request/history',
+  },
+  {
+    icon: PackageCheck,
+    label: 'เบิกสินค้า',
+    path: '/request',
   },
 ]
 
@@ -50,7 +50,7 @@ function getNotificationMeta(statusId) {
 }
 
 function isRequestActionable(statusId) {
-  return statusId === 6 || statusId === 8
+  return statusId === 10 || statusId === 6 || statusId === 8
 }
 
 function RequestLayout() {

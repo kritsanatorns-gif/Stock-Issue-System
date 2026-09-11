@@ -113,7 +113,7 @@ function RequestLoginPage() {
   }
 
   if (isSessionActive) {
-    return <Navigate to="/request" replace />
+    return <Navigate to="/request/history" replace />
   }
 
   const clearCheckedEmployee = () => {
@@ -269,7 +269,7 @@ function RequestLoginPage() {
         unitRef: checkedEmployee.unitRef || '',
         username: checkedEmployee.name,
       })
-      navigate('/request', { replace: true })
+      navigate('/request/history', { replace: true })
     } catch (error) {
       const status = error?.response?.status
 

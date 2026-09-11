@@ -15,23 +15,27 @@
 } from '@mui/material'
 import { ClipboardList, FileDown, Printer, RefreshCw, Zap } from 'lucide-react'
 import JsBarcode from 'jsbarcode'
+import dayjs from 'dayjs'
 import { useCallback, useEffect, useState } from 'react'
 import { getRequisitions } from '../../api/api'
 import AppTable from '../../components/common/AppTable'
+import { getRequisitionItemQuantities, getRequisitionStatusLabel, isPartiallyAllowedRequisition } from '../../utils/requisitionStatus'
+import DateInputField from '../../components/common/DateInputField'
 import { useRequestAuthStore } from '../../store/requestAuthStore'
 import { formatDisplayDateTime, getElapsedDuration, getThailandDateParts } from '../../utils/dateUtils'
 
 function normalizeRequisition(row) {
   const items = (row.items ?? row.Items ?? []).map((item, index) => {
-    const quantity = Number(item.quantity ?? item.Quantity ?? 0)
-    const fulfilledQty = Number(item.fulfilledQty ?? item.FulfilledQty ?? 0)
+    const { quantity, fulfilledQty, deniedQty, backlogQty } = getRequisitionItemQuantities(item, row.statusId ?? row.StatusId)
 
     return {
       availableQty: Number(item.availableQty ?? item.AvailableQty ?? 0),
-      backlogQty: Number(item.backlogQty ?? item.BacklogQty ?? Math.max(0, quantity - fulfilledQty)),
+      backlogQty,
       barcode: item.barcode ?? item.Barcode ?? '',
       category: item.category ?? item.Category ?? '',
       code: item.code ?? item.Code ?? '',
+      deniedQty,
+      denyRemark: item.denyRemark ?? item.DenyRemark ?? '',
       detailId: item.detailId ?? item.DetailId ?? index + 1,
       fulfilledQty,
       lineNo: item.lineNo ?? item.LineNo ?? index + 1,
@@ -47,6 +51,7 @@ function normalizeRequisition(row) {
   const division = row.department ?? row.Department ?? ''
 
   return {
+    approvedAt: row.approvedAt ?? row.ApprovedAt ?? null,
     createdAt: row.createdAt ?? row.CreatedAt ?? '',
     department,
     division,
@@ -70,44 +75,26 @@ function getRequestSlipRemark(row) {
   return (row.userRemark || row.urgentRemark || '').trim()
 }
 
-function getSlipQtyValue(item, key, fallback = 0) {
-  const value = item?.[key] ?? item?.[key.charAt(0).toUpperCase() + key.slice(1)] ?? fallback
-
-  return Number(value || 0)
-}
-
 function getHistorySlipRows(row) {
-  const rawItems = row?.items ?? []
-  const hasBacklog =
-    Number(row?.statusId ?? row?.StatusId ?? 0) === 8 ||
-    rawItems.some((item) => {
-      const requestedQty = getSlipQtyValue(item, 'quantity')
-      const fulfilledQty = getSlipQtyValue(item, 'fulfilledQty')
-      const backlogQty = getSlipQtyValue(item, 'backlogQty', Math.max(0, requestedQty - fulfilledQty))
-
-      return backlogQty > 0 && fulfilledQty > 0
-    })
-
-  const rows = rawItems
-    .map((item) => {
-      const requestedQty = getSlipQtyValue(item, 'quantity')
-      const fulfilledQty = getSlipQtyValue(item, 'fulfilledQty')
-      const backlogQty = getSlipQtyValue(item, 'backlogQty', Math.max(0, requestedQty - fulfilledQty))
-      return {
-        backlogQty,
-        barcode: item.barcode ?? item.Barcode ?? item.code ?? item.Code ?? '',
-        category: item.category ?? item.Category ?? '',
-        fulfilledQty,
-        isCarryOverBacklog: Boolean(item.isCarryOverBacklog ?? item.IsCarryOverBacklog),
-        productName: item.productName ?? item.ProductName ?? '',
-        requestedQty,
-        remark: item.remark ?? item.Remark ?? '',
-        unit: item.unit ?? item.Unit ?? '',
-      }
-    })
-    .filter((item) => item.requestedQty > 0)
-
-  return { hasBacklog, rows }
+  const rows = (row.items ?? row.Items ?? []).map((item) => {
+    const quantities = getRequisitionItemQuantities(item, row.statusId ?? row.StatusId)
+    const denyReason = String(item.denyRemark ?? item.DenyRemark ?? '').trim()
+    const denialNote = quantities.deniedQty > 0
+      ? (denyReason ? 'ไม่ให้เบิกเพราะ : ' + denyReason : 'ไม่ให้เบิก')
+      : ''
+    return {
+      ...quantities,
+      requestedQty: quantities.quantity,
+      category: item.category ?? item.Category ?? '',
+      productName: item.productName ?? item.ProductName ?? '',
+      unit: item.unit ?? item.Unit ?? '',
+      remark: [
+        denialNote,
+        item.remark ?? item.Remark ?? '' ? 'หมายเหตุรายการ: ' + (item.remark ?? item.Remark ?? '') : '',
+      ].filter(Boolean).join('\n'),
+    }
+  }).filter((item) => item.requestedQty > 0)
+  return { rows }
 }
 
 function getSlipModeConfig() {
@@ -134,6 +121,7 @@ export function buildPrintableRowWithBacklog(row) {
 }
 
 const REQUEST_STATUS_META = {
+  10: { background: '#f5f3ff', border: '#ddd6fe', chip: '#7c3aed', label: 'รออนุมัติ' },
   6: {
     background: 'linear-gradient(135deg, #eff6ff 0%, #ffffff 100%)',
     border: '#bfdbfe',
@@ -161,6 +149,9 @@ const REQUEST_STATUS_META = {
 }
 
 function getRequestStatusMeta(row) {
+  if (isPartiallyAllowedRequisition(row)) {
+    return { background: '#ecfeff', border: '#a5f3fc', chip: '#0e7490', label: getRequisitionStatusLabel(row) }
+  }
   return REQUEST_STATUS_META[row.statusId] ?? {
     background: 'linear-gradient(135deg, #f8fafc 0%, #ffffff 100%)',
     border: '#cbd5e1',
@@ -170,30 +161,11 @@ function getRequestStatusMeta(row) {
 }
 
 function getRequestSlipStamp(row) {
-  const statusText = String(row.status ?? row.Status ?? '').replace(/\s/g, '')
-  const isUrgent = Boolean(row.isUrgent ?? row.IsUrgent)
-  const isBacklog = Number(row.statusId ?? row.StatusId ?? 0) === 8 || statusText.includes('ค้าง')
-  const isDenied = Number(row.statusId ?? row.StatusId ?? 0) === 9 || statusText.includes('ไม่ให้เบิก')
-  const isComplete = statusText.includes('ได้ของครบ') || statusText.includes('ครบ') || statusText.includes('งานจบ')
-  const parts = []
-
-  if (isUrgent) {
-    parts.push('ด่วน')
-  }
-
-  if (isDenied) {
-    parts.push('ไม่ให้เบิก')
-  } else if (isBacklog) {
-    parts.push('ค้าง')
-  } else if (isComplete) {
-    parts.push('ได้ของครบ')
-  }
-
-  return parts.join(' / ')
+  return [Boolean(row.isUrgent ?? row.IsUrgent) ? 'ด่วน' : '', getRequisitionStatusLabel(row)].filter(Boolean).join(' / ')
 }
 
 function getRequestSlipStampColor(slipStamp) {
-  return slipStamp.includes('ได้ของครบ') && !slipStamp.includes('ค้าง') && !slipStamp.includes('ด่วน')
+  return (slipStamp.includes('ได้ของครบ') || slipStamp.includes('จ่ายครบตามที่อนุญาต')) && !slipStamp.includes('ค้าง') && !slipStamp.includes('ด่วน')
     ? '#15803d'
     : '#dc2626'
 }
@@ -314,7 +286,7 @@ function printHistorySlipOld(row) {
   printWindow.document.close()
 }
 
-export function printHistorySlip(row) {
+function printHistorySlipLegacy(row) {
   if (!row) {
     return
   }
@@ -341,7 +313,7 @@ export function printHistorySlip(row) {
   const documentTitle = 'ใบเบิกของ'
   const displayRows = getSlipRowsForMode(slipRows, isBacklogDocument)
   const showBacklogColumns = isBacklogDocument
-  const fixedRowCount = 25
+  const fixedRowCount = 15
 
   if (displayRows.length === 0) {
     window.alert('ไม่มีรายการสำหรับพิมพ์ใบนี้')
@@ -356,12 +328,12 @@ export function printHistorySlip(row) {
       (item, index) => `
         <tr>
           <td class="center">${index + 1}</td>
-          <td class="center">${escapeHtml(item.category)}</td>
-          <td>${escapeHtml(item.productName)}</td>
-          <td class="center">${item.displayQty.toLocaleString('th-TH')}</td>
-          ${showBacklogColumns ? `<td class="center">${item.backlogQty.toLocaleString('th-TH')}</td>` : ''}
+          <td style="text-align: left;">${escapeHtml(item.category)}</td>
+          <td style="text-align: left;">${escapeHtml(item.productName)}</td>
+          <td style="text-align: right;">${item.displayQty.toLocaleString('th-TH')}</td>
+          ${showBacklogColumns ? `<td style="text-align: right;">${item.backlogQty.toLocaleString('th-TH')}</td>` : ''}
           <td class="center">${escapeHtml(item.unit)}</td>
-          <td>${escapeHtml(item.remark || '')}</td>
+          <td class="remark-cell">${escapeHtml(item.remark || '')}</td>
         </tr>
       `,
     )
@@ -393,11 +365,12 @@ export function printHistorySlip(row) {
             border: 2px solid ${slipStampColor};
             color: ${slipStampColor};
             display: ${slipStamp ? 'inline-flex' : 'none'};
-            font-size: 22px;
+            font-size: 16px;
+            max-width: 60%;
             font-weight: 900;
             left: 5mm;
             letter-spacing: 1px;
-            line-height: 1;
+            line-height: 1.35;
             padding: 6px 14px;
             position: absolute;
             top: 5mm;
@@ -423,9 +396,10 @@ export function printHistorySlip(row) {
           table { border-collapse: collapse; margin-top: 8px; page-break-inside: auto; width: 100%; }
           thead { display: table-header-group; }
           tr { page-break-after: auto; page-break-inside: avoid; }
-          th, td { border: 1px solid #111; font-size: 12px; height: 28px; padding: 1px 3px; text-align: center; vertical-align: middle; word-break: break-word; }
-          th { font-weight: 800; text-align: center; }
+th, td { border: 1px solid #111; font-size: 10px; height: 40px; padding: 3px 4px; text-align: center; vertical-align: middle; overflow-wrap: anywhere; word-break: break-word; }
+          th { font-size: 11px; font-weight: 800; text-align: center; }
           .center { text-align: center; }
+          .remark-cell { text-align: left; white-space: pre-line; }
           .receive-section { display: grid; gap: 10px; grid-template-columns: minmax(0, 1fr) 310px; margin-top: 8px; padding-top: 8px; }
           .receiver-fields { padding-top: 8px; }
           .receiver-fields .field-row { margin-bottom: 10px; }
@@ -493,13 +467,13 @@ export function printHistorySlip(row) {
           <table>
             <thead>
               <tr>
-                <th style="width: 58px;">ลำดับ</th>
-                <th style="width: ${showBacklogColumns ? 120 : 130}px;">หมวด</th>
-                <th style="width: ${showBacklogColumns ? 155 : 175}px;">รายการ</th>
-                <th style="width: 68px;">${showBacklogColumns ? 'จำนวนที่ขอ' : modeConfig.qtyHeader}</th>
+                <th style="width: 48px;">ลำดับ</th>
+                <th style="width: 124px;">หมวด</th>
+                <th style="width: 155px;">รายการ</th>
+                <th style="width: 56px;">จำนวน</th>
                 ${showBacklogColumns ? '<th style="width: 58px;">ค้าง</th>' : ''}
-                <th style="width: 72px;">หน่วยนับ</th>
-                <th style="width: ${showBacklogColumns ? 150 : 180}px;">หมายเหตุ</th>
+                <th style="width: 60px;">หน่วยนับ</th>
+                <th style="width: ${showBacklogColumns ? 165 : 190}px;">หมายเหตุ</th>
               </tr>
             </thead>
             <tbody>${rowsHtml}</tbody>
@@ -580,17 +554,17 @@ function buildRequestPdfHtml(row) {
       (item, index) => `
         <tr>
           <td class="center">${index + 1}</td>
-          <td class="center">${escapeHtml(item.category)}</td>
-          <td>${escapeHtml(item.productName)}</td>
-          <td class="center">${item.displayQty.toLocaleString('th-TH')}</td>
-          ${showBacklogColumns ? `<td class="center">${item.backlogQty.toLocaleString('th-TH')}</td>` : ''}
+          <td style="text-align: left;">${escapeHtml(item.category)}</td>
+          <td style="text-align: left;">${escapeHtml(item.productName)}</td>
+          <td style="text-align: right;">${item.displayQty.toLocaleString('th-TH')}</td>
+          ${showBacklogColumns ? `<td style="text-align: right;">${item.backlogQty.toLocaleString('th-TH')}</td>` : ''}
           <td class="center">${escapeHtml(item.unit)}</td>
-          <td>${escapeHtml(item.remark || '')}</td>
+          <td class="request-pdf-remark-cell">${escapeHtml(item.remark || '')}</td>
         </tr>
       `,
     )
     .join('')
-    + Array.from({ length: Math.max(0, 25 - displayRows.length) }, (_, index) => `
++ Array.from({ length: Math.max(0, 15 - displayRows.length) }, (_, index) => `
       <tr>
         <td class="center">${displayRows.length + index + 1}</td>
         <td></td><td></td><td></td>${showBacklogColumns ? '<td></td>' : ''}<td></td><td></td>
@@ -619,11 +593,12 @@ function buildRequestPdfHtml(row) {
         border: 2px solid ${slipStampColor};
         color: ${slipStampColor};
         display: ${slipStamp ? 'inline-flex' : 'none'};
-        font-size: 22px;
+        font-size: 16px;
+        max-width: 60%;
         font-weight: 900;
         left: 22px;
         letter-spacing: 1px;
-        line-height: 1;
+        line-height: 1.35;
         padding: 6px 14px;
         position: absolute;
         top: 19px;
@@ -661,8 +636,9 @@ function buildRequestPdfHtml(row) {
       .request-pdf-date-line { font-size: 11px; line-height: 1; white-space: nowrap; }
       .request-pdf-table { border-collapse: collapse; margin-top: 8px; width: 100%; }
       .request-pdf-table th,
-      .request-pdf-table td { border: 1px solid #111; font-size: 12px; height: 28px; padding: 1px 3px; text-align: center; vertical-align: middle; word-break: break-word; }
-      .request-pdf-table th { font-weight: 800; text-align: center; }
+.request-pdf-table td { border: 1px solid #111; font-size: 10px; height: 40px; padding: 3px 4px; text-align: center; vertical-align: middle; overflow-wrap: anywhere; word-break: break-word; }
+      .request-pdf-table th { font-size: 11px; font-weight: 800; text-align: center; }
+      .request-pdf-table .request-pdf-remark-cell { text-align: left; white-space: pre-line; }
       .center { text-align: center; }
       .request-pdf-receive { display: grid; gap: 10px; grid-template-columns: minmax(0, 1fr) 310px; margin-top: 8px; padding-top: 8px; }
       .request-pdf-receiver-fields { padding-top: 8px; }
@@ -725,13 +701,13 @@ function buildRequestPdfHtml(row) {
       <table class="request-pdf-table">
         <thead>
           <tr>
-            <th style="width: 58px;">ลำดับ</th>
-            <th style="width: ${showBacklogColumns ? 120 : 130}px;">หมวด</th>
-            <th style="width: ${showBacklogColumns ? 155 : 175}px;">รายการ</th>
-            <th style="width: 68px;">${showBacklogColumns ? 'จำนวนที่ขอ' : modeConfig.qtyHeader}</th>
+            <th style="width: 48px;">ลำดับ</th>
+            <th style="width: 124px;">หมวด</th>
+            <th style="width: 155px;">รายการ</th>
+            <th style="width: 56px;">จำนวน</th>
             ${showBacklogColumns ? '<th style="width: 58px;">ค้าง</th>' : ''}
-            <th style="width: 72px;">หน่วยนับ</th>
-            <th style="width: ${showBacklogColumns ? 150 : 180}px;">หมายเหตุ</th>
+            <th style="width: 60px;">หน่วยนับ</th>
+            <th style="width: ${showBacklogColumns ? 165 : 190}px;">หมายเหตุ</th>
           </tr>
         </thead>
         <tbody>${rowsHtml}</tbody>
@@ -769,6 +745,38 @@ function buildRequestPdfHtml(row) {
       </section>
     </main>
   `
+}
+
+export function printHistorySlip(row) {
+  if (!row) return
+
+  const html = buildRequestPdfHtml(row)
+  if (!html) {
+    window.alert('ไม่มีรายการสำหรับพิมพ์ใบนี้')
+    return
+  }
+
+  const printWindow = window.open('', '_blank', 'width=900,height=900')
+  if (!printWindow) return
+
+  printWindow.document.write(`
+    <!doctype html>
+    <html lang="th">
+      <head>
+        <meta charset="utf-8" />
+        <title>ใบเบิกของ</title>
+        <style>
+          @page { size: A4 portrait; margin: 0; }
+          body { margin: 0; }
+        </style>
+      </head>
+      <body>
+        ${html}
+        <script>window.onload = () => { window.print() }</script>
+      </body>
+    </html>
+  `)
+  printWindow.document.close()
 }
 
 export async function downloadHistorySlipPdf(row) {
@@ -838,37 +846,38 @@ function RequestHistoryPage() {
   const [loadError, setLoadError] = useState('')
   const [selectedRow, setSelectedRow] = useState(null)
   const [remarkRow, setRemarkRow] = useState(null)
-  const employeeId = Number(employee?.employeeId ?? 0)
-  const employeeName = employee?.employeeName ?? employee?.name ?? employee?.username ?? ''
+  const [endDate, setEndDate] = useState(() => dayjs().format('YYYY-MM-DD'))
+  const [startDate, setStartDate] = useState(() => dayjs().subtract(1, 'month').format('YYYY-MM-DD'))
   const department = employee?.department ?? ''
 
   const loadRows = useCallback(async () => {
     setLoadError('')
 
     try {
-      const data = await getRequisitions()
+      const data = await getRequisitions({ department })
       const normalizedRows = (data ?? []).map(normalizeRequisition)
 
-      setRows(
-        normalizedRows.filter((row) => {
-          const sameEmployeeId = employeeId > 0 && row.employeeId === employeeId
-          const sameName = employeeName && row.employeeName === employeeName
-          const sameDepartment = department && row.department === department
-
-          return sameEmployeeId || (sameName && sameDepartment)
-        }),
-      )
+      setRows(normalizedRows.filter((row) => department && row.department === department))
     } catch {
       setLoadError('โหลดประวัติคำขอเบิกไม่สำเร็จ กรุณาตรวจสอบ Backend API')
       setRows([])
     }
-  }, [department, employeeId, employeeName])
+  }, [department])
 
   useEffect(() => {
     loadRows()
   }, [loadRows])
 
-  const getStatusCount = (statusId) => rows.filter((row) => row.statusId === statusId).length
+  const dateError = !startDate || !endDate
+    ? 'กรุณาเลือกวันที่เริ่มต้นและวันที่สิ้นสุด'
+    : endDate < startDate ? 'วันที่สิ้นสุดต้องไม่ก่อนวันที่เริ่มต้น' : ''
+  const filteredRows = dateError ? [] : rows.filter((row) => {
+    if (!row.createdAt) return false
+    const parts = getThailandDateParts(row.createdAt)
+    const date = `${Number(parts.year) - 543}-${parts.month}-${parts.day}`
+    return date >= startDate && date <= endDate
+  })
+  const getStatusCount = (statusId) => filteredRows.filter((row) => row.statusId === statusId).length
 
   const requestStatusStyle = (row) => {
     const meta = getRequestStatusMeta(row)
@@ -880,8 +889,12 @@ function RequestHistoryPage() {
     {
       background: 'linear-gradient(135deg, #eff6ff 0%, #ffffff 100%)',
       border: '#bfdbfe',
-      count: rows.length,
+      count: filteredRows.length,
       label: 'ทั้งหมด',
+    },
+    {
+      ...REQUEST_STATUS_META[10],
+      count: getStatusCount(10),
     },
     {
       ...REQUEST_STATUS_META[6],
@@ -910,7 +923,7 @@ function RequestHistoryPage() {
       sortValue: (row) => Number(row.headerId ?? 0),
     },
     { key: 'requestNo', label: 'เลขที่คำขอ', width: 150 },
-    { key: 'division', label: 'ฝ่าย', width: 120, align: 'center' },
+    { key: 'employeeName', label: 'ผู้ขอเบิก', width: 160, align: 'center', wrap: true },
     { key: 'department', label: 'แผนก', width: 120, align: 'center' },
     {
       key: 'isUrgent',
@@ -930,6 +943,7 @@ function RequestHistoryPage() {
       key: 'status',
       label: 'สถานะ',
       width: 140,
+      value: (row) => getRequestStatusMeta(row).label,
       render: (row) => {
         const statusStyle = requestStatusStyle(row)
 
@@ -939,6 +953,9 @@ function RequestHistoryPage() {
             size="small"
             sx={{
               backgroundColor: statusStyle.backgroundColor,
+              height: 'auto',
+              maxWidth: '100%',
+              '& .MuiChip-label': { whiteSpace: 'normal', py: 0.5 },
               color: statusStyle.color,
               fontWeight: 800,
             }}
@@ -951,14 +968,14 @@ function RequestHistoryPage() {
       label: 'ระยะเวลารอ',
       width: 125,
       align: 'center',
-      value: (row) => ([6, 8].includes(row.statusId) ? getElapsedDuration(row.createdAt).label : '-'),
+      value: (row) => ([6, 8].includes(row.statusId) && row.approvedAt ? getElapsedDuration(row.approvedAt).label : '-'),
       sortValue: (row) => {
-        if (![6, 8].includes(row.statusId)) return -1
+        if (![6, 8].includes(row.statusId) || !row.approvedAt) return -1
 
-        const elapsed = getElapsedDuration(row.createdAt)
+        const elapsed = getElapsedDuration(row.approvedAt)
         return elapsed.days * 24 + elapsed.hours
       },
-      render: (row) => ([6, 8].includes(row.statusId) ? getElapsedDuration(row.createdAt).label : '-'),
+      render: (row) => ([6, 8].includes(row.statusId) && row.approvedAt ? getElapsedDuration(row.approvedAt).label : '-'),
     },
     { key: 'totalItems', label: 'จำนวนรายการ', width: 130, align: 'center' },
     { key: 'totalQty', label: 'จำนวนรวม', width: 130, align: 'center' },
@@ -992,22 +1009,23 @@ function RequestHistoryPage() {
 
   const detailColumns = [
     { key: 'lineNo', label: 'ลำดับ', width: 70 },
-    { key: 'code', label: 'รหัสสินค้า', width: 150 },
-    { key: 'productName', label: 'ชื่อสินค้า', width: 260 },
+    { key: 'code', label: 'รหัสสินค้า', width: 210 },
+    { key: 'productName', label: 'ชื่อสินค้า', width: 260, align: 'left', wrap: true },
     { key: 'category', label: 'หมวดหมู่', width: 130 },
     { key: 'quantity', label: 'จำนวนที่ขอ', width: 100, align: 'center' },
     { key: 'fulfilledQty', label: 'จ่ายแล้ว', width: 90, align: 'center' },
     { key: 'backlogQty', label: 'ยังค้าง', width: 90, align: 'center' },
     { key: 'unit', label: 'หน่วย', width: 90, align: 'center' },
+    { key: 'denyRemark', label: 'เหตุผลที่ไม่ให้เบิก', width: 220, wrap: true },
   ]
 
   return (
     <Box>
       <Stack alignItems="flex-start" direction="row" justifyContent="space-between" sx={{ mb: 2, width: '100%' }}>
         <Box>
-          <Typography sx={{ fontSize: 24, fontWeight: 900 }}>ประวัติของฉัน</Typography>
+          <Typography sx={{ fontSize: 24, fontWeight: 900 }}>ประวัติการขอเบิกในแผนก</Typography>
           <Typography sx={{ color: '#64748b', fontSize: 14 }}>
-            ดูคำขอเบิกสินค้าและสถานะรายการของตัวเอง
+            ดูคำขอเบิกสินค้าและสถานะรายการของทุกคนในแผนกเดียวกัน
           </Typography>
         </Box>
         <Box sx={{ ml: 'auto' }}>
@@ -1018,9 +1036,23 @@ function RequestHistoryPage() {
       </Stack>
 
       {loadError ? <Alert severity="error" sx={{ mb: 2 }}>{loadError}</Alert> : null}
+      <Card sx={{ mb: 2 }}>
+        <CardContent>
+          <Typography sx={{ fontWeight: 800, mb: 1.5 }}>ช่วงวันที่ขอเบิก (เริ่มต้นแสดงย้อนหลัง 1 เดือน)</Typography>
+          <Grid container spacing={2}>
+            <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+              <DateInputField label="วันที่เริ่มต้น" size="small" value={startDate} onChange={setStartDate} max={endDate || undefined} />
+            </Grid>
+            <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+              <DateInputField label="วันที่สิ้นสุด" size="small" value={endDate} onChange={setEndDate} min={startDate || undefined} />
+            </Grid>
+          </Grid>
+          {dateError ? <Alert severity="warning" sx={{ mt: 1.5 }}>{dateError}</Alert> : null}
+        </CardContent>
+      </Card>
       <Grid container spacing={2} sx={{ mb: 2 }}>
         {requestStatusCards.map((card) => (
-          <Grid key={card.label} size={{ xs: 12, md: 2.4 }}>
+          <Grid key={card.label} size={{ xs: 12, md: 2 }}>
             <Card sx={{ border: `1px solid ${card.border}`, background: card.background }}>
               <CardContent>
                 <Typography sx={{ color: '#475569', fontSize: 13, fontWeight: 800 }}>{card.label}</Typography>
@@ -1038,11 +1070,16 @@ function RequestHistoryPage() {
             columns={columns}
             defaultSortField="createdAt"
             defaultSortDirection="desc"
-            prioritySortValue={(row) => Number(row.isUrgent && Number(row.statusId) !== 7)}
+            prioritySortValue={(row) => {
+              const statusId = Number(row.statusId)
+              const statusPriority = { 10: 4, 6: 3, 8: 2, 9: 1, 7: 0 }[statusId] ?? 0
+              const urgentPriority = row.isUrgent && [10, 6, 8].includes(statusId) ? 5 : 0
+              return urgentPriority + statusPriority
+            }}
             fitToWidth
             maxHeight="calc(100vh - 390px)"
             noDataText="ยังไม่มีประวัติคำขอเบิก"
-            rows={rows}
+            rows={filteredRows}
             showGlobalSearch
           />
         </CardContent>
@@ -1080,6 +1117,8 @@ function RequestHistoryPage() {
                     size="small"
                     sx={{
                       backgroundColor: getRequestStatusMeta(selectedRow).chip,
+                      height: 'auto',
+                      '& .MuiChip-label': { whiteSpace: 'normal', py: 0.5 },
                       color: '#fff',
                       fontWeight: 800,
                     }}
@@ -1097,6 +1136,16 @@ function RequestHistoryPage() {
               {selectedRow.remark ? <Alert severity="info">{selectedRow.remark}</Alert> : null}
               <AppTable
                 columns={detailColumns}
+                getRowSx={(item) => {
+                  const denied = selectedRow.statusId === 9 || Number(item.deniedQty) > 0
+                  const pending = Number(item.backlogQty) > 0
+                  const background = denied ? '#fef2f2' : pending ? '#fff7ed' : '#f0fdf4'
+                  const hover = denied ? '#fee2e2' : pending ? '#ffedd5' : '#dcfce7'
+                  return {
+                    backgroundColor: background,
+                    '&.MuiTableRow-hover:hover': { backgroundColor: hover },
+                  }
+                }}
                 fitToWidth
                 maxHeight={360}
                 noDataText="ไม่มีรายการสินค้า"
@@ -1108,6 +1157,8 @@ function RequestHistoryPage() {
                   productName: item.productName ?? item.ProductName ?? '',
                   quantity: item.quantity ?? item.Quantity ?? '',
                   fulfilledQty: item.fulfilledQty ?? item.FulfilledQty ?? 0,
+                  deniedQty: item.deniedQty ?? item.DeniedQty ?? 0,
+                  denyRemark: item.denyRemark ?? item.DenyRemark ?? '',
                   backlogQty: item.backlogQty ?? item.BacklogQty ?? 0,
                   unit: item.unit ?? item.Unit ?? '',
                 }))}
@@ -1118,20 +1169,24 @@ function RequestHistoryPage() {
           ) : null}
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2.5 }}>
-          <Button
-            startIcon={<Printer size={18} />}
-            variant="outlined"
-            onClick={() => printHistorySlip(selectedRow)}
-          >
-            พิมพ์ใบคำขอ
-          </Button>
-          <Button
-            startIcon={<FileDown size={18} />}
-            variant="outlined"
-            onClick={() => downloadHistorySlipPdf(buildPrintableRowWithBacklog(selectedRow, rows))}
-          >
-            ดาวน์โหลด PDF
-          </Button>
+          {selectedRow?.statusId !== 8 ? (
+            <>
+              <Button
+                startIcon={<Printer size={18} />}
+                variant="outlined"
+                onClick={() => printHistorySlip(selectedRow)}
+              >
+                พิมพ์ใบคำขอ
+              </Button>
+              <Button
+                startIcon={<FileDown size={18} />}
+                variant="outlined"
+                onClick={() => downloadHistorySlipPdf(buildPrintableRowWithBacklog(selectedRow, rows))}
+              >
+                ดาวน์โหลด PDF
+              </Button>
+            </>
+          ) : null}
           <Button variant="contained" onClick={() => setSelectedRow(null)}>
             ปิด
           </Button>

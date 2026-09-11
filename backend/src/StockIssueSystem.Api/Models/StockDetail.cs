@@ -30,6 +30,11 @@ public sealed class StockDetail
 
     public int? FulfilledQty { get; set; }
 
+    public int? DeniedQty { get; set; }
+
+    [MaxLength(500)]
+    public string DenyRemark { get; set; } = string.Empty;
+
     // Links an ISSUE line back to its exact requisition line for safe reversals.
     public int? SourceRequisitionDetailId { get; set; }
 
