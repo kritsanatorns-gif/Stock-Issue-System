@@ -400,7 +400,7 @@ function AppTable({
                           wordBreak: 'break-word',
                         }}
                       >
-                        {column.render ? column.render(row) : getCellValue(row, column)}
+                        {column.render ? column.render(row, page * rowsPerPage + index) : getCellValue(row, column)}
                       </TableCell>
                     ))}
                   </TableRow>

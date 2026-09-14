@@ -115,7 +115,8 @@ const supplierPurchaseDetailColumns = [
   { key: 'poInvoiceNo', label: 'เลขที่ Invoice', width: 170, value: (row) => row.poInvoiceNo || '-' },
   { key: 'productCode', label: 'รหัสสินค้า', width: 140 },
   { key: 'productName', label: 'สินค้า', minWidth: 220 },
-  { key: 'quantity', label: 'จำนวนรับเข้า', width: 140, align: 'center', render: (row) => `${Number(row.quantity ?? 0).toLocaleString('th-TH')} ${row.unit ?? ''}`.trim() },
+  { key: 'quantity', label: 'จำนวนรับเข้า', width: 120, align: 'center', render: (row) => Number(row.quantity ?? 0).toLocaleString('th-TH') },
+  { key: 'unit', label: 'หน่วย', width: 90, align: 'center', render: (row) => row.unit || '-' },
   {
     key: 'unitCost',
     label: 'ต้นทุน/หน่วย',
@@ -150,7 +151,8 @@ const departmentIssueDetailColumns = [
   { key: 'documentNo', label: 'เลขที่เอกสาร', width: 130 },
   { key: 'productCode', label: 'รหัสสินค้า', width: 140 },
   { key: 'productName', label: 'สินค้า', minWidth: 220 },
-  { key: 'quantity', label: 'จำนวนที่เบิก', width: 130, align: 'center', render: (row) => `${Number(row.quantity ?? 0).toLocaleString('th-TH')} ${row.unit ?? ''}`.trim() },
+  { key: 'quantity', label: 'จำนวนที่เบิก', width: 115, align: 'center', render: (row) => Number(row.quantity ?? 0).toLocaleString('th-TH') },
+  { key: 'unit', label: 'หน่วย', width: 90, align: 'center', render: (row) => row.unit || '-' },
   {
     key: 'totalCost',
     label: 'มูลค่าต้นทุน FIFO',

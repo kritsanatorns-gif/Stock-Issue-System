@@ -81,6 +81,8 @@ app.Logger.LogInformation("Preparing database schema: product minimum quantity")
 await EnsureProductMinQtyColumn(app);
 app.Logger.LogInformation("Preparing database schema: stock adjustment menu");
 await EnsureStockAdjustMenu(app);
+await EnsureUnits(app);
+await EnsureUnitMenu(app);
 app.Logger.LogInformation("Preparing database schema: requisition workflow");
 await EnsureRequisitionWorkflow(app);
 await EnsureRequisitionApproval(app);
@@ -91,6 +93,51 @@ await EnsureAuditLogTable(app);
 app.Logger.LogInformation("Database schema preparation completed.");
 
 app.Run();
+
+static async Task EnsureUnits(WebApplication app)
+{
+    await using var scope = app.Services.CreateAsyncScope();
+    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    await db.Database.ExecuteSqlRawAsync("""
+        IF OBJECT_ID(N'dbo.Unit', N'U') IS NULL
+        BEGIN
+            CREATE TABLE dbo.Unit (UnitId int IDENTITY(1,1) NOT NULL PRIMARY KEY, UnitName nvarchar(50) NOT NULL, UnitStatus int NOT NULL CONSTRAINT DF_Unit_Status DEFAULT 1);
+            CREATE UNIQUE INDEX UX_Unit_UnitName ON dbo.Unit(UnitName);
+        END
+        IF NOT EXISTS (SELECT 1 FROM dbo.Unit WHERE UnitName = N'ชิ้น') INSERT INTO dbo.Unit(UnitName, UnitStatus) VALUES(N'ชิ้น', 1);
+        IF NOT EXISTS (SELECT 1 FROM dbo.Unit WHERE UnitName = N'แพ็ค') INSERT INTO dbo.Unit(UnitName, UnitStatus) VALUES(N'แพ็ค', 1);
+        """);
+}
+
+static async Task EnsureUnitMenu(WebApplication app)
+{
+    await using var scope = app.Services.CreateAsyncScope();
+    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    await db.Database.ExecuteSqlRawAsync("""
+        IF NOT EXISTS (SELECT 1 FROM dbo.Menu WHERE MenuId = 12 OR MenuCode = 'UNITS')
+        BEGIN
+            SET IDENTITY_INSERT dbo.Menu ON;
+            INSERT INTO dbo.Menu (MenuId, MenuCode, MenuName, MenuPath, SortOrder, IsActive)
+            VALUES (12, 'UNITS', N'จัดการหน่วย', '/units', 12, 1);
+            SET IDENTITY_INSERT dbo.Menu OFF;
+        END
+        ELSE
+        BEGIN
+            UPDATE dbo.Menu
+            SET MenuCode = 'UNITS', MenuName = N'จัดการหน่วย', MenuPath = '/units', SortOrder = 12, IsActive = 1
+            WHERE MenuId = 12 OR MenuCode = 'UNITS';
+        END
+
+        INSERT INTO dbo.EmployeeMenuPermission (EmployeeId, MenuId, CreatedDate)
+        SELECT employee.EmployeeId, 12, GETDATE()
+        FROM dbo.Employee employee
+        WHERE (employee.Permission = '1' OR employee.Permission LIKE N'%admin%' OR employee.Permission LIKE N'%ผู้ดูแล%')
+          AND NOT EXISTS (
+              SELECT 1 FROM dbo.EmployeeMenuPermission permission
+              WHERE permission.EmployeeId = employee.EmployeeId AND permission.MenuId = 12
+          );
+        """);
+}
 
 static async Task EnsureRequisitionApproval(WebApplication app)
 {
@@ -160,15 +207,6 @@ static async Task EnsureDepartmentDivisionColumn(WebApplication app)
         WHERE ISNULL(DivisionName, N'') = N'';
     """);
 
-    await dbContext.Database.ExecuteSqlRawAsync("""
-        IF EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'dbo.Department') AND name = N'IX_Department_DepartmentCode' AND is_unique = 1)
-            DROP INDEX IX_Department_DepartmentCode ON dbo.Department;
-
-        IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'dbo.Department') AND name = N'UX_Department_DepartmentCode_NotEmpty')
-            CREATE UNIQUE INDEX UX_Department_DepartmentCode_NotEmpty
-                ON dbo.Department(DepartmentCode)
-                WHERE DepartmentCode <> N'';
-    """);
 }
 
 static async Task EnsureEmployeeDepartmentColumn(WebApplication app)

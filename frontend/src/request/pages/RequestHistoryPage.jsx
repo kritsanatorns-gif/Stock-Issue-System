@@ -1,3 +1,4 @@
+import { addReportCanvas, clampReportTableCells, installReportPrinting } from '../../utils/reportPagination'
 ﻿import {
   Alert,
   Box,
@@ -283,6 +284,7 @@ function printHistorySlipOld(row) {
       </body>
     </html>
   `)
+  installReportPrinting(printWindow)
   printWindow.document.close()
 }
 
@@ -515,6 +517,7 @@ th, td { border: 1px solid #111; font-size: 10px; height: 40px; padding: 3px 4px
       </body>
     </html>
   `)
+  installReportPrinting(printWindow)
   printWindow.document.close()
 }
 
@@ -776,6 +779,7 @@ export function printHistorySlip(row) {
       </body>
     </html>
   `)
+  installReportPrinting(printWindow)
   printWindow.document.close()
 }
 
@@ -807,32 +811,15 @@ export async function downloadHistorySlipPdf(row) {
   document.body.appendChild(container)
 
   try {
-    const canvas = await html2canvas(container.querySelector('.request-pdf-sheet'), {
+    const requestSheet = container.querySelector('.request-pdf-sheet')
+    clampReportTableCells(requestSheet)
+    const canvas = await html2canvas(requestSheet, {
       backgroundColor: '#ffffff',
       scale: 2,
       useCORS: true,
     })
-    const imageData = canvas.toDataURL('image/png')
     const pdf = new jsPDF('p', 'mm', 'a4')
-    const pageWidth = pdf.internal.pageSize.getWidth()
-    const pageHeight = pdf.internal.pageSize.getHeight()
-    const pdfMarginX = 5
-    const pdfMarginY = 5
-    const pdfWidth = pageWidth - pdfMarginX * 2
-    const pdfHeight = pageHeight - pdfMarginY * 2
-    const imageHeight = (canvas.height * pdfWidth) / canvas.width
-    let heightLeft = imageHeight
-    let position = pdfMarginY
-
-    pdf.addImage(imageData, 'PNG', pdfMarginX, position, pdfWidth, imageHeight)
-    heightLeft -= pdfHeight
-
-    while (heightLeft > 0) {
-      position = heightLeft - imageHeight + pdfMarginY
-      pdf.addPage()
-      pdf.addImage(imageData, 'PNG', pdfMarginX, position, pdfWidth, imageHeight)
-      heightLeft -= pdfHeight
-    }
+    addReportCanvas(pdf, canvas, { landscape: false })
 
     pdf.save(`${row.requestNo || 'request-slip'}.pdf`)
   } finally {

@@ -160,13 +160,15 @@ function ProductMovementDetails({ error, isLoading, movement }) {
       render: (row) =>
         readValue(row, 'movementType') === 'ปรับสต๊อก'
           ? '-'
-          : `${formatQty(readValue(row, 'receiveQty', 'ReceiveQty') ?? readValue(row, 'qty', 'Qty'))} ${readValue(row, 'receiveUnit', 'ReceiveUnit') || readValue(row, 'unit', 'Unit') || ''}`,
+          : formatQty(readValue(row, 'receiveQty', 'ReceiveQty') ?? readValue(row, 'qty', 'Qty')),
     },
+    { key: 'receiveUnit', label: 'หน่วยรับเข้า', render: (row) => readValue(row, 'receiveUnit', 'ReceiveUnit') || readValue(row, 'unit', 'Unit') || '-' },
     {
       key: 'qty',
       label: 'ผลต่อสต๊อก',
-      render: (row) => `${formatQty(readValue(row, 'qty', 'Qty'))} ${readValue(row, 'unit', 'Unit') || ''}`,
+      render: (row) => formatQty(readValue(row, 'qty', 'Qty')),
     },
+    { key: 'unit', label: 'หน่วย', render: (row) => readValue(row, 'unit', 'Unit') || '-' },
     {
       key: 'costLot',
       label: 'ราคาซื้อ',
@@ -184,8 +186,9 @@ function ProductMovementDetails({ error, isLoading, movement }) {
     {
       key: 'qty',
       label: 'จำนวนเบิก',
-      render: (row) => `${formatQty(readValue(row, 'qty', 'Qty'))} ${readValue(row, 'unit', 'Unit') || ''}`,
+      render: (row) => formatQty(readValue(row, 'qty', 'Qty')),
     },
+    { key: 'unit', label: 'หน่วย', render: (row) => readValue(row, 'unit', 'Unit') || '-' },
     {
       key: 'department',
       label: 'แผนก',

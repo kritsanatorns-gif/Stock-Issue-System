@@ -1,3 +1,4 @@
+import { installReportPrinting } from '../../utils/reportPagination'
 ﻿import {
   Alert,
   Box,
@@ -193,6 +194,7 @@ function printRequestSlipOld({ department, items, remark, requesterName, request
       </body>
     </html>
   `)
+  installReportPrinting(printWindow)
   printWindow.document.close()
 }
 

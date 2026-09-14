@@ -1,3 +1,4 @@
+import { addReportCanvas, clampReportTableCells, installReportPrinting } from '../../utils/reportPagination'
 import {
   Alert,
   Box,
@@ -23,7 +24,9 @@ import Swal from 'sweetalert2'
 import * as XLSX from 'xlsx'
 import {
   createCategory,
+  createUnit,
   getCategories,
+  getUnits,
   getProductCostLots,
   getProductMovements,
   getProducts,
@@ -31,6 +34,7 @@ import {
   importProductImagesFromExcel,
   uploadProductImage,
   updateCategory,
+  updateUnit,
   updateProduct,
 } from '../../api/api'
 import { apiOrigin } from '../../api/apiConfig'
@@ -64,6 +68,20 @@ const defaultCategoryForm = {
   categoryId: '',
   categoryName: '',
   categoryStatus: 1,
+}
+
+const defaultUnitForm = {
+  unitId: '',
+  unitName: '',
+  unitStatus: 1,
+}
+
+function mapUnit(row) {
+  return {
+    unitId: row.unitId ?? row.UnitId ?? '',
+    unitName: row.unitName ?? row.UnitName ?? '',
+    unitStatus: Number(row.unitStatus ?? row.UnitStatus ?? 1),
+  }
 }
 
 const productExportColumns = [
@@ -344,10 +362,14 @@ function ProductsPage() {
   const employeeId = getEmployeeId(employee)
   const employeeName = getEmployeeName(employee)
   const [categories, setCategories] = useState([])
+  const [units, setUnits] = useState([])
+  const [unitForm, setUnitForm] = useState(defaultUnitForm)
   const [categoryForm, setCategoryForm] = useState(defaultCategoryForm)
   const [confirmSaveType, setConfirmSaveType] = useState('')
   const [editForm, setEditForm] = useState(defaultProductForm)
   const [isCategoryDialogOpen, setIsCategoryDialogOpen] = useState(false)
+  const [isUnitDialogOpen, setIsUnitDialogOpen] = useState(false)
+  const [isUnitFormOpen, setIsUnitFormOpen] = useState(false)
   const [isCategoryFormOpen, setIsCategoryFormOpen] = useState(false)
   const [isEditOpen, setIsEditOpen] = useState(false)
   const [isImportOpen, setIsImportOpen] = useState(false)
@@ -429,9 +451,19 @@ function ProductsPage() {
     }
   }
 
+  const loadUnits = async () => {
+    try {
+      const data = await getUnits()
+      setUnits((data ?? []).map(mapUnit))
+    } catch {
+      toast.error('โหลดข้อมูลหน่วยไม่สำเร็จ')
+    }
+  }
+
   useEffect(() => {
     loadProducts()
     loadCategories()
+    loadUnits()
   }, [])
 
   const handleEdit = (product) => {
@@ -985,6 +1017,50 @@ function ProductsPage() {
     }
   }
 
+  const openCreateUnit = () => {
+    setUnitForm(defaultUnitForm)
+    setIsUnitFormOpen(true)
+  }
+
+  const openEditUnit = (unit) => {
+    setUnitForm({
+      unitId: unit.unitId,
+      unitName: unit.unitName,
+      unitStatus: unit.unitStatus,
+    })
+    setIsUnitFormOpen(true)
+  }
+
+  const handleSaveUnit = async () => {
+    const name = unitForm.unitName.trim()
+    if (!name) return
+
+    try {
+      if (unitForm.unitId) {
+        await updateUnit(unitForm.unitId, { unitName: name, unitStatus: Number(unitForm.unitStatus) })
+      } else {
+        await createUnit({ unitName: name, unitStatus: Number(unitForm.unitStatus) })
+      }
+      setIsUnitFormOpen(false)
+      await loadUnits()
+      await Swal.fire({
+        title: 'สำเร็จ',
+        text: unitForm.unitId ? 'แก้ไขหน่วยสำเร็จ' : 'เพิ่มหน่วยสำเร็จ',
+        icon: 'success',
+        customClass: { container: 'stock-swal-container' },
+        confirmButtonText: 'ตกลง',
+      })
+    } catch {
+      await Swal.fire({
+        title: 'ไม่สำเร็จ',
+        text: 'บันทึกหน่วยไม่สำเร็จ',
+        icon: 'error',
+        customClass: { container: 'stock-swal-container' },
+        confirmButtonText: 'ตกลง',
+      })
+    }
+  }
+
   const categoryColumns = [
     {
       key: 'actions',
@@ -1019,6 +1095,22 @@ function ProductsPage() {
           size="small"
         />
       ),
+    },
+  ]
+
+  const unitColumns = [
+    {
+      key: 'sequence', label: 'ลำดับ', width: 90, align: 'center', searchable: false, sortable: false,
+      render: (_row, index) => index + 1,
+    },
+    { key: 'unitName', label: 'ชื่อหน่วย', minWidth: 260 },
+    {
+      key: 'unitStatus', label: 'สถานะ', width: 130, align: 'center', searchable: false,
+      render: (row) => <Chip color={row.unitStatus === 1 ? 'success' : 'error'} label={row.unitStatus === 1 ? 'ใช้งาน' : 'ไม่ใช้งาน'} size="small" />,
+    },
+    {
+      key: 'actions', label: 'จัดการ', width: 150, align: 'center', searchable: false, sortable: false,
+      render: (row) => <Button startIcon={<Pencil size={16} />} size="small" variant="outlined" onClick={() => openEditUnit(row)}>แก้ไข</Button>,
     },
   ]
 
@@ -1068,6 +1160,7 @@ function ProductsPage() {
     const reportWindow = window.open('', '_blank', 'width=1100,height=800')
     if (!reportWindow) return
     reportWindow.document.write(`<!doctype html><html lang="th"><head><meta charset="utf-8"/><title>รายละเอียดต้นทุน FIFO</title><style>@page{size:A4 landscape;margin:10mm}body{font-family:Tahoma,Arial,sans-serif;color:#111827;font-size:12px}h1{text-align:center;margin:0}h2{font-size:15px;margin:20px 0 8px}.meta{text-align:center;margin:7px 0 18px}table{width:100%;border-collapse:collapse}th,td{border:1px solid #111;padding:6px;text-align:center}th{background:#fffec8}.cards{display:flex;gap:8px;margin:14px 0}.card{border:1px solid #94a3b8;padding:8px;flex:1}.card b{display:block;font-size:18px;margin-top:4px}</style></head><body><h1>รายละเอียดต้นทุน FIFO</h1><div class="meta">สินค้า: ${escapeHtml(costLotsData.productName || '-')} | รหัสสินค้า: ${escapeHtml(costLotsData.productId || '-')} | หน่วยเบิก: ${escapeHtml(costLotsData.issueUnit || '-')}</div><div class="cards"><div class="card">จำนวนล็อตที่เหลือ<b>${Number(costLotsData.totalLots ?? 0).toLocaleString('th-TH')}</b></div><div class="card">จำนวนคงเหลือ<b>${Number(costLotsData.totalRemainingQty ?? 0).toLocaleString('th-TH')}</b></div><div class="card">ต้นทุนเฉลี่ยรวม/หน่วย<b>${money(costLotsData.averageUnitCost)}</b></div><div class="card">มูลค่าต้นทุนรวม<b>${money(costLotsData.totalRemainingCostValue)}</b></div></div><h2>สรุปต้นทุนแยกตามผู้ขาย</h2><table><thead><tr><th>ลำดับ</th><th>ผู้ขาย</th><th>จำนวนล็อต</th><th>จำนวนคงเหลือ</th><th>ต้นทุนเฉลี่ย/หน่วย</th><th>มูลค่าต้นทุนรวม</th></tr></thead><tbody>${supplierRows}</tbody></table><h2>รายละเอียดล็อต FIFO</h2><table><thead><tr><th>ลำดับ</th><th>วันที่รับเข้า</th><th>ผู้ขาย</th><th>จำนวนเริ่มต้น</th><th>จำนวนคงเหลือ</th><th>ต้นทุน/หน่วย</th><th>มูลค่าต้นทุนรวม</th></tr></thead><tbody>${lotRows}</tbody></table>${autoPrint ? '<script>window.onload=()=>window.print()</script>' : ''}</body></html>`)
+    installReportPrinting(reportWindow)
     reportWindow.document.close()
     return reportWindow
   }
@@ -1082,23 +1175,10 @@ function ProductsPage() {
       if (reportWindow.document.readyState !== 'complete') {
         await new Promise((resolve) => { reportWindow.onload = resolve })
       }
+      clampReportTableCells(reportWindow.document.body)
       const canvas = await html2canvas(reportWindow.document.body, { backgroundColor: '#ffffff', scale: 2, useCORS: true })
       const pdf = new jsPDF('l', 'mm', 'a4')
-      const pageWidth = 281
-      const pageHeight = 194
-      const imageHeight = (canvas.height * pageWidth) / canvas.width
-      const imageData = canvas.toDataURL('image/png')
-      let position = 8
-      let remainingHeight = imageHeight
-
-      while (remainingHeight > 0) {
-        pdf.addImage(imageData, 'PNG', 8, position, pageWidth, imageHeight)
-        remainingHeight -= pageHeight
-        if (remainingHeight > 0) {
-          pdf.addPage()
-          position -= pageHeight
-        }
-      }
+    addReportCanvas(pdf, canvas, { landscape: true })
       pdf.save(`fifo-cost-${costLotsData.productId || 'product'}-${dayjs().format('YYYYMMDD-HHmm')}.pdf`)
     } catch (error) {
       toast.error('ไม่สามารถสร้างไฟล์ PDF ได้')
@@ -1192,6 +1272,14 @@ function ProductsPage() {
           onClick={() => setIsCategoryDialogOpen(true)}
         >
           จัดการหมวดหมู่
+        </Button>
+        <Button
+          startIcon={<FolderCog size={18} />}
+          sx={{ fontWeight: 700, height: 40, minWidth: 140, py: 0 }}
+          variant="outlined"
+          onClick={() => setIsUnitDialogOpen(true)}
+        >
+          จัดการหน่วย
         </Button>
       </Box>
 
@@ -1414,11 +1502,10 @@ function ProductsPage() {
               <Grid size={4}>
                 <TextField
                   fullWidth
-                  required
-                  helperText="ชื่อที่ผู้ใช้งานเห็นตอนค้นหาและเบิกสินค้า"
-                  label="ชื่อสินค้า"
-                  value={editForm.productName}
-                  onChange={(event) => handleProductFormChange('productName', event.target.value)}
+                  label="Barcode"
+                  helperText="ใช้ยิงสแกน ถ้าไม่มีให้เว้นว่างได้"
+                  value={editForm.barcode}
+                  onChange={(event) => handleProductFormChange('barcode', event.target.value)}
                 />
               </Grid>
               <Grid size={4}>
@@ -1444,10 +1531,11 @@ function ProductsPage() {
               <Grid size={12}>
                 <TextField
                   fullWidth
-                  label="Barcode"
-                  helperText="ใช้ยิงสแกน ถ้าไม่มีให้เว้นว่างได้"
-                  value={editForm.barcode}
-                  onChange={(event) => handleProductFormChange('barcode', event.target.value)}
+                  required
+                  helperText="ชื่อที่ผู้ใช้งานเห็นตอนค้นหาและเบิกสินค้า"
+                  label="ชื่อสินค้า"
+                  value={editForm.productName}
+                  onChange={(event) => handleProductFormChange('productName', event.target.value)}
                 />
               </Grid>
             </Grid>
@@ -1649,6 +1737,66 @@ function ProductsPage() {
       <Dialog
         fullWidth
         maxWidth="lg"
+        open={isUnitDialogOpen}
+        onClose={() => setIsUnitDialogOpen(false)}
+      >
+        <DialogTitle sx={{ px: 3, width: '100%' }}>
+          <Stack direction="row" spacing={2} sx={{ alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+            <Typography sx={{ fontSize: 20, fontWeight: 800 }}>จัดการหน่วย</Typography>
+            <Button startIcon={<Plus size={18} />} variant="contained" onClick={openCreateUnit}>เพิ่มหน่วย</Button>
+          </Stack>
+        </DialogTitle>
+        <DialogContent>
+          <AppTable
+            columns={unitColumns}
+            defaultSortField="unitId"
+            defaultSortDirection="desc"
+            maxHeight="460px"
+            noDataText="ไม่พบข้อมูลหน่วย"
+            rowKey="unitId"
+            rows={units}
+            showGlobalSearch
+          />
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2.5 }}>
+          <Button variant="contained" onClick={() => setIsUnitDialogOpen(false)}>ปิด</Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog fullWidth maxWidth="xs" open={isUnitFormOpen} onClose={() => setIsUnitFormOpen(false)}>
+        <DialogTitle>{unitForm.unitId ? 'แก้ไขหน่วย' : 'เพิ่มหน่วย'}</DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} sx={{ pt: 1 }}>
+            <TextField
+              autoFocus
+              fullWidth
+              required
+              label="ชื่อหน่วย"
+              value={unitForm.unitName}
+              onChange={(event) => setUnitForm((current) => ({ ...current, unitName: event.target.value }))}
+              onKeyDown={(event) => { if (event.key === 'Enter') handleSaveUnit() }}
+            />
+            <TextField
+              fullWidth
+              select
+              label="สถานะการใช้งาน"
+              value={unitForm.unitStatus}
+              onChange={(event) => setUnitForm((current) => ({ ...current, unitStatus: Number(event.target.value) }))}
+            >
+              <MenuItem value={1}>ใช้งาน</MenuItem>
+              <MenuItem value={2}>ไม่ใช้งาน</MenuItem>
+            </TextField>
+          </Stack>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2.5 }}>
+          <Button color="inherit" onClick={() => setIsUnitFormOpen(false)}>ยกเลิก</Button>
+          <Button disabled={!unitForm.unitName.trim()} startIcon={<Save size={18} />} variant="contained" onClick={() => setConfirmSaveType('unit')}>บันทึก</Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        fullWidth
+        maxWidth="lg"
         open={isCategoryDialogOpen}
         onClose={() => setIsCategoryDialogOpen(false)}
       >
@@ -1744,12 +1892,16 @@ function ProductsPage() {
             <Alert severity="info">
               {confirmSaveType === 'product'
                 ? 'ต้องการบันทึกข้อมูลสินค้านี้ใช่หรือไม่'
-                : 'ต้องการบันทึกข้อมูลหมวดหมู่นี้ใช่หรือไม่'}
+                : confirmSaveType === 'unit'
+                  ? 'ต้องการบันทึกข้อมูลหน่วยนี้ใช่หรือไม่'
+                  : 'ต้องการบันทึกข้อมูลหมวดหมู่นี้ใช่หรือไม่'}
             </Alert>
             <Typography sx={{ color: '#475569', fontSize: 14 }}>
               {confirmSaveType === 'product'
                 ? `สินค้า: ${editForm.productName || '-'}`
-                : `หมวดหมู่: ${categoryForm.categoryName || '-'}`}
+                : confirmSaveType === 'unit'
+                  ? `หน่วย: ${unitForm.unitName || '-'}`
+                  : `หมวดหมู่: ${categoryForm.categoryName || '-'}`}
             </Typography>
           </Stack>
         </DialogContent>
@@ -1768,6 +1920,8 @@ function ProductsPage() {
                 handleSaveProduct()
               } else if (saveType === 'category') {
                 handleSaveCategory()
+              } else if (saveType === 'unit') {
+                handleSaveUnit()
               }
             }}
           >
@@ -1827,9 +1981,10 @@ function ProductsPage() {
 
       <Dialog
         fullWidth
-        maxWidth="lg"
+        maxWidth={false}
         open={Boolean(costLotsData)}
         onClose={() => setCostLotsData(null)}
+        PaperProps={{ sx: { maxWidth: 'calc(100vw - 32px)', width: 'calc(100vw - 32px)' } }}
       >
         <DialogTitle>รายละเอียดต้นทุน FIFO</DialogTitle>
         <DialogContent>

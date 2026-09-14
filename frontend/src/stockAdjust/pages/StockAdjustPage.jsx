@@ -293,15 +293,16 @@ function StockAdjustPage() {
       ),
     },
     { key: 'productId', label: 'รหัสสินค้า', width: 180 },
-    { key: 'barcode', label: 'Barcode', width: 145 },
+    { key: 'barcode', label: 'Barcode', width: 170 },
     { key: 'productName', label: 'ชื่อสินค้า', width: 215, wrap: true },
-    { key: 'categoryName', label: 'หมวดหมู่', width: 110 },
+    { key: 'categoryName', label: 'หมวดหมู่', width: 145 },
     {
       key: 'stockQty',
-      label: 'คงเหลือปัจจุบัน',
-      width: 125,
-      render: (row) => `${Number(row.stockQty).toLocaleString('th-TH')} ${row.issueUnit}`,
+      label: 'คงเหลือ',
+      width: 90,
+      render: (row) => Number(row.stockQty).toLocaleString('th-TH'),
     },
+    { key: 'issueUnit', label: 'หน่วย', width: 85, align: 'center' },
   ]
 
   const selectedColumns = [
@@ -359,8 +360,9 @@ function StockAdjustPage() {
       key: 'currentQty',
       label: 'ยอดเดิม',
       width: 110,
-      render: (row) => `${Number(row.currentQty).toLocaleString('th-TH')} ${row.issueUnit}`,
+      render: (row) => Number(row.currentQty).toLocaleString('th-TH'),
     },
+    { key: 'issueUnit', label: 'หน่วย', width: 85, align: 'center' },
     {
       key: 'diff',
       label: 'ผลต่าง',

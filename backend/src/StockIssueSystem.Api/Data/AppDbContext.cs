@@ -9,6 +9,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
     public DbSet<Category> Categories => Set<Category>();
     public DbSet<Department> Departments => Set<Department>();
     public DbSet<Employee> Employees => Set<Employee>();
+    public DbSet<InventoryUnit> InventoryUnits => Set<InventoryUnit>();
     public DbSet<EmployeeMenuPermission> EmployeeMenuPermissions => Set<EmployeeMenuPermission>();
     public DbSet<Menu> Menus => Set<Menu>();
     public DbSet<Permission> Permissions => Set<Permission>();
@@ -88,13 +89,9 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
         {
             entity.ToTable("Department", "dbo");
             entity.HasKey(department => department.DepartmentId);
-            entity.Property(department => department.DepartmentCode).HasMaxLength(200).IsRequired();
             entity.Property(department => department.DepartmentName).HasMaxLength(50).IsRequired();
             entity.Property(department => department.DivisionName).HasMaxLength(100).HasDefaultValue("");
             entity.Property(department => department.DepartmentStatus).HasDefaultValue(1);
-            entity.HasIndex(department => department.DepartmentCode)
-                .HasFilter("[DepartmentCode] <> N''")
-                .IsUnique();
         });
 
         modelBuilder.Entity<Employee>(entity =>
@@ -108,6 +105,15 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
             entity.Property(employee => employee.Username).HasColumnName("Usersname").HasMaxLength(50);
             entity.Property(employee => employee.Password).HasMaxLength(50);
             entity.Property(employee => employee.Status).HasColumnName("EmployeeStatus");
+        });
+
+        modelBuilder.Entity<InventoryUnit>(entity =>
+        {
+            entity.ToTable("Unit", "dbo");
+            entity.HasKey(unit => unit.UnitId);
+            entity.Property(unit => unit.UnitName).HasMaxLength(50).IsRequired();
+            entity.Property(unit => unit.UnitStatus).HasDefaultValue(1);
+            entity.HasIndex(unit => unit.UnitName).IsUnique();
         });
 
         modelBuilder.Entity<EmployeeMenuPermission>(entity =>

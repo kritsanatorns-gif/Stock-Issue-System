@@ -1,3 +1,4 @@
+import { addReportCanvas, clampReportTableCells, installReportPrinting, stampReportFooters } from '../../utils/reportPagination'
 ﻿import {
   Box,
   Button,
@@ -63,7 +64,7 @@ const issueSlipColumns = [
   { key: 'lineNo', label: 'ลำดับ', width: 80, sortable: false },
   { key: 'code', label: 'รหัสสินค้า', width: 160, sortable: false },
   { key: 'barcode', label: 'Barcode', width: 150, sortable: false },
-  { key: 'productName', label: 'ชื่อสินค้า', width: 260, sortable: false },
+  { key: 'productName', label: 'ชื่อสินค้า', width: 260, align: 'left', headerAlign: 'center', sortable: false },
   { key: 'category', label: 'หมวดหมู่', width: 120, sortable: false },
   { key: 'quantity', label: 'จำนวน', width: 100, align: 'center', sortable: false },
   { key: 'unit', label: 'หน่วย', width: 100, sortable: false },
@@ -188,11 +189,11 @@ function printSummaryReport({ detailRows, endDate, reportType, startDate, summar
     </table>
   ` : ''
   const detailRowsHtml = detailRows.map((row, index) => `
-    <tr class="${index > 0 && index % 35 === 0 ? 'page-break-row' : ''}"><td>${index + 1}</td><td>${escapeHtml(formatDisplayDateTime(row.createdAt))}</td><td>${escapeHtml(row.employeeName)}</td><td>${escapeHtml(row.productName)}</td>${isAdjustReport ? `<td>${escapeHtml(`${Number(row.beforeQty ?? 0).toLocaleString('th-TH')} ${row.unit}`)}</td><td>${escapeHtml(`${Number(row.quantity).toLocaleString('th-TH')} ${row.unit}`)}</td>` : `<td>${escapeHtml(`${Number(row.quantity).toLocaleString('th-TH')} ${row.unit}`)}</td>${isReceiveReport ? `<td>${escapeHtml(formatMoney(row.unitCost))}</td><td>${escapeHtml(formatMoney(row.totalCost))}</td>` : ''}${showDetailColumn ? `<td>${escapeHtml(row.reason || '-')}</td>` : ''}`}</tr>
+    <tr class="${index > 0 && index % 35 === 0 ? 'page-break-row' : ''}"><td>${index + 1}</td><td>${escapeHtml(formatDisplayDateTime(row.createdAt))}</td><td>${escapeHtml(row.employeeName)}</td><td>${escapeHtml(row.productName)}</td>${isAdjustReport ? `<td>${Number(row.beforeQty ?? 0).toLocaleString('th-TH')}</td><td>${Number(row.quantity).toLocaleString('th-TH')}</td><td>${escapeHtml(row.unit || '-')}</td>` : `<td>${Number(row.quantity).toLocaleString('th-TH')}</td><td>${escapeHtml(row.unit || '-')}</td>${isReceiveReport ? `<td>${escapeHtml(formatMoney(row.unitCost))}</td><td>${escapeHtml(formatMoney(row.totalCost))}</td>` : ''}${showDetailColumn ? `<td>${escapeHtml(row.reason || '-')}</td>` : ''}`}</tr>
   `).join('')
   const detailSection = reportType !== 'all' ? `
     <h3>รายละเอียด${escapeHtml(getReportTypeLabel(reportType))}</h3>
-    <table class="detail-table${isAdjustReport ? ' adjust-detail-table' : reportType === 'cancellation' ? ' cancel-detail-table' : ''}"><thead><tr><th>ลำดับ</th><th>วันเวลา</th><th>ผู้ทำรายการ</th><th>สินค้า</th>${isAdjustReport ? '<th>จำนวนก่อนปรับ</th><th>จำนวนที่ปรับ</th>' : `<th>จำนวน</th>${isReceiveReport ? '<th>ต้นทุน/หน่วย</th><th>ต้นทุนรวม</th>' : ''}${showDetailColumn ? `<th>${escapeHtml(getDetailColumnLabel(reportType))}</th>` : ''}`}</tr></thead><tbody>${detailRowsHtml}</tbody></table>
+    <table class="detail-table${isAdjustReport ? ' adjust-detail-table' : reportType === 'cancellation' ? ' cancel-detail-table' : ''}"><thead><tr><th>ลำดับ</th><th>วันเวลา</th><th>ผู้ทำรายการ</th><th>สินค้า</th>${isAdjustReport ? '<th>จำนวนก่อนปรับ</th><th>จำนวนที่ปรับ</th><th>หน่วย</th>' : `<th>จำนวน</th><th>หน่วย</th>${isReceiveReport ? '<th>ต้นทุน/หน่วย</th><th>ต้นทุนรวม</th>' : ''}${showDetailColumn ? `<th>${escapeHtml(getDetailColumnLabel(reportType))}</th>` : ''}`}</tr></thead><tbody>${detailRowsHtml}</tbody></table>
   ` : ''
 
   printWindow.document.write(`<!doctype html>
@@ -259,6 +260,7 @@ function printSummaryReport({ detailRows, endDate, reportType, startDate, summar
         ${autoPrint ? '<script>window.onload = () => window.print()</script>' : ''}
       </body>
     </html>`)
+  installReportPrinting(printWindow)
   printWindow.document.close()
   return printWindow
 }
@@ -512,7 +514,7 @@ function buildIssueSlipContentHtml(report) {
           <td class="center">${escapeHtml(item.lineNo)}</td>
           <td>${escapeHtml(item.code)}</td>
           <td>${escapeHtml(item.barcode)}</td>
-          <td>${escapeHtml(item.productName)}</td>
+          <td class="product-name">${escapeHtml(item.productName)}</td>
           <td>${escapeHtml(String(item.category ?? '').trim() || 'General')}</td>
           <td class="right">${escapeHtml(item.quantity)}</td>
           <td>${escapeHtml(item.unit)}</td>
@@ -590,7 +592,8 @@ function buildCancelSlipContentHtml(report) {
       <td class="center">${escapeHtml(formatDisplayDateTime(report.createdAt))}</td>
       <td>${escapeHtml(report.employeeName || '-')}</td>
       <td>${escapeHtml(item.productName)}</td>
-      <td class="center">${escapeHtml(`${Number(item.quantity ?? 0).toLocaleString('th-TH')} ${item.unit || ''}`.trim())}</td>
+      <td class="center">${Number(item.quantity ?? 0).toLocaleString('th-TH')}</td>
+      <td class="center">${escapeHtml(item.unit || '-')}</td>
     </tr>
   `).join('')
 
@@ -603,7 +606,7 @@ function buildCancelSlipContentHtml(report) {
         <span>ประเภท: ถอยยอด</span>
       </section>
       <h3>รายละเอียดการถอยยอด</h3>
-      <table><thead><tr><th>ลำดับ</th><th>วันเวลา</th><th>ผู้ทำรายการ</th><th>สินค้า</th><th>จำนวน</th></tr></thead><tbody>${rows}</tbody></table>
+      <table><thead><tr><th>ลำดับ</th><th>วันเวลา</th><th>ผู้ทำรายการ</th><th>สินค้า</th><th>จำนวน</th><th>หน่วย</th></tr></thead><tbody>${rows}</tbody></table>
       <section class="adjust-summary__reason"><strong>หมายเหตุ:</strong> ${escapeHtml(getCancelReason(report.department || report.remark))}</section>
       <section class="receive-summary__signatures"><div>ผู้จัดทำรายงาน</div><div>ผู้ตรวจสอบ</div></section>
     </div>
@@ -622,9 +625,10 @@ function buildAdjustSummaryContentHtml(report) {
         <td class="center">${index + 1}</td>
         <td class="center">${escapeHtml(formatDisplayDateTime(report.createdAt))}</td>
         <td>${escapeHtml(report.employeeName || '-')}</td>
-        <td>${escapeHtml(item.productName)}</td>
-        <td class="center">${escapeHtml(beforeQty === null ? '-' : `${beforeQty.toLocaleString('th-TH')} ${item.unit || ''}`.trim())}</td>
-        <td class="center">${escapeHtml(`${adjustedQty.toLocaleString('th-TH')} ${item.unit || ''}`.trim())}</td>
+        <td class="product-name">${escapeHtml(item.productName)}</td>
+        <td class="center">${beforeQty === null ? '-' : beforeQty.toLocaleString('th-TH')}</td>
+        <td class="center">${adjustedQty.toLocaleString('th-TH')}</td>
+        <td class="center">${escapeHtml(item.unit || '-')}</td>
       </tr>
     `
     })
@@ -643,7 +647,7 @@ function buildAdjustSummaryContentHtml(report) {
       </section>
       <h3>รายละเอียดการปรับสต๊อก</h3>
       <table>
-        <thead><tr><th>ลำดับ</th><th>วันเวลา</th><th>ผู้ทำรายการ</th><th>สินค้า</th><th>จำนวนก่อนปรับ</th><th>จำนวนที่ปรับ</th></tr></thead>
+        <thead><tr><th>ลำดับ</th><th>วันเวลา</th><th>ผู้ทำรายการ</th><th>สินค้า</th><th>จำนวนก่อนปรับ</th><th>จำนวนที่ปรับ</th><th>หน่วย</th></tr></thead>
         <tbody>${rows}</tbody>
       </table>
       <section class="adjust-summary__reason"><strong>หมายเหตุ:</strong> ${escapeHtml(report.department || '-')}</section>
@@ -662,8 +666,9 @@ function buildReceiveSummaryContentHtml(report) {
         <td class="center">${index + 1}</td>
         <td class="center">${escapeHtml(formatDisplayDateTime(report.createdAt))}</td>
         <td>${escapeHtml(report.employeeName || '-')}</td>
-        <td>${escapeHtml(item.productName)}</td>
-        <td class="center">${escapeHtml(`${Number(item.quantity ?? 0).toLocaleString('th-TH')} ${item.unit || ''}`.trim())}</td>
+        <td class="product-name">${escapeHtml(item.productName)}</td>
+        <td class="center">${Number(item.quantity ?? 0).toLocaleString('th-TH')}</td>
+        <td class="center">${escapeHtml(item.unit || '-')}</td>
         <td class="right">${escapeHtml(formatMoney(item.unitCost))}</td>
         <td class="right">${escapeHtml(formatMoney(item.totalCost))}</td>
         <td class="center">${escapeHtml(report.poInvoiceNo || report.PoInvoiceNo || '-')}</td>
@@ -693,6 +698,7 @@ function buildReceiveSummaryContentHtml(report) {
             <th>ผู้ทำรายการ</th>
             <th>สินค้า</th>
             <th>จำนวน</th>
+            <th>หน่วย</th>
             <th>ต้นทุน/หน่วย</th>
             <th>ต้นทุนรวม</th>
             <th>Invoice</th>
@@ -787,6 +793,8 @@ function buildIssueSlipStyleHtml() {
       }
       .issue-slip .center { text-align: center; }
       .issue-slip .right { text-align: right; }
+      .issue-slip .product-name,
+      .receive-summary .product-name { text-align: left; }
       .issue-slip__signatures {
         display: grid;
         gap: 28px;
@@ -914,6 +922,7 @@ function openIssueSlipPrintWindow(report) {
 
   printWindow.document.open()
   printWindow.document.write(buildIssueSlipPrintHtml(report))
+  installReportPrinting(printWindow)
   printWindow.document.close()
 }
 
@@ -934,31 +943,15 @@ async function downloadIssueSlipPdf(report) {
   document.body.appendChild(container)
 
   try {
-    const canvas = await html2canvas(container.querySelector('.issue-slip, .receive-summary'), {
+    const reportSheet = container.querySelector('.issue-slip, .receive-summary')
+    clampReportTableCells(reportSheet)
+    const canvas = await html2canvas(reportSheet, {
       backgroundColor: '#ffffff',
       scale: 2,
       useCORS: true,
     })
-    const imageData = canvas.toDataURL('image/png')
     const pdf = new jsPDF('p', 'mm', 'a4')
-    const pdfWidth = pdf.internal.pageSize.getWidth()
-    const pdfHeight = pdf.internal.pageSize.getHeight()
-    const pageMargin = 8
-    const printableWidth = pdfWidth - (pageMargin * 2)
-    const printableHeight = pdfHeight - (pageMargin * 2)
-    const imageHeight = (canvas.height * printableWidth) / canvas.width
-    let heightLeft = imageHeight
-    let position = 0
-
-    pdf.addImage(imageData, 'PNG', pageMargin, pageMargin + position, printableWidth, imageHeight)
-    heightLeft -= printableHeight
-
-    while (heightLeft > 0) {
-      position = heightLeft - imageHeight
-      pdf.addPage()
-      pdf.addImage(imageData, 'PNG', pageMargin, pageMargin + position, printableWidth, imageHeight)
-      heightLeft -= printableHeight
-    }
+    addReportCanvas(pdf, canvas, { landscape: false })
 
     pdf.save(`${report.documentNo}.pdf`)
   } finally {
@@ -1371,6 +1364,7 @@ function ReportsPage() {
     const pdf = new jsPDF('p', 'mm', 'a4')
     try {
       for (let pageIndex = 0; pageIndex < pageSheets.length; pageIndex += 1) {
+        clampReportTableCells(pageSheets[pageIndex])
         const canvas = await html2canvas(pageSheets[pageIndex], {
           backgroundColor: '#ffffff',
           scale: 2,
@@ -1386,6 +1380,7 @@ function ReportsPage() {
       pdfWindow.close()
     }
 
+    stampReportFooters(pdf)
     pdf.save(`stock-report-${dayjs().format('YYYYMMDD-HHmm')}.pdf`)
   }
 
@@ -1582,9 +1577,13 @@ function ReportsPage() {
                         <>
                           <TableCell align="center" sx={{ fontWeight: 900, width: 130, whiteSpace: 'nowrap' }}>จำนวนก่อนปรับ</TableCell>
                           <TableCell align="center" sx={{ fontWeight: 900, width: 100 }}>จำนวนที่ปรับ</TableCell>
+                          <TableCell align="center" sx={{ fontWeight: 900, width: 75 }}>หน่วย</TableCell>
                         </>
                       ) : (
-                        <TableCell align="center" sx={{ fontWeight: 900, width: reportType === 'stockReceive' ? 64 : reportType === 'cancellation' ? 75 : 90 }}>จำนวน</TableCell>
+                        <>
+                          <TableCell align="center" sx={{ fontWeight: 900, width: reportType === 'stockReceive' ? 64 : reportType === 'cancellation' ? 75 : 90 }}>จำนวน</TableCell>
+                          <TableCell align="center" sx={{ fontWeight: 900, width: reportType === 'stockReceive' ? 55 : 75 }}>หน่วย</TableCell>
+                        </>
                       )}
                       {reportType === 'stockReceive' && (
                         <>
@@ -1606,13 +1605,17 @@ function ReportsPage() {
                         <TableCell align="center">{row.productName}</TableCell>
                         {reportType === 'stockAdjust' ? (
                           <>
-                            <TableCell align="center" sx={{ fontWeight: 900 }}>{row.beforeQty.toLocaleString('th-TH')} {row.unit}</TableCell>
-                            <TableCell align="center" sx={{ color: '#0f172a', fontWeight: 900 }}>{row.quantity.toLocaleString('th-TH')} {row.unit}</TableCell>
+                            <TableCell align="center" sx={{ fontWeight: 900 }}>{row.beforeQty.toLocaleString('th-TH')}</TableCell>
+                            <TableCell align="center" sx={{ color: '#0f172a', fontWeight: 900 }}>{row.quantity.toLocaleString('th-TH')}</TableCell>
+                            <TableCell align="center">{row.unit || '-'}</TableCell>
                           </>
                         ) : (
-                          <TableCell align="center" sx={{ color: '#0f172a', fontWeight: 900 }}>
-                            {row.quantity.toLocaleString('th-TH')} {row.unit}
-                          </TableCell>
+                          <>
+                            <TableCell align="center" sx={{ color: '#0f172a', fontWeight: 900 }}>
+                              {row.quantity.toLocaleString('th-TH')}
+                            </TableCell>
+                            <TableCell align="center">{row.unit || '-'}</TableCell>
+                          </>
                         )}
                         {reportType === 'stockReceive' && (
                           <>
@@ -1656,9 +1659,10 @@ function ReportsPage() {
 
       <Dialog
         fullWidth
-        maxWidth="lg"
+        maxWidth={false}
         open={Boolean(selectedReport)}
         onClose={() => setSelectedDocumentNo('')}
+        PaperProps={{ sx: { maxWidth: 'calc(100vw - 32px)', width: 'calc(100vw - 32px)' } }}
       >
         <DialogTitle sx={{ alignItems: 'center', display: 'flex', gap: 1.25 }}>
           <FileText size={22} />

@@ -1,9 +1,9 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using StockIssueSystem.Api.Data;
 using StockIssueSystem.Api.Models;
 using StockIssueSystem.Api.Models.DTOs;
-using System.Text.RegularExpressions;
 
 namespace StockIssueSystem.Api.Controllers;
 
@@ -11,14 +11,12 @@ namespace StockIssueSystem.Api.Controllers;
 [Route("api/departments")]
 public sealed class DepartmentController(AppDbContext dbContext) : ControllerBase
 {
-    private static readonly Regex DepartmentCodePattern = new(@"^[A-Za-z0-9._/-]+$", RegexOptions.Compiled);
-    private static readonly Regex DepartmentNamePattern = new(@"^[A-Za-z0-9\u0E00-\u0E7F\s._/-]+$", RegexOptions.Compiled);
 
     [HttpGet]
     public async Task<ActionResult<IReadOnlyList<DepartmentDto>>> GetDepartments()
     {
         var departments = await dbContext.Departments
-            .OrderBy(department => department.DepartmentCode)
+            .OrderBy(department => department.DepartmentId)
             .Select(department => ToDto(department))
             .ToListAsync();
 
@@ -41,24 +39,15 @@ public sealed class DepartmentController(AppDbContext dbContext) : ControllerBas
     [HttpPost]
     public async Task<ActionResult<DepartmentDto>> CreateDepartment(CreateDepartmentDto request)
     {
-        var validationError = ValidateDepartment(request.DepartmentCode, request.DepartmentName, request.DivisionName);
+        var validationError = ValidateDepartment(request.DepartmentName, request.DivisionName);
 
         if (validationError is not null)
         {
             return BadRequest(validationError);
         }
 
-        var departmentCode = request.DepartmentCode.Trim();
-
-        if (!string.IsNullOrWhiteSpace(departmentCode)
-            && await dbContext.Departments.AnyAsync(department => department.DepartmentCode == departmentCode))
-        {
-            return Conflict("Department code already exists.");
-        }
-
         var department = new Department
         {
-            DepartmentCode = departmentCode,
             DepartmentName = request.DepartmentName.Trim(),
             DivisionName = string.IsNullOrWhiteSpace(request.DivisionName) ? request.DepartmentName.Trim() : request.DivisionName.Trim(),
             DepartmentStatus = request.DepartmentStatus,
@@ -73,10 +62,69 @@ public sealed class DepartmentController(AppDbContext dbContext) : ControllerBas
         }, ToDto(department));
     }
 
+    [HttpPost("import-hr")]
+    public async Task<ActionResult<object>> ImportFromHr()
+    {
+        var hrDepartments = new List<(string DivisionName, string DepartmentName)>();
+
+        await using (var connection = new SqlConnection(dbContext.Database.GetConnectionString()))
+        await using (var command = connection.CreateCommand())
+        {
+            command.CommandText = """
+                SELECT DISTINCT
+                    LTRIM(RTRIM(ISNULL(Department, N''))) AS DivisionName,
+                    LTRIM(RTRIM(ISNULL(Division, N''))) AS DepartmentName
+                FROM MARSHR.HRM.dbo.EMPLOYEE
+                WHERE LTRIM(RTRIM(ISNULL(Department, N''))) <> N''
+                    AND LTRIM(RTRIM(ISNULL(Division, N''))) <> N''
+                ORDER BY DivisionName, DepartmentName
+                """;
+
+            await connection.OpenAsync();
+            await using var reader = await command.ExecuteReaderAsync();
+
+            while (await reader.ReadAsync())
+            {
+                hrDepartments.Add((
+                    reader["DivisionName"]?.ToString()?.Trim() ?? string.Empty,
+                    reader["DepartmentName"]?.ToString()?.Trim() ?? string.Empty));
+            }
+        }
+
+        var existingKeys = (await dbContext.Departments
+            .Select(department => new { department.DivisionName, department.DepartmentName })
+            .ToListAsync())
+            .Select(department => $"{department.DivisionName.Trim()}\u001f{department.DepartmentName.Trim()}")
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var newDepartments = hrDepartments
+            .Where(department => existingKeys.Add($"{department.DivisionName}\u001f{department.DepartmentName}"))
+            .Select(department => new Department
+            {
+                DivisionName = department.DivisionName,
+                DepartmentName = department.DepartmentName,
+                DepartmentStatus = 1,
+            })
+            .ToList();
+
+        if (newDepartments.Count > 0)
+        {
+            dbContext.Departments.AddRange(newDepartments);
+            await dbContext.SaveChangesAsync();
+        }
+
+        return Ok(new
+        {
+            imported = newDepartments.Count,
+            skipped = hrDepartments.Count - newDepartments.Count,
+            total = hrDepartments.Count,
+        });
+    }
+
     [HttpPut("{departmentId:int}")]
     public async Task<ActionResult<DepartmentDto>> UpdateDepartment(int departmentId, UpdateDepartmentDto request)
     {
-        var validationError = ValidateDepartment(request.DepartmentCode, request.DepartmentName, request.DivisionName);
+        var validationError = ValidateDepartment(request.DepartmentName, request.DivisionName);
 
         if (validationError is not null)
         {
@@ -90,15 +138,6 @@ public sealed class DepartmentController(AppDbContext dbContext) : ControllerBas
             return NotFound("Department not found.");
         }
 
-        var departmentCode = request.DepartmentCode.Trim();
-
-        if (!string.IsNullOrWhiteSpace(departmentCode) && await dbContext.Departments.AnyAsync(item =>
-            item.DepartmentId != departmentId && item.DepartmentCode == departmentCode))
-        {
-            return Conflict("Department code already exists.");
-        }
-
-        department.DepartmentCode = departmentCode;
         department.DepartmentName = request.DepartmentName.Trim();
         department.DivisionName = string.IsNullOrWhiteSpace(request.DivisionName) ? request.DepartmentName.Trim() : request.DivisionName.Trim();
         department.DepartmentStatus = request.DepartmentStatus;
@@ -108,21 +147,11 @@ public sealed class DepartmentController(AppDbContext dbContext) : ControllerBas
         return Ok(ToDto(department));
     }
 
-    private static string? ValidateDepartment(string departmentCode, string departmentName, string divisionName)
+    private static string? ValidateDepartment(string departmentName, string divisionName)
     {
         if (string.IsNullOrWhiteSpace(departmentName) || string.IsNullOrWhiteSpace(divisionName))
         {
             return "Division and department name are required.";
-        }
-
-        if (!string.IsNullOrWhiteSpace(departmentCode) && !DepartmentCodePattern.IsMatch(departmentCode.Trim()))
-        {
-            return "Department code supports English letters, numbers, and . _ / - only.";
-        }
-
-        if (!DepartmentNamePattern.IsMatch(departmentName.Trim()))
-        {
-            return "Department name contains invalid characters.";
         }
 
         return null;
@@ -133,7 +162,6 @@ public sealed class DepartmentController(AppDbContext dbContext) : ControllerBas
         return new DepartmentDto
         {
             DepartmentId = department.DepartmentId,
-            DepartmentCode = department.DepartmentCode,
             DepartmentName = department.DepartmentName,
             DivisionName = department.DivisionName,
             DepartmentStatus = department.DepartmentStatus,

@@ -22,10 +22,15 @@ import { useAuthStore } from '../../store/authStore'
 import './RequestLoginPage.css'
 
 function normalizeDepartmentRow(row) {
+  const divisionName = row.divisionName ?? row.DivisionName ?? ''
+  const departmentName = row.departmentName ?? row.DepartmentName ?? ''
+
   return {
-    code: row.departmentCode ?? row.DepartmentCode ?? '',
+    code: String(row.departmentId ?? row.DepartmentId ?? ''),
     id: row.departmentId ?? row.DepartmentId ?? '',
-    name: row.departmentName ?? row.DepartmentName ?? '',
+    name: departmentName,
+    divisionName,
+    label: divisionName && departmentName ? `${divisionName} - ${departmentName}` : (divisionName || departmentName),
     status: Number(row.departmentStatus ?? row.DepartmentStatus ?? 1),
   }
 }
@@ -80,9 +85,14 @@ function RequestLoginPage() {
     }
 
     return activeDepartmentOptions.filter((item) =>
-      `${item.code} ${item.name}`.toLowerCase().includes(keyword),
+      `${item.code} ${item.divisionName} ${item.name}`.toLowerCase().includes(keyword),
     )
   }, [activeDepartmentOptions, departmentSearchText])
+
+  const selectedDepartmentOption = useMemo(
+    () => activeDepartmentOptions.find((item) => item.code === selectedDepartmentCode),
+    [activeDepartmentOptions, selectedDepartmentCode],
+  )
 
   useEffect(() => {
     let isMounted = true
@@ -467,6 +477,7 @@ function RequestLoginPage() {
               <Select
                 label="เลือกแผนก"
                 labelId="request-simple-department-select-label"
+                renderValue={(value) => (value ? selectedDepartmentOption?.label || '' : '')}
                 value={selectedDepartmentCode}
                 onChange={(event) => handleDepartmentSelectChange(event.target.value)}
                 startAdornment={
@@ -509,7 +520,7 @@ function RequestLoginPage() {
                 {filteredDepartmentOptions.length ? (
                   filteredDepartmentOptions.map((departmentRow) => (
                     <MenuItem key={departmentRow.id || departmentRow.code} value={departmentRow.code}>
-                      {departmentRow.name}
+                      {departmentRow.label}
                     </MenuItem>
                   ))
                 ) : (
@@ -567,6 +578,7 @@ function RequestLoginPage() {
                   <Select
                     label="เลือกแผนก"
                     labelId="request-department-select-label"
+                    renderValue={(value) => (value ? selectedDepartmentOption?.label || '' : '')}
                     value={selectedDepartmentCode}
                     onChange={(event) => handleDepartmentSelectChange(event.target.value)}
                     startAdornment={
@@ -609,7 +621,7 @@ function RequestLoginPage() {
                     {filteredDepartmentOptions.length ? (
                       filteredDepartmentOptions.map((departmentRow) => (
                         <MenuItem key={departmentRow.id || departmentRow.code} value={departmentRow.code}>
-                          {departmentRow.name}
+                          {departmentRow.label}
                         </MenuItem>
                       ))
                     ) : (
@@ -622,9 +634,9 @@ function RequestLoginPage() {
               <BufferedTextField
                 fullWidth
                 required
-                label="ชื่อแผนกที่เลือก"
-                value={department}
-                helperText={department ? `Code: ${selectedDepartmentCode || '-'}` : 'เลือกแผนกหรือยิง QR แผนกก่อนเข้าสู่ระบบ'}
+                label="ฝ่าย - แผนกที่เลือก"
+                value={selectedDepartmentOption?.label || ''}
+                helperText={department ? 'เลือกฝ่ายและแผนกก่อนเข้าสู่ระบบ' : 'เลือกฝ่ายและแผนกก่อนเข้าสู่ระบบ'}
                 InputProps={{
                   readOnly: true,
                 }}
