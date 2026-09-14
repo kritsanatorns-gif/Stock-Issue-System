@@ -97,6 +97,12 @@ export async function getDepartments() {
   return response.data
 }
 
+export async function importDepartmentsFromHr() {
+  const response = await api.post('/departments/import-hr')
+
+  return response.data
+}
+
 export async function getHrEmployee(employeeCode, department = '') {
   const response = await api.get(`/hr-employees/${encodeURIComponent(employeeCode)}`, {
     params: department ? { department } : {},
@@ -144,6 +150,21 @@ export async function updateDepartment(departmentId, department) {
 export async function getProducts(params = {}) {
   const response = await api.get('/products', { params })
 
+  return response.data
+}
+
+export async function getUnits() {
+  const response = await api.get('/units')
+  return response.data
+}
+
+export async function createUnit(unit) {
+  const response = await api.post('/units', unit)
+  return response.data
+}
+
+export async function updateUnit(unitId, unit) {
+  const response = await api.put(`/units/${unitId}`, unit)
   return response.data
 }
 
@@ -245,6 +266,11 @@ export async function approveRequisition(headerId, payload) {
   return response.data
 }
 
+export async function acceptRequisition(headerId, payload) {
+  const response = await api.post(`/requisitions/${headerId}/accept`, payload)
+  return response.data
+}
+
 export async function rejectRequisition(headerId, payload) {
   const response = await api.post(`/requisitions/${headerId}/reject`, payload)
 
@@ -259,6 +285,12 @@ export async function keepRequisitionBacklog(headerId, payload) {
 
 export async function denyRequisition(headerId, payload) {
   const response = await api.post(`/requisitions/${headerId}/deny`, payload)
+
+  return response.data
+}
+
+export async function denyRequisitionItem(headerId, detailId, payload) {
+  const response = await api.post(`/requisitions/${headerId}/items/${detailId}/deny`, payload)
 
   return response.data
 }

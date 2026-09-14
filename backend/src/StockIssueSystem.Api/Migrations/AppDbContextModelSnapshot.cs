@@ -17,10 +17,60 @@ namespace StockIssueSystem.Api.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "10.0.8")
+                .HasAnnotation("ProductVersion", "8.0.8")
                 .HasAnnotation("Relational:MaxIdentifierLength", 128);
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
+
+            modelBuilder.Entity("StockIssueSystem.Api.Models.AuditLog", b =>
+                {
+                    b.Property<long>("AuditLogId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("AuditLogId"));
+
+                    b.Property<string>("ActionType")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
+                    b.Property<int?>("EmployeeId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("EmployeeName")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)")
+                        .HasDefaultValue("");
+
+                    b.Property<string>("IpAddress")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)")
+                        .HasDefaultValue("");
+
+                    b.Property<DateTime>("OccurredAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Resource")
+                        .IsRequired()
+                        .HasMaxLength(250)
+                        .HasColumnType("nvarchar(250)");
+
+                    b.Property<int>("StatusCode")
+                        .HasColumnType("int");
+
+                    b.HasKey("AuditLogId");
+
+                    b.HasIndex("EmployeeId");
+
+                    b.HasIndex("OccurredAt");
+
+                    b.ToTable("AuditLog", "dbo");
+                });
 
             modelBuilder.Entity("StockIssueSystem.Api.Models.Category", b =>
                 {
@@ -56,11 +106,6 @@ namespace StockIssueSystem.Api.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("DepartmentId"));
 
-                    b.Property<string>("DepartmentCode")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
-
                     b.Property<string>("DepartmentName")
                         .IsRequired()
                         .HasMaxLength(50)
@@ -71,10 +116,14 @@ namespace StockIssueSystem.Api.Migrations
                         .HasColumnType("int")
                         .HasDefaultValue(1);
 
-                    b.HasKey("DepartmentId");
+                    b.Property<string>("DivisionName")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)")
+                        .HasDefaultValue("");
 
-                    b.HasIndex("DepartmentCode")
-                        .IsUnique();
+                    b.HasKey("DepartmentId");
 
                     b.ToTable("Department", "dbo");
                 });
@@ -85,7 +134,7 @@ namespace StockIssueSystem.Api.Migrations
                         .HasColumnType("int");
 
                     b.Property<string>("Department")
-                        .IsRequired()
+                        .ValueGeneratedOnAdd()
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)")
                         .HasDefaultValue("HR");
@@ -143,6 +192,32 @@ namespace StockIssueSystem.Api.Migrations
                         .IsUnique();
 
                     b.ToTable("EmployeeMenuPermission", "dbo");
+                });
+
+            modelBuilder.Entity("StockIssueSystem.Api.Models.InventoryUnit", b =>
+                {
+                    b.Property<int>("UnitId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("UnitId"));
+
+                    b.Property<string>("UnitName")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<int>("UnitStatus")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(1);
+
+                    b.HasKey("UnitId");
+
+                    b.HasIndex("UnitName")
+                        .IsUnique();
+
+                    b.ToTable("Unit", "dbo");
                 });
 
             modelBuilder.Entity("StockIssueSystem.Api.Models.Menu", b =>
@@ -245,6 +320,11 @@ namespace StockIssueSystem.Api.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("nvarchar(20)");
 
+                    b.Property<decimal>("MinQty")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("decimal(18, 2)")
+                        .HasDefaultValue(10m);
+
                     b.Property<string>("ProductId")
                         .IsRequired()
                         .HasMaxLength(50)
@@ -334,8 +414,8 @@ namespace StockIssueSystem.Api.Migrations
                         .HasColumnType("int");
 
                     b.Property<string>("StatusTable")
-                        .HasMaxLength(10)
-                        .HasColumnType("nvarchar(10)");
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
 
                     b.HasKey("StatusId");
 
@@ -409,10 +489,22 @@ namespace StockIssueSystem.Api.Migrations
                     b.Property<int>("Status")
                         .HasColumnType("int");
 
+                    b.Property<int?>("SupplierId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("SupplierName")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)")
+                        .HasDefaultValue("");
+
                     b.Property<decimal>("UnitCost")
-                        .HasColumnType("decimal(18, 2)");
+                        .HasColumnType("decimal(18, 4)");
 
                     b.HasKey("CostLotId");
+
+                    b.HasIndex("SupplierId");
 
                     b.HasIndex("ProductId", "RemainingQty", "CreatedDate");
 
@@ -442,6 +534,17 @@ namespace StockIssueSystem.Api.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
 
+                    b.Property<int?>("DeniedQty")
+                        .HasColumnType("int");
+
+                    b.Property<string>("DenyRemark")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<int?>("FulfilledQty")
+                        .HasColumnType("int");
+
                     b.Property<int>("HeaderId")
                         .HasColumnType("int");
 
@@ -466,6 +569,16 @@ namespace StockIssueSystem.Api.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("nvarchar(20)");
 
+                    b.Property<string>("Remark")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)")
+                        .HasDefaultValue("");
+
+                    b.Property<int?>("SourceRequisitionDetailId")
+                        .HasColumnType("int");
+
                     b.Property<string>("Unit")
                         .IsRequired()
                         .HasMaxLength(20)
@@ -474,6 +587,8 @@ namespace StockIssueSystem.Api.Migrations
                     b.HasKey("DetailId");
 
                     b.HasIndex("HeaderId");
+
+                    b.HasIndex("SourceRequisitionDetailId");
 
                     b.ToTable("StockDetail", "dbo");
                 });
@@ -486,6 +601,26 @@ namespace StockIssueSystem.Api.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("HeaderId"));
 
+                    b.Property<string>("AdjustNo")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)")
+                        .HasDefaultValue("");
+
+                    b.Property<DateTime?>("ApprovedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("ApprovedBy")
+                        .HasColumnType("int");
+
+                    b.Property<string>("CancelNo")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)")
+                        .HasDefaultValue("");
+
                     b.Property<string>("CreateBy")
                         .IsRequired()
                         .HasMaxLength(20)
@@ -495,6 +630,20 @@ namespace StockIssueSystem.Api.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("datetime2")
                         .HasDefaultValueSql("GETDATE()");
+
+                    b.Property<string>("Department")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)")
+                        .HasDefaultValue("");
+
+                    b.Property<string>("Division")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)")
+                        .HasDefaultValue("");
 
                     b.Property<string>("DocType")
                         .IsRequired()
@@ -513,8 +662,16 @@ namespace StockIssueSystem.Api.Migrations
 
                     b.Property<string>("PoInvoiceNo")
                         .IsRequired()
+                        .ValueGeneratedOnAdd()
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)")
+                        .HasDefaultValue("");
+
+                    b.Property<string>("ReceiveNo")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)")
                         .HasDefaultValue("");
 
                     b.Property<string>("Remark")
@@ -522,7 +679,27 @@ namespace StockIssueSystem.Api.Migrations
                         .HasMaxLength(255)
                         .HasColumnType("nvarchar(255)");
 
+                    b.Property<string>("RequestNo")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)")
+                        .HasDefaultValue("");
+
+                    b.Property<string>("RequesterName")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)")
+                        .HasDefaultValue("");
+
+                    b.Property<int?>("SourceRequisitionId")
+                        .HasColumnType("int");
+
                     b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("SupplierId")
                         .HasColumnType("int");
 
                     b.Property<DateTime>("TransactionDate")
@@ -538,6 +715,26 @@ namespace StockIssueSystem.Api.Migrations
                         .HasDefaultValue("");
 
                     b.HasKey("HeaderId");
+
+                    b.HasIndex("AdjustNo")
+                        .IsUnique()
+                        .HasFilter("[AdjustNo] <> N''");
+
+                    b.HasIndex("CancelNo")
+                        .IsUnique()
+                        .HasFilter("[CancelNo] <> N''");
+
+                    b.HasIndex("ReceiveNo")
+                        .IsUnique()
+                        .HasFilter("[ReceiveNo] <> N''");
+
+                    b.HasIndex("RequestNo")
+                        .IsUnique()
+                        .HasFilter("[RequestNo] <> N''");
+
+                    b.HasIndex("SourceRequisitionId");
+
+                    b.HasIndex("SupplierId");
 
                     b.ToTable("StockHeader", "dbo");
                 });
@@ -559,6 +756,16 @@ namespace StockIssueSystem.Api.Migrations
                     b.Property<int>("Qty")
                         .HasColumnType("int");
 
+                    b.Property<int?>("SupplierId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("SupplierName")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)")
+                        .HasDefaultValue("");
+
                     b.Property<decimal>("TotalCost")
                         .HasColumnType("decimal(18, 2)");
 
@@ -571,7 +778,86 @@ namespace StockIssueSystem.Api.Migrations
 
                     b.HasIndex("IssueDetailId");
 
+                    b.HasIndex("SupplierId");
+
                     b.ToTable("StockIssueCost", "dbo");
+                });
+
+            modelBuilder.Entity("StockIssueSystem.Api.Models.Supplier", b =>
+                {
+                    b.Property<int>("SupplierId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("SupplierId"));
+
+                    b.Property<string>("AccountId")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)")
+                        .HasDefaultValue("");
+
+                    b.Property<string>("AccountName")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(250)
+                        .HasColumnType("nvarchar(250)")
+                        .HasDefaultValue("");
+
+                    b.Property<string>("Address")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)")
+                        .HasDefaultValue("");
+
+                    b.Property<string>("Branch")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime>("CreatedDate")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
+                        .HasDefaultValueSql("GETDATE()");
+
+                    b.Property<int>("CreditDays")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Phone")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("ShortName")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)")
+                        .HasDefaultValue("");
+
+                    b.Property<string>("SupplierName")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<int>("SupplierStatus")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(1);
+
+                    b.Property<string>("TaxId")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.HasKey("SupplierId");
+
+                    b.HasIndex("SupplierName")
+                        .IsUnique();
+
+                    b.ToTable("Supplier", "dbo");
                 });
 
             modelBuilder.Entity("StockIssueSystem.Api.Models.EmployeeMenuPermission", b =>

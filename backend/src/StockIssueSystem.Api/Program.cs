@@ -77,20 +77,91 @@ app.Logger.LogInformation("Preparing database schema: document statuses");
 await EnsureStockHeaderStatuses(app);
 app.Logger.LogInformation("Preparing database schema: product remarks");
 await EnsureProductRemarkColumn(app);
-app.Logger.LogInformation("Removing retired product size data");
-await RemoveProductSizeColumn(app);
 app.Logger.LogInformation("Preparing database schema: product minimum quantity");
 await EnsureProductMinQtyColumn(app);
 app.Logger.LogInformation("Preparing database schema: stock adjustment menu");
 await EnsureStockAdjustMenu(app);
+await EnsureUnits(app);
+await EnsureUnitMenu(app);
 app.Logger.LogInformation("Preparing database schema: requisition workflow");
 await EnsureRequisitionWorkflow(app);
+await EnsureRequisitionApproval(app);
+await EnsureRequisitionItemDenial(app);
 app.Logger.LogInformation("Preparing database schema: supplier workflow");
 await EnsureSupplierWorkflow(app);
 await EnsureAuditLogTable(app);
 app.Logger.LogInformation("Database schema preparation completed.");
 
 app.Run();
+
+static async Task EnsureUnits(WebApplication app)
+{
+    await using var scope = app.Services.CreateAsyncScope();
+    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    await db.Database.ExecuteSqlRawAsync("""
+        IF OBJECT_ID(N'dbo.Unit', N'U') IS NULL
+        BEGIN
+            CREATE TABLE dbo.Unit (UnitId int IDENTITY(1,1) NOT NULL PRIMARY KEY, UnitName nvarchar(50) NOT NULL, UnitStatus int NOT NULL CONSTRAINT DF_Unit_Status DEFAULT 1);
+            CREATE UNIQUE INDEX UX_Unit_UnitName ON dbo.Unit(UnitName);
+        END
+        IF NOT EXISTS (SELECT 1 FROM dbo.Unit WHERE UnitName = N'ชิ้น') INSERT INTO dbo.Unit(UnitName, UnitStatus) VALUES(N'ชิ้น', 1);
+        IF NOT EXISTS (SELECT 1 FROM dbo.Unit WHERE UnitName = N'แพ็ค') INSERT INTO dbo.Unit(UnitName, UnitStatus) VALUES(N'แพ็ค', 1);
+        """);
+}
+
+static async Task EnsureUnitMenu(WebApplication app)
+{
+    await using var scope = app.Services.CreateAsyncScope();
+    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    await db.Database.ExecuteSqlRawAsync("""
+        IF NOT EXISTS (SELECT 1 FROM dbo.Menu WHERE MenuId = 12 OR MenuCode = 'UNITS')
+        BEGIN
+            SET IDENTITY_INSERT dbo.Menu ON;
+            INSERT INTO dbo.Menu (MenuId, MenuCode, MenuName, MenuPath, SortOrder, IsActive)
+            VALUES (12, 'UNITS', N'จัดการหน่วย', '/units', 12, 1);
+            SET IDENTITY_INSERT dbo.Menu OFF;
+        END
+        ELSE
+        BEGIN
+            UPDATE dbo.Menu
+            SET MenuCode = 'UNITS', MenuName = N'จัดการหน่วย', MenuPath = '/units', SortOrder = 12, IsActive = 1
+            WHERE MenuId = 12 OR MenuCode = 'UNITS';
+        END
+
+        INSERT INTO dbo.EmployeeMenuPermission (EmployeeId, MenuId, CreatedDate)
+        SELECT employee.EmployeeId, 12, GETDATE()
+        FROM dbo.Employee employee
+        WHERE (employee.Permission = '1' OR employee.Permission LIKE N'%admin%' OR employee.Permission LIKE N'%ผู้ดูแล%')
+          AND NOT EXISTS (
+              SELECT 1 FROM dbo.EmployeeMenuPermission permission
+              WHERE permission.EmployeeId = employee.EmployeeId AND permission.MenuId = 12
+          );
+        """);
+}
+
+static async Task EnsureRequisitionApproval(WebApplication app)
+{
+    await using var scope = app.Services.CreateAsyncScope();
+    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    await db.Database.ExecuteSqlRawAsync("""
+        IF COL_LENGTH(N'dbo.StockHeader', N'ApprovedAt') IS NULL
+            ALTER TABLE dbo.StockHeader ADD ApprovedAt datetime2 NULL;
+        IF COL_LENGTH(N'dbo.StockHeader', N'ApprovedBy') IS NULL
+            ALTER TABLE dbo.StockHeader ADD ApprovedBy int NULL;
+        """);
+}
+
+static async Task EnsureRequisitionItemDenial(WebApplication app)
+{
+    await using var scope = app.Services.CreateAsyncScope();
+    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    await db.Database.ExecuteSqlRawAsync("""
+        IF COL_LENGTH(N'dbo.StockDetail', N'DeniedQty') IS NULL
+            ALTER TABLE dbo.StockDetail ADD DeniedQty int NULL;
+        IF COL_LENGTH(N'dbo.StockDetail', N'DenyRemark') IS NULL
+            ALTER TABLE dbo.StockDetail ADD DenyRemark nvarchar(500) NOT NULL CONSTRAINT DF_StockDetail_DenyRemark DEFAULT N'';
+        """);
+}
 
 static async Task EnsureAuditLogTable(WebApplication app)
 {
@@ -136,15 +207,6 @@ static async Task EnsureDepartmentDivisionColumn(WebApplication app)
         WHERE ISNULL(DivisionName, N'') = N'';
     """);
 
-    await dbContext.Database.ExecuteSqlRawAsync("""
-        IF EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'dbo.Department') AND name = N'IX_Department_DepartmentCode' AND is_unique = 1)
-            DROP INDEX IX_Department_DepartmentCode ON dbo.Department;
-
-        IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'dbo.Department') AND name = N'UX_Department_DepartmentCode_NotEmpty')
-            CREATE UNIQUE INDEX UX_Department_DepartmentCode_NotEmpty
-                ON dbo.Department(DepartmentCode)
-                WHERE DepartmentCode <> N'';
-    """);
 }
 
 static async Task EnsureEmployeeDepartmentColumn(WebApplication app)
@@ -663,6 +725,7 @@ static async Task EnsureRequisitionWorkflow(WebApplication app)
             );
     """);
 
+    await UpsertStatus(dbContext, RequisitionStatuses.AwaitingApproval, "รออนุมัติ", "Requisition", 10);
     await UpsertStatus(dbContext, RequisitionStatuses.Pending, "รอจัดของ", "Requisition", 6);
     await UpsertStatus(dbContext, RequisitionStatuses.Approved, "ได้ของครบ", "Requisition", 7);
     await UpsertStatus(dbContext, RequisitionStatuses.Backlog, "ค้าง", "Requisition", 8);
@@ -691,30 +754,6 @@ static async Task EnsureProductRemarkColumn(WebApplication app)
             ALTER TABLE dbo.Product
             ADD ProductRemark nvarchar(500) NOT NULL
                 CONSTRAINT DF_Product_ProductRemark DEFAULT N''
-        END
-    """);
-}
-
-static async Task RemoveProductSizeColumn(WebApplication app)
-{
-    await using var scope = app.Services.CreateAsyncScope();
-    var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-
-    await dbContext.Database.ExecuteSqlRawAsync("""
-        IF COL_LENGTH(N'dbo.Product', N'Size') IS NOT NULL
-        BEGIN
-            DECLARE @constraintName nvarchar(128);
-            SELECT @constraintName = dc.name
-            FROM sys.default_constraints dc
-            INNER JOIN sys.columns c
-                ON c.default_object_id = dc.object_id
-            WHERE dc.parent_object_id = OBJECT_ID(N'dbo.Product')
-                AND c.name = N'Size';
-
-            IF @constraintName IS NOT NULL
-                EXEC(N'ALTER TABLE dbo.Product DROP CONSTRAINT [' + @constraintName + N']');
-
-            ALTER TABLE dbo.Product DROP COLUMN Size;
         END
     """);
 }

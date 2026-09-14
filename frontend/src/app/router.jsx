@@ -1,36 +1,50 @@
 import { Navigate, createBrowserRouter } from 'react-router-dom'
+import { lazy, Suspense } from 'react'
 import MainLayout from '../layouts/MainLayout'
 import LoginLayout from '../layouts/LoginLayout'
 import NavigateToFirstAllowed from '../auth/components/NavigateToFirstAllowed'
 import RequireAuth from '../auth/components/RequireAuth'
 import RequireMenuAccess from '../auth/components/RequireMenuAccess'
-import LoginPage from '../auth/pages/LoginPage'
-import ApprovalsPage from '../approvals/pages/ApprovalsPage'
-import DashboardPage from '../Dashboard/pages/DashboardPage'
-import DepartmentsPage from '../departments/pages/DepartmentsPage'
-import ProductsPage from '../products/pages/ProductsPage'
-import ReportsPage from '../reports/pages/ReportsPage'
-import StockAdjustPage from '../stockAdjust/pages/StockAdjustPage'
-import StockInPage from '../stockIn/pages/StockInPage'
-import StockIssuePage from '../stockIssue/pages/StockOutPage'
-import SuppliersPage from '../suppliers/pages/SuppliersPage'
-import HistoryPage from '../transactions/pages/HistoryPage'
-import UsersPage from '../users/pages/UsersPage'
-import RequestLoginPage from '../request/pages/RequestLoginPage'
-import RequestPage from '../request/pages/RequestPage'
-import RequestHistoryPage from '../request/pages/RequestHistoryPage'
 import RequestLayout from '../request/layouts/RequestLayout'
+
+const LoginPage = lazy(() => import('../auth/pages/LoginPage'))
+const ApprovalsPage = lazy(() => import('../approvals/pages/ApprovalsPage'))
+const DashboardPage = lazy(() => import('../Dashboard/pages/DashboardPage'))
+const DepartmentsPage = lazy(() => import('../departments/pages/DepartmentsPage'))
+const ProductsPage = lazy(() => import('../products/pages/ProductsPage'))
+const ReportsPage = lazy(() => import('../reports/pages/ReportsPage'))
+const StockAdjustPage = lazy(() => import('../stockAdjust/pages/StockAdjustPage'))
+const StockInPage = lazy(() => import('../stockIn/pages/StockInPage'))
+const StockIssuePage = lazy(() => import('../stockIssue/pages/StockOutPage'))
+const SuppliersPage = lazy(() => import('../suppliers/pages/SuppliersPage'))
+const HistoryPage = lazy(() => import('../transactions/pages/HistoryPage'))
+const UsersPage = lazy(() => import('../users/pages/UsersPage'))
+const RequestLoginPage = lazy(() => import('../request/pages/RequestLoginPage'))
+const RequestPage = lazy(() => import('../request/pages/RequestPage'))
+const RequestHistoryPage = lazy(() => import('../request/pages/RequestHistoryPage'))
+
+function PageLoading() {
+  return <div style={{ padding: 24 }}>กำลังโหลด...</div>
+}
+
+function renderLazyPage(Page) {
+  return (
+    <Suspense fallback={<PageLoading />}>
+      <Page />
+    </Suspense>
+  )
+}
 
 function PortalHome() {
   const isRequestPortal = window.location.port === '9500'
 
-  return isRequestPortal ? <RequestLoginPage /> : <LoginPage />
+  return isRequestPortal ? renderLazyPage(RequestLoginPage) : renderLazyPage(LoginPage)
 }
 
 function HrLoginRoute() {
   return window.location.port === '9500'
-    ? <RequestLoginPage />
-    : <LoginPage />
+    ? renderLazyPage(RequestLoginPage)
+    : renderLazyPage(LoginPage)
 }
 
 export const router = createBrowserRouter([
@@ -40,7 +54,7 @@ export const router = createBrowserRouter([
   },
   {
     path: '/request-login',
-    element: <RequestLoginPage />,
+    element: renderLazyPage(RequestLoginPage),
   },
   {
     element: <LoginLayout />,
@@ -57,11 +71,11 @@ export const router = createBrowserRouter([
     children: [
       {
         index: true,
-        element: <RequestPage />,
+        element: renderLazyPage(RequestPage),
       },
       {
         path: 'history',
-        element: <RequestHistoryPage />,
+        element: renderLazyPage(RequestHistoryPage),
       },
     ],
   },
@@ -80,7 +94,7 @@ export const router = createBrowserRouter([
             path: 'dashboard',
             element: (
               <RequireMenuAccess menuCode="DASHBOARD">
-                <DashboardPage />
+                {renderLazyPage(DashboardPage)}
               </RequireMenuAccess>
             ),
           },
@@ -88,7 +102,7 @@ export const router = createBrowserRouter([
             path: 'stock-issue',
             element: (
               <RequireMenuAccess menuCode="STOCK_OUT">
-                <StockIssuePage />
+                {renderLazyPage(StockIssuePage)}
               </RequireMenuAccess>
             ),
           },
@@ -96,7 +110,7 @@ export const router = createBrowserRouter([
             path: 'approvals',
             element: (
               <RequireMenuAccess menuCode="APPROVALS">
-                <ApprovalsPage />
+                {renderLazyPage(ApprovalsPage)}
               </RequireMenuAccess>
             ),
           },
@@ -104,7 +118,7 @@ export const router = createBrowserRouter([
             path: 'stock-in',
             element: (
               <RequireMenuAccess menuCode="STOCK_IN">
-                <StockInPage />
+                {renderLazyPage(StockInPage)}
               </RequireMenuAccess>
             ),
           },
@@ -112,7 +126,7 @@ export const router = createBrowserRouter([
             path: 'stock-adjust',
             element: (
               <RequireMenuAccess menuCode="STOCK_ADJUST">
-                <StockAdjustPage />
+                {renderLazyPage(StockAdjustPage)}
               </RequireMenuAccess>
             ),
           },
@@ -120,7 +134,7 @@ export const router = createBrowserRouter([
             path: 'suppliers',
             element: (
               <RequireMenuAccess menuCode="SUPPLIERS">
-                <SuppliersPage />
+                {renderLazyPage(SuppliersPage)}
               </RequireMenuAccess>
             ),
           },
@@ -128,7 +142,7 @@ export const router = createBrowserRouter([
             path: 'products',
             element: (
               <RequireMenuAccess menuCode="PRODUCTS">
-                <ProductsPage />
+                {renderLazyPage(ProductsPage)}
               </RequireMenuAccess>
             ),
           },
@@ -140,7 +154,7 @@ export const router = createBrowserRouter([
             path: 'history',
             element: (
               <RequireMenuAccess menuCode="HISTORY">
-                <HistoryPage />
+                {renderLazyPage(HistoryPage)}
               </RequireMenuAccess>
             ),
           },
@@ -148,7 +162,7 @@ export const router = createBrowserRouter([
             path: 'reports',
             element: (
               <RequireMenuAccess menuCode="REPORTS">
-                <ReportsPage />
+                {renderLazyPage(ReportsPage)}
               </RequireMenuAccess>
             ),
           },
@@ -156,7 +170,7 @@ export const router = createBrowserRouter([
             path: 'users',
             element: (
               <RequireMenuAccess menuCode="USERS">
-                <UsersPage />
+                {renderLazyPage(UsersPage)}
               </RequireMenuAccess>
             ),
           },
@@ -164,7 +178,7 @@ export const router = createBrowserRouter([
             path: 'departments',
             element: (
               <RequireMenuAccess menuCode="DEPARTMENTS">
-                <DepartmentsPage />
+                {renderLazyPage(DepartmentsPage)}
               </RequireMenuAccess>
             ),
           },

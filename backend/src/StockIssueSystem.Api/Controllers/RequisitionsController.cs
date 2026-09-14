@@ -23,7 +23,7 @@ public sealed class RequisitionsController(
     private const string MainLocationId = "MAIN";
 
     [HttpGet]
-    public async Task<IActionResult> GetRequisitions([FromQuery] string? status)
+    public async Task<IActionResult> GetRequisitions([FromQuery] string? status, [FromQuery] string? department)
     {
         var query = dbContext.StockHeaders
             .AsNoTracking()
@@ -34,7 +34,15 @@ public sealed class RequisitionsController(
         {
             query = query.Where(header =>
                 header.Status == RequisitionStatuses.Pending
+                || header.Status == RequisitionStatuses.AwaitingApproval
                 || header.Status == RequisitionStatuses.Backlog);
+        }
+
+        if (!string.IsNullOrWhiteSpace(department))
+        {
+            var requestedDepartment = department.Trim();
+            // StockHeader.Division เก็บข้อมูลแผนกของผู้ขอเบิก
+            query = query.Where(header => header.Division == requestedDepartment);
         }
 
         var reports = await query
@@ -114,7 +122,7 @@ public sealed class RequisitionsController(
             IsUrgent = request.IsUrgent,
             Remark = BuildRemark(request.Department, request.Remark, request.RequesterName),
             RequesterName = request.RequesterName.Trim(),
-            Status = RequisitionStatuses.Pending,
+            Status = RequisitionStatuses.AwaitingApproval,
             TransactionDate = DateTime.Now,
             UrgentRemark = request.IsUrgent ? request.UrgentRemark.Trim() : string.Empty,
         };
@@ -158,6 +166,27 @@ public sealed class RequisitionsController(
             RequestNo = header.RequestNo,
             Status = RequisitionStatuses.GetName(header.Status),
         });
+    }
+
+    [HttpPost("{headerId:int}/accept")]
+    public async Task<IActionResult> AcceptRequisition(int headerId, ApproveRequisitionDto request)
+    {
+        if (!await dbContext.Employees.AnyAsync(employee => employee.EmployeeId == request.EmployeeId && employee.Status == 1))
+            return BadRequest("ไม่พบผู้อนุมัติที่ใช้งานอยู่");
+
+        await using var transaction = await dbContext.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+        var requisition = await dbContext.StockHeaders.FirstOrDefaultAsync(header => header.HeaderId == headerId && header.DocType == RequisitionDocType);
+        if (requisition is null) return NotFound("Requisition not found.");
+        if (requisition.Status != RequisitionStatuses.AwaitingApproval)
+            return Conflict("รายการนี้ไม่ได้อยู่ในสถานะรออนุมัติ กรุณารีเฟรชข้อมูล");
+
+        requisition.Status = RequisitionStatuses.Pending;
+        requisition.ApprovedAt = DateTime.Now;
+        requisition.ApprovedBy = request.EmployeeId;
+        await dbContext.SaveChangesAsync();
+        await transaction.CommitAsync();
+        await PublishRequesterStatusChanged(requisition);
+        return Ok(new { requisition.HeaderId, requisition.ApprovedAt, StatusId = requisition.Status });
     }
 
     [HttpPost("{headerId:int}/approve")]
@@ -333,6 +362,7 @@ public sealed class RequisitionsController(
         }
 
         var requisition = await dbContext.StockHeaders
+            .Include(header => header.Details)
             .FirstOrDefaultAsync(header => header.HeaderId == headerId && header.DocType == RequisitionDocType);
 
         if (requisition is null)
@@ -340,11 +370,16 @@ public sealed class RequisitionsController(
             return NotFound("Requisition not found.");
         }
 
-        if (requisition.Status != RequisitionStatuses.Pending && requisition.Status != RequisitionStatuses.Backlog)
+        if (requisition.Status != RequisitionStatuses.AwaitingApproval && requisition.Status != RequisitionStatuses.Pending && requisition.Status != RequisitionStatuses.Backlog)
         {
-            return BadRequest("This request is not waiting for picking.");
+            return BadRequest("This request cannot be rejected in its current status.");
         }
 
+        foreach (var detail in requisition.Details.Where(detail => RequisitionProgress.GetBacklogQty(detail) > 0))
+        {
+            RequisitionProgress.RecordDenial(detail);
+            detail.DenyRemark = request.Remark?.Trim() ?? string.Empty;
+        }
         requisition.Status = RequisitionStatuses.Rejected;
         await dbContext.SaveChangesAsync();
         await PublishRequesterStatusChanged(requisition);
@@ -352,6 +387,41 @@ public sealed class RequisitionsController(
         return Ok(new
         {
             requisition.HeaderId,
+            Status = RequisitionStatuses.GetName(requisition.Status),
+        });
+    }
+
+    [HttpPost("{headerId:int}/items/{detailId:int}/deny")]
+    public async Task<IActionResult> DenyRequisitionItem(int headerId, int detailId, RejectRequisitionDto request)
+    {
+        if (request.EmployeeId <= 0) return BadRequest("Employee ID is required.");
+
+        var requisition = await dbContext.StockHeaders
+            .Include(header => header.Details)
+            .FirstOrDefaultAsync(header => header.HeaderId == headerId && header.DocType == RequisitionDocType);
+        if (requisition is null) return NotFound("Requisition not found.");
+        if (requisition.Status != RequisitionStatuses.AwaitingApproval
+            && requisition.Status != RequisitionStatuses.Pending
+            && requisition.Status != RequisitionStatuses.Backlog)
+            return BadRequest("This request cannot be changed in its current status.");
+
+        var detail = requisition.Details.FirstOrDefault(item => item.DetailId == detailId);
+        if (detail is null) return NotFound("Requisition item not found.");
+        if (RequisitionProgress.GetBacklogQty(detail) <= 0)
+            return BadRequest("This requisition item has no remaining quantity.");
+
+        RequisitionProgress.RecordDenial(detail);
+        detail.Remark = request.ItemRemark?.Trim() ?? detail.Remark;
+        detail.DenyRemark = request.Remark?.Trim() ?? string.Empty;
+        RequisitionProgress.SyncStatus(requisition);
+        await dbContext.SaveChangesAsync();
+        await PublishRequesterStatusChanged(requisition);
+
+        return Ok(new
+        {
+            requisition.HeaderId,
+            DetailId = detail.DetailId,
+            DeniedQty = RequisitionProgress.GetDeniedQty(detail),
             Status = RequisitionStatuses.GetName(requisition.Status),
         });
     }
@@ -524,6 +594,8 @@ public sealed class RequisitionsController(
             header.HeaderId,
             header.RequestNo,
             CreatedAt = header.TransactionDate,
+            header.ApprovedAt,
+            header.ApprovedBy,
             Department = department,
             Division = header.Division,
             EmployeeId = employeeId,
@@ -551,6 +623,8 @@ public sealed class RequisitionsController(
                 detail.Category,
                 Quantity = detail.Qty,
                 FulfilledQty = RequisitionProgress.GetFulfilledQty(detail),
+                DeniedQty = RequisitionProgress.GetDeniedQty(detail),
+                detail.DenyRemark,
                 BacklogQty = RequisitionProgress.GetBacklogQty(detail),
                 AvailableQty = balances.TryGetValue(detail.ProductId, out var balance) ? balance.Qty : 0,
                 Unit = detail.Unit,

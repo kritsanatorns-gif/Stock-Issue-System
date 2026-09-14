@@ -39,7 +39,7 @@ function readValue(row, camelKey, pascalKey = camelKey) {
 
 function MovementMiniTable({ columns, noDataText, rows }) {
   const [page, setPage] = useState(0)
-  const [rowsPerPage, setRowsPerPage] = useState(10)
+  const [rowsPerPage, setRowsPerPage] = useState(25)
   const lastPage = Math.max(0, Math.ceil(rows.length / rowsPerPage) - 1)
   const safePage = Math.min(page, lastPage)
   const visibleRows = rows.slice(safePage * rowsPerPage, (safePage + 1) * rowsPerPage)
@@ -64,7 +64,7 @@ function MovementMiniTable({ columns, noDataText, rows }) {
           value={rowsPerPage}
           onChange={handleRowsPerPageChange}
         >
-          {[5, 10, 20, 50].map((option) => <MenuItem key={option} value={option}>{option}</MenuItem>)}
+          {[10, 25, 50].map((option) => <MenuItem key={option} value={option}>{option}</MenuItem>)}
         </TextField>
       </Stack>
       <Box sx={{ border: '1px solid #cbd5e1', borderRadius: 1.5, overflow: 'hidden' }}>
@@ -160,13 +160,15 @@ function ProductMovementDetails({ error, isLoading, movement }) {
       render: (row) =>
         readValue(row, 'movementType') === 'ปรับสต๊อก'
           ? '-'
-          : `${formatQty(readValue(row, 'receiveQty', 'ReceiveQty') ?? readValue(row, 'qty', 'Qty'))} ${readValue(row, 'receiveUnit', 'ReceiveUnit') || readValue(row, 'unit', 'Unit') || ''}`,
+          : formatQty(readValue(row, 'receiveQty', 'ReceiveQty') ?? readValue(row, 'qty', 'Qty')),
     },
+    { key: 'receiveUnit', label: 'หน่วยรับเข้า', render: (row) => readValue(row, 'receiveUnit', 'ReceiveUnit') || readValue(row, 'unit', 'Unit') || '-' },
     {
       key: 'qty',
       label: 'ผลต่อสต๊อก',
-      render: (row) => `${formatQty(readValue(row, 'qty', 'Qty'))} ${readValue(row, 'unit', 'Unit') || ''}`,
+      render: (row) => formatQty(readValue(row, 'qty', 'Qty')),
     },
+    { key: 'unit', label: 'หน่วย', render: (row) => readValue(row, 'unit', 'Unit') || '-' },
     {
       key: 'costLot',
       label: 'ราคาซื้อ',
@@ -184,8 +186,9 @@ function ProductMovementDetails({ error, isLoading, movement }) {
     {
       key: 'qty',
       label: 'จำนวนเบิก',
-      render: (row) => `${formatQty(readValue(row, 'qty', 'Qty'))} ${readValue(row, 'unit', 'Unit') || ''}`,
+      render: (row) => formatQty(readValue(row, 'qty', 'Qty')),
     },
+    { key: 'unit', label: 'หน่วย', render: (row) => readValue(row, 'unit', 'Unit') || '-' },
     {
       key: 'department',
       label: 'แผนก',
@@ -250,13 +253,14 @@ function ProductDataTable({
     {
       key: 'edit',
       label: 'แก้ไข',
-      width: 95,
+      width: 115,
       align: 'center',
       searchable: false,
       sortable: false,
       render: (row) => (
         <Button
           startIcon={<Pencil size={16} />}
+          sx={{ whiteSpace: 'nowrap' }}
           size="small"
           variant="outlined"
           onClick={() => onEdit(row)}
@@ -265,9 +269,9 @@ function ProductDataTable({
         </Button>
       ),
     },
-    { key: 'productId', label: 'รหัสสินค้า', width: 145 },
-    { key: 'productName', label: 'ชื่อสินค้า', width: 230 },
-    { key: 'categoryName', label: 'หมวดหมู่', width: 120, align: 'center' },
+    { key: 'productId', label: 'รหัสสินค้า', width: 190 },
+    { key: 'productName', label: 'ชื่อสินค้า', width: 280, align: 'left', headerAlign: 'center', wrap: true },
+    { key: 'categoryName', label: 'หมวดหมู่', width: 160, align: 'center' },
     {
       key: 'receiveUnit',
       label: 'รับเข้าเป็น',
@@ -325,7 +329,7 @@ function ProductDataTable({
     {
       key: 'costLots',
       label: 'รายละเอียดต้นทุน',
-      width: 125,
+      width: 165,
       align: 'center',
       searchable: false,
       sortable: false,
@@ -348,7 +352,7 @@ function ProductDataTable({
     {
       key: 'productRemark',
       label: 'หมายเหตุสินค้า',
-      width: 135,
+      width: 170,
       align: 'center',
       searchable: false,
       sortable: false,
@@ -371,7 +375,7 @@ function ProductDataTable({
     {
       key: 'lastRemark',
       label: 'รายละเอียดรับเข้า',
-      width: 125,
+      width: 180,
       align: 'center',
       searchable: false,
       sortable: false,
@@ -409,6 +413,7 @@ function ProductDataTable({
   return (
     <AppTable
       columns={columns}
+      minTableWidth={2200}
       defaultSortDirection="asc"
       defaultSortField="stockStatus"
       expandable

@@ -43,7 +43,7 @@ function AppDataTable({
   defaultSortFieldId,
   defaultSortAsc = false,
   pagination = true,
-  paginationPerPage = 10,
+  paginationPerPage = 25,
   paginationRowsPerPageOptions = [10, 25, 50, 100],
   customStyles = defaultCustomStyles,
   paginationComponentOptions = defaultPaginationComponentOptions,

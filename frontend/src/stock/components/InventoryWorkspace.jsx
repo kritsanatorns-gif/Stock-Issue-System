@@ -15,6 +15,8 @@
   IconButton,
   InputAdornment,
   MenuItem,
+  Radio,
+  RadioGroup,
   Stack,
   TextField,
   Typography,
@@ -47,6 +49,7 @@ import {
   getHrEmployee,
   getProductFavorites,
   getProducts,
+  getUnits,
   getSuppliers,
   saveProductFavorite,
   updateSupplier,
@@ -97,9 +100,21 @@ const getThailandTodayInputValue = () => {
   return `${value('year')}-${value('month')}-${value('day')}`
 }
 
+const getThailandTimeInputValue = () => {
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    hour: '2-digit',
+    hourCycle: 'h23',
+    minute: '2-digit',
+    timeZone: 'Asia/Bangkok',
+  }).formatToParts(new Date())
+  const value = (type) => parts.find((part) => part.type === type)?.value ?? '00'
+
+  return `${value('hour')}:${value('minute')}`
+}
+
 function normalizeDepartmentRow(row) {
   return {
-    code: row.departmentCode ?? row.DepartmentCode ?? '',
+    code: String(row.departmentId ?? row.DepartmentId ?? ''),
     divisionName: row.divisionName ?? row.DivisionName ?? '',
     id: row.departmentId ?? row.DepartmentId ?? '',
     name: row.departmentName ?? row.DepartmentName ?? '',
@@ -142,9 +157,11 @@ function normalizeCompareText(value) {
 }
 
 function getReceiveStockQty(item) {
-  const conversionQty = shouldUseSameUnitConversion(item.unit ?? item.receiveUnit, item.issueUnit)
+  const receiveUnit = item.unit ?? item.receiveUnit ?? ''
+  const issueUnit = item.issueUnit ?? ''
+  const conversionQty = shouldUseSameUnitConversion(receiveUnit, issueUnit)
     ? 1
-    : Math.max(toPositiveNumber(item.conversionQty), 1)
+    : toPositiveNumber(item.conversionQty)
 
   return toPositiveNumber(item.requestQty) * conversionQty
 }
@@ -158,9 +175,12 @@ function shouldUseSameUnitConversion(receiveUnit, issueUnit) {
 }
 
 function getDisplayConversionQty(item) {
-  return shouldUseSameUnitConversion(item.unit ?? item.receiveUnit, item.issueUnit)
+  const receiveUnit = item.unit ?? item.receiveUnit ?? ''
+  const issueUnit = item.issueUnit ?? ''
+
+  return shouldUseSameUnitConversion(receiveUnit, issueUnit)
     ? 1
-    : Math.max(toPositiveNumber(item.conversionQty), 1)
+    : toPositiveNumber(item.conversionQty)
 }
 
 function getConversionHelperText(item) {
@@ -168,7 +188,7 @@ function getConversionHelperText(item) {
   const receiveUnit = item.unit ?? item.receiveUnit ?? ''
   const issueUnit = item.issueUnit ?? ''
 
-  if (shouldUseSameUnitConversion(receiveUnit, issueUnit)) {
+  if (shouldUseSameUnitConversion(receiveUnit, issueUnit) && getDisplayConversionQty(item) === 1) {
     return `${receiveQty} ${receiveUnit} = ${receiveQty} ${issueUnit}`
   }
 
@@ -258,11 +278,14 @@ function InventoryWorkspace({ mode }) {
     ?? 'ผู้ใช้งาน'
   const [inventoryItems, setInventoryItems] = useState([])
   const [categoryOptions, setCategoryOptions] = useState([])
+  const [categorySearchText, setCategorySearchText] = useState('')
+  const [unitOptions, setUnitOptions] = useState(['ชิ้น', 'แพ็ค'])
   const [suppliers, setSuppliers] = useState([])
   const [allSuppliers, setAllSuppliers] = useState([])
   const [poInvoiceNo, setPoInvoiceNo] = useState('')
   const [receiveDate, setReceiveDate] = useState(getThailandTodayInputValue)
   const [receiveSupplierId, setReceiveSupplierId] = useState('')
+  const [supplierSearchText, setSupplierSearchText] = useState('')
   const [isSupplierDialogOpen, setIsSupplierDialogOpen] = useState(false)
   const [isSupplierManagementOpen, setIsSupplierManagementOpen] = useState(false)
   const [supplierName, setSupplierName] = useState('')
@@ -281,6 +304,7 @@ function InventoryWorkspace({ mode }) {
   const [isProductDialogOpen, setIsProductDialogOpen] = useState(false)
   const [isConfirmSaveOpen, setIsConfirmSaveOpen] = useState(false)
   const [isConfirmNewProductOpen, setIsConfirmNewProductOpen] = useState(false)
+  const [pendingNewProductScan, setPendingNewProductScan] = useState('')
   const [matchedProduct, setMatchedProduct] = useState(null)
   const [missingIssueCode, setMissingIssueCode] = useState('')
   const [productForm, setProductForm] = useState(defaultProductForm)
@@ -296,7 +320,8 @@ function InventoryWorkspace({ mode }) {
   const [issueDepartment, setIssueDepartment] = useState('')
   const [issueDivision, setIssueDivision] = useState('')
   const [issueDepartmentCode, setIssueDepartmentCode] = useState('')
-  const [isIssueUrgent, setIsIssueUrgent] = useState(false)
+  const [issueRequestType, setIssueRequestType] = useState('')
+  const isIssueUrgent = issueRequestType === 'urgent'
   const [issueUrgentRemark, setIssueUrgentRemark] = useState('')
   const [issueUrgentTouched, setIssueUrgentTouched] = useState(false)
   const [isDepartmentSelectOpen, setIsDepartmentSelectOpen] = useState(false)
@@ -404,6 +429,20 @@ function InventoryWorkspace({ mode }) {
     }
   }, [mode, supplierFilter])
 
+  const loadUnits = useCallback(async () => {
+    try {
+      const rows = await getUnits()
+      setUnitOptions(
+        (rows ?? [])
+          .filter((row) => Number(row.unitStatus ?? row.UnitStatus ?? 1) === 1)
+          .map((row) => String(row.unitName ?? row.UnitName ?? '').trim())
+          .filter(Boolean),
+      )
+    } catch {
+      setUnitOptions(['ชิ้น', 'แพ็ค'])
+    }
+  }, [])
+
   const loadSuppliers = useCallback(async () => {
     if (mode !== 'receive') {
       return
@@ -427,6 +466,10 @@ function InventoryWorkspace({ mode }) {
   useEffect(() => {
     loadCategories()
   }, [loadCategories])
+
+  useEffect(() => {
+    loadUnits()
+  }, [loadUnits])
 
   useEffect(() => {
     loadSuppliers()
@@ -525,6 +568,11 @@ function InventoryWorkspace({ mode }) {
       setRequesterName(String(requester.name ?? requester.Name ?? '').trim())
     } catch {
       setRequesterName('')
+      setDepartmentCodeText('')
+      setDepartmentSearchText('')
+      setIssueDepartment('')
+      setIssueDivision('')
+      setIssueDepartmentCode('')
       toast.error('ไม่พบข้อมูลพนักงานจากระบบ Login User')
     }
   }
@@ -614,7 +662,9 @@ function InventoryWorkspace({ mode }) {
 
   const createSelectedItem = (item) => {
     const unit = mode === 'receive' ? item.receiveUnit : item.issueUnit
-    const conversionQty = shouldUseSameUnitConversion(unit, item.issueUnit) ? 1 : (item.conversionQty ?? 1)
+    const conversionQty = shouldUseSameUnitConversion(item.receiveUnit, item.issueUnit)
+      ? 1
+      : (item.conversionQty ?? 1)
 
     return {
       ...item,
@@ -634,9 +684,7 @@ function InventoryWorkspace({ mode }) {
 
     setReceiveDraftItem({
       ...draftItem,
-      conversionQty: shouldUseSameUnitConversion(draftItem.unit, draftItem.issueUnit)
-        ? 1
-        : draftItem.conversionQty,
+      conversionQty: getDisplayConversionQty(draftItem),
     })
   }
 
@@ -659,9 +707,9 @@ function InventoryWorkspace({ mode }) {
         [field]: nextValue,
       }
 
-        if (shouldUseSameUnitConversion(next.unit, next.issueUnit)) {
-          next.conversionQty = '1'
-        }
+      if (shouldUseSameUnitConversion(next.unit, next.issueUnit)) {
+        next.conversionQty = '1'
+      }
 
       return next
     })
@@ -784,7 +832,15 @@ function InventoryWorkspace({ mode }) {
           width: 120,
           align: 'center',
           sortable: false,
-          render: (row) => `${Number(row.requestQty ?? 0).toLocaleString('th-TH')} ${row.unit}`,
+          render: (row) => Number(row.requestQty ?? 0).toLocaleString('th-TH'),
+        },
+        {
+          key: 'receiveUnit',
+          label: 'หน่วย',
+          width: 90,
+          align: 'center',
+          sortable: false,
+          render: (row) => row.unit || '-',
         },
         {
           key: 'unitCost',
@@ -803,10 +859,11 @@ function InventoryWorkspace({ mode }) {
           value: (row) => getReceiveStockQty(row),
           render: (row) => (
             <Typography sx={{ color: '#0f172a', fontSize: 13, fontWeight: 800 }}>
-              {getReceiveStockQty(row).toLocaleString('th-TH')} {row.issueUnit}
+              {getReceiveStockQty(row).toLocaleString('th-TH')}
             </Typography>
           ),
         },
+        { key: 'stockUnit', label: 'หน่วย', width: 90, align: 'center', sortable: false, render: (row) => row.issueUnit || '-' },
         { key: 'code', label: 'รหัสสินค้า', width: 150, sortable: false },
       ]
     }
@@ -838,8 +895,9 @@ function InventoryWorkspace({ mode }) {
         width: 110,
         align: 'center',
         sortable: false,
-        render: (row) => `${getIssueAvailableQty(row).toLocaleString('th-TH')} ${row.unit ?? ''}`,
+        render: (row) => getIssueAvailableQty(row).toLocaleString('th-TH'),
       },
+      { key: 'availableUnit', label: 'หน่วย', width: 90, align: 'center', sortable: false, render: (row) => row.unit || '-' },
       baseColumns[0],
       baseColumns[2],
       {
@@ -1004,7 +1062,7 @@ function InventoryWorkspace({ mode }) {
         isFavorite: favoriteProductCodes.includes(matchedItem.code),
       })
     } else if (mode === 'receive') {
-      handleOpenNewProduct(scanCode)
+      setPendingNewProductScan(scanCode)
     } else {
       setMissingIssueCode(scanCode)
     }
@@ -1149,13 +1207,13 @@ function InventoryWorkspace({ mode }) {
     })
   }
 
-  const handleOpenNewProduct = (initialCode = scanText.trim()) => {
-    const normalizedInitialCode = typeof initialCode === 'string' ? initialCode : scanText.trim()
+  const handleOpenNewProduct = (initialValue = '', initialField = '') => {
+    const normalizedInitialValue = typeof initialValue === 'string' ? initialValue.trim() : ''
 
     setProductForm({
       ...defaultProductForm,
-      barcode: normalizedInitialCode,
-      code: normalizedInitialCode,
+      barcode: initialField === 'barcode' ? normalizedInitialValue : '',
+      code: initialField === 'code' ? normalizedInitialValue : '',
     })
     setIsProductFormSubmitted(false)
     setDuplicateProductCodeAlerted('')
@@ -1245,13 +1303,7 @@ function InventoryWorkspace({ mode }) {
       barcode: item.barcode ?? '',
       category: String(item.category ?? '').trim() || 'General',
       code: item.code ?? '',
-      conversionQty: mode === 'receive'
-        ? (
-            shouldUseSameUnitConversion(item.unit ?? item.receiveUnit, item.issueUnit)
-              ? 1
-              : toPositiveNumber(item.conversionQty)
-          )
-        : 1,
+      conversionQty: mode === 'receive' ? getDisplayConversionQty(item) : 1,
       costLot: mode === 'receive' ? String(item.unitCost ?? '') : String(item.costLot ?? ''),
       imageName: item.imageName ?? '',
       lineNo: index + 1,
@@ -1267,6 +1319,17 @@ function InventoryWorkspace({ mode }) {
   })
 
   const handleSubmitTransaction = async () => {
+    if (mode === 'issue' && !issueRequestType) {
+      await Swal.fire({
+        title: 'กรุณาเลือกประเภทการเบิก',
+        text: 'กรุณาเลือกเบิกปกติหรือเบิกด่วนก่อนส่งคำขอ',
+        icon: 'warning',
+        confirmButtonText: 'ตกลง',
+        customClass: { container: 'stock-swal-container' },
+      })
+      return
+    }
+
     if (!canSubmit) {
       return
     }
@@ -1283,7 +1346,7 @@ function InventoryWorkspace({ mode }) {
       0,
     )
     const transactionDate = mode === 'receive'
-      ? new Date(`${receiveDate}T12:00:00`)
+      ? new Date(`${receiveDate}T${getThailandTimeInputValue()}:00`)
       : now
     const transactionPayload = {
       ...createTransactionPayload(documentNo, transactionDate),
@@ -1362,7 +1425,7 @@ function InventoryWorkspace({ mode }) {
       setRequesterName('')
       setRequesterEmployeeId('')
       setPendingDepartmentToCreate('')
-      setIsIssueUrgent(false)
+      setIssueRequestType('')
       setIssueUrgentRemark('')
       setIssueUrgentTouched(false)
       await loadInventoryItems()
@@ -1617,10 +1680,13 @@ function InventoryWorkspace({ mode }) {
                       label="หมวดหมู่"
                       size="small"
                       value={category}
-                      onChange={(event) => setCategory(event.target.value)}
+                      onChange={(event) => { setCategory(event.target.value); setCategorySearchText('') }}
                     >
                       <MenuItem value="">ทั้งหมด</MenuItem>
-                      {categories.map((item) => (
+                      <MenuItem disableRipple sx={{ cursor: 'default', py: 0.75 }} onKeyDown={(event) => event.stopPropagation()}>
+                        <TextField autoFocus fullWidth placeholder="ค้นหาหมวดหมู่" size="small" value={categorySearchText} onChange={(event) => setCategorySearchText(event.target.value)} onClick={(event) => event.stopPropagation()} />
+                      </MenuItem>
+                      {categories.filter((item) => item.toLowerCase().includes(categorySearchText.trim().toLowerCase())).map((item) => (
                         <MenuItem key={item} value={item}>
                           {item}
                         </MenuItem>
@@ -1652,10 +1718,13 @@ function InventoryWorkspace({ mode }) {
                         label="ผู้ขาย"
                         size="small"
                         value={supplierFilter}
-                        onChange={(event) => setSupplierFilter(event.target.value)}
+                        onChange={(event) => { setSupplierFilter(event.target.value); setSupplierSearchText('') }}
                       >
                         <MenuItem value="">ทั้งหมด</MenuItem>
-                        {suppliers.map((supplier) => (
+                        <MenuItem disableRipple sx={{ cursor: 'default', py: 0.75 }} onKeyDown={(event) => event.stopPropagation()}>
+                          <TextField autoFocus fullWidth placeholder="ค้นหาผู้ขาย" size="small" value={supplierSearchText} onChange={(event) => setSupplierSearchText(event.target.value)} onClick={(event) => event.stopPropagation()} />
+                        </MenuItem>
+                        {suppliers.filter((supplier) => `${supplier.accountId ?? ''} ${supplier.supplierName ?? ''}`.toLowerCase().includes(supplierSearchText.trim().toLowerCase())).map((supplier) => (
                           <MenuItem key={supplier.supplierId} value={String(supplier.supplierId)}>
                             {supplier.supplierName}
                           </MenuItem>
@@ -1800,9 +1869,52 @@ function InventoryWorkspace({ mode }) {
                     <Chip label={mode === 'issue' ? `${selectedItems.length}/${MAX_ISSUE_ITEMS_PER_REQUEST} รายการ` : `${selectedItems.length} รายการ`} size="small" />
                   </Stack>
 
+                  {mode === 'issue' ? (
+                    <Box
+                      sx={{
+                        bgcolor: issueRequestType === 'urgent' ? '#fff7ed' : '#f8fafc',
+                        border: `1px solid ${issueRequestType === 'urgent' ? '#fed7aa' : '#dbe4f0'}`,
+                        borderRadius: 2,
+                        p: 1.25,
+                      }}
+                    >
+                      <Typography sx={{ color: '#0f172a', fontSize: 14, fontWeight: 900 }}>ประเภทการเบิก *</Typography>
+                      <RadioGroup
+                        row
+                        value={issueRequestType}
+                        onChange={(event) => {
+                          const nextType = event.target.value
+                          setIssueRequestType(nextType)
+                          setIssueUrgentTouched(false)
+                          if (nextType !== 'urgent') setIssueUrgentRemark('')
+                        }}
+                      >
+                        <FormControlLabel control={<Radio size="small" />} label="เบิกปกติ" value="normal" />
+                        <FormControlLabel control={<Radio color="error" size="small" />} label="เบิกด่วน" value="urgent" />
+                      </RadioGroup>
+                      <Typography sx={{ color: '#64748b', fontSize: 12, mb: isIssueUrgent ? 1 : 0 }}>
+                        เลือกเบิกด่วนเฉพาะกรณีที่ต้องการให้จัดของก่อนรายการทั่วไป
+                      </Typography>
+                      {isIssueUrgent ? (
+                        <TextField
+                          error={issueUrgentTouched && !issueUrgentRemark.trim()}
+                          fullWidth
+                          helperText={issueUrgentTouched && !issueUrgentRemark.trim() ? 'กรุณาระบุเหตุผลเบิกด่วน' : 'เหตุผลนี้จะแสดงในรายการคำขอ'}
+                          label="เหตุผลเบิกด่วน *"
+                          minRows={2}
+                          multiline
+                          size="small"
+                          value={issueUrgentRemark}
+                          onBlur={() => setIssueUrgentTouched(true)}
+                          onChange={(event) => setIssueUrgentRemark(event.target.value)}
+                        />
+                      ) : null}
+                    </Box>
+                  ) : null}
+
                   {mode === 'receive' ? (
                     <Grid container spacing={1.25}>
-                      <Grid size={{ xs: 12, sm: 4 }}>
+                      <Grid size={{ xs: 12, sm: 3 }}>
                         <TextField
                           fullWidth
                           label={config.documentLabel}
@@ -1821,18 +1933,21 @@ function InventoryWorkspace({ mode }) {
                           label="ผู้ขายของรายการนำเข้า"
                           size="small"
                           value={receiveSupplierId}
-                          onChange={(event) => setReceiveSupplierId(event.target.value)}
+                          onChange={(event) => { setReceiveSupplierId(event.target.value); setSupplierSearchText('') }}
                           helperText="เลือกครั้งเดียว ใช้กับสินค้าทุกรายการในชุดนี้"
                         >
                           <MenuItem value="">เลือกผู้ขาย</MenuItem>
-                          {suppliers.map((supplier) => (
+                          <MenuItem disableRipple disableTouchRipple sx={{ cursor: 'default', py: 0.75 }} onKeyDown={(event) => event.stopPropagation()}>
+                            <TextField autoFocus fullWidth placeholder="ค้นหารหัสหรือชื่อผู้ขาย" size="small" value={supplierSearchText} onChange={(event) => setSupplierSearchText(event.target.value)} onClick={(event) => event.stopPropagation()} />
+                          </MenuItem>
+                          {suppliers.filter((supplier) => `${supplier.accountId ?? ''} ${supplier.supplierName ?? ''}`.toLowerCase().includes(supplierSearchText.trim().toLowerCase())).map((supplier) => (
                             <MenuItem key={supplier.supplierId} value={String(supplier.supplierId)}>
                               {supplier.supplierName}
                             </MenuItem>
                           ))}
                         </TextField>
                       </Grid>
-                      <Grid size={{ xs: 12, sm: 4 }}>
+                      <Grid size={{ xs: 12, sm: 3 }}>
                         <DateInputField
                           fullWidth
                           required
@@ -1841,6 +1956,16 @@ function InventoryWorkspace({ mode }) {
                           value={receiveDate}
                           onChange={setReceiveDate}
                           helperText="ใช้แสดงในรายงานและประวัติรับเข้า"
+                        />
+                      </Grid>
+                      <Grid size={{ xs: 12, sm: 2 }}>
+                        <TextField
+                          disabled
+                          fullWidth
+                          label="เวลา"
+                          size="small"
+                          value={getThailandTimeInputValue()}
+                          helperText="บันทึกเวลาปัจจุบัน"
                         />
                       </Grid>
                     </Grid>
@@ -1913,10 +2038,7 @@ function InventoryWorkspace({ mode }) {
                                   <Typography sx={{ color: '#64748b', fontSize: 11 }}>แปลงหน่วย</Typography>
                                   <Typography sx={{ color: '#0f172a', fontSize: 13, fontWeight: 800 }}>
                                     1 {item.unit} = {
-                                      (shouldUseSameUnitConversion(item.unit, item.issueUnit)
-                                        ? 1
-                                        : Number(item.conversionQty ?? 1)
-                                      ).toLocaleString('th-TH')
+                                      getDisplayConversionQty(item).toLocaleString('th-TH')
                                     } {item.issueUnit}
                                   </Typography>
                                 </Grid>
@@ -1951,7 +2073,25 @@ function InventoryWorkspace({ mode }) {
                             size="small"
                             value={requesterEmployeeId}
                             onBlur={handleRequesterEmployeeIdBlur}
-                            onChange={(event) => setRequesterEmployeeId(normalizeEmployeeNumericId(event.target.value))}
+                            onKeyDown={(event) => {
+                              if (event.key === 'Enter') {
+                                event.preventDefault()
+                                handleRequesterEmployeeIdBlur()
+                              }
+                            }}
+                            onChange={(event) => {
+                              const nextEmployeeId = normalizeEmployeeNumericId(event.target.value)
+                              setRequesterEmployeeId(nextEmployeeId)
+
+                              if (!nextEmployeeId) {
+                                setRequesterName('')
+                                setDepartmentCodeText('')
+                                setDepartmentSearchText('')
+                                setIssueDepartment('')
+                                setIssueDivision('')
+                                setIssueDepartmentCode('')
+                              }
+                            }}
                           />
                         </Grid>
                         <Grid size={{ xs: 12, sm: 7 }}>
@@ -1967,28 +2107,7 @@ function InventoryWorkspace({ mode }) {
                         </Grid>
                       </Grid>
                       <Grid container spacing={1.25}>
-                        <Grid size={{ xs: 12, sm: 4 }}>
-                          <TextField
-                            disabled
-                            fullWidth
-                            label="ยิง QR แผนก"
-                            placeholder="สแกนรหัสแผนก"
-                            size="small"
-                            value={departmentCodeText}
-                            onChange={(event) => setDepartmentCodeText(normalizeBarcodeInput(event.target.value))}
-                            onKeyDown={handleDepartmentCodeKeyDown}
-                            slotProps={{
-                              input: {
-                                startAdornment: (
-                                  <InputAdornment position="start">
-                                    <Barcode color="#64748b" size={18} />
-                                  </InputAdornment>
-                                ),
-                              },
-                            }}
-                          />
-                        </Grid>
-                        <Grid size={{ xs: 12, sm: 4 }}>
+                        <Grid size={{ xs: 12, sm: 6 }}>
                           <TextField
                             disabled
                             fullWidth
@@ -2089,50 +2208,6 @@ function InventoryWorkspace({ mode }) {
                           },
                         }}
                       />
-                      <Box
-                        sx={{
-                          bgcolor: isIssueUrgent ? '#fff7ed' : '#ffffff',
-                          border: `1px solid ${isIssueUrgent ? '#fed7aa' : '#e2e8f0'}`,
-                          borderRadius: 2,
-                          p: 1.25,
-                        }}
-                      >
-                        <FormControlLabel
-                          control={(
-                            <Checkbox
-                              checked={isIssueUrgent}
-                              color="error"
-                              onChange={(event) => {
-                                setIsIssueUrgent(event.target.checked)
-                                setIssueUrgentTouched(false)
-                                if (!event.target.checked) {
-                                  setIssueUrgentRemark('')
-                                }
-                              }}
-                            />
-                          )}
-                          label="เบิกด่วน"
-                          sx={{ fontWeight: 800, m: 0 }}
-                        />
-                        {isIssueUrgent ? (
-                          <TextField
-                            error={issueUrgentTouched && !issueUrgentRemark.trim()}
-                            fullWidth
-                            helperText={
-                              issueUrgentTouched && !issueUrgentRemark.trim()
-                                ? 'กรุณาระบุเหตุผลเบิกด่วน'
-                                : 'เหตุผลนี้จะแสดงให้ HR เห็นในรายการคำขอ'
-                            }
-                            label="เหตุผลเบิกด่วน *"
-                            minRows={2}
-                            multiline
-                            size="small"
-                            value={issueUrgentRemark}
-                            onBlur={() => setIssueUrgentTouched(true)}
-                            onChange={(event) => setIssueUrgentRemark(event.target.value)}
-                          />
-                        ) : null}
-                      </Box>
                     </Stack>
                   )}
 
@@ -2147,7 +2222,20 @@ function InventoryWorkspace({ mode }) {
                     startIcon={<CheckSquare size={18} />}
                     sx={{ minHeight: 44, fontWeight: 800 }}
                     variant="contained"
-                    onClick={() => setIsConfirmSaveOpen(true)}
+                    onClick={() => {
+                      if (mode === 'issue' && !issueRequestType) {
+                        Swal.fire({
+                          title: 'กรุณาเลือกประเภทการเบิก',
+                          text: 'กรุณาเลือกเบิกปกติหรือเบิกด่วนก่อนส่งคำขอ',
+                          icon: 'warning',
+                          confirmButtonText: 'ตกลง',
+                          customClass: { container: 'stock-swal-container' },
+                        })
+                        return
+                      }
+
+                      setIsConfirmSaveOpen(true)
+                    }}
                   >
                     {config.actionLabel}
                   </Button>
@@ -2158,6 +2246,51 @@ function InventoryWorkspace({ mode }) {
         </Grid>
       </Grid>
     </Box>
+
+    <Dialog
+      fullWidth
+      maxWidth="xs"
+      open={Boolean(pendingNewProductScan)}
+      onClose={() => setPendingNewProductScan('')}
+    >
+      <DialogTitle sx={{ alignItems: 'center', display: 'flex', gap: 1 }}>
+        <Barcode size={22} />
+        ไม่พบสินค้า
+      </DialogTitle>
+      <DialogContent>
+        <Stack spacing={1.5} sx={{ pt: 1 }}>
+          <Alert severity="info">
+            เลือกชนิดของข้อมูลที่สแกน เพื่อใส่ในช่องที่ถูกต้องก่อนเพิ่มสินค้าใหม่
+          </Alert>
+          <Typography sx={{ color: '#475569', fontSize: 14 }}>
+            ข้อมูลที่สแกน: <strong>{pendingNewProductScan}</strong>
+          </Typography>
+        </Stack>
+      </DialogContent>
+      <DialogActions sx={{ flexWrap: 'wrap', gap: 1, px: 3, pb: 2.5 }}>
+        <Button color="inherit" onClick={() => setPendingNewProductScan('')}>ยกเลิก</Button>
+        <Button
+          variant="outlined"
+          onClick={() => {
+            const value = pendingNewProductScan
+            setPendingNewProductScan('')
+            handleOpenNewProduct(value, 'code')
+          }}
+        >
+          เป็นรหัสสินค้า
+        </Button>
+        <Button
+          variant="contained"
+          onClick={() => {
+            const value = pendingNewProductScan
+            setPendingNewProductScan('')
+            handleOpenNewProduct(value, 'barcode')
+          }}
+        >
+          เป็นบาร์โค้ด
+        </Button>
+      </DialogActions>
+    </Dialog>
 
     <Dialog
       fullWidth
@@ -2203,7 +2336,7 @@ function InventoryWorkspace({ mode }) {
 
     <Dialog
       fullWidth
-      maxWidth="md"
+      maxWidth="lg"
       open={Boolean(receiveDraftItem)}
       onClose={() => setReceiveDraftItem(null)}
     >
@@ -2214,8 +2347,24 @@ function InventoryWorkspace({ mode }) {
       <DialogContent>
         {receiveDraftItem ? (
           <Stack spacing={2} sx={{ pt: 1 }}>
-            <Box className="inventory-workspace__scan-product-detail">
-              <Grid container spacing={1.5}>
+            <Box className="inventory-workspace__scan-product-detail" sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 3, alignItems: { xs: 'center', sm: 'flex-start' } }}>
+              <Box sx={{ width: 180, height: 180, flexShrink: 0, bgcolor: '#fff', border: '1px solid #dbe3ef', borderRadius: 2, display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', overflow: 'hidden' }}>
+                <Stack alignItems="center" spacing={1} sx={{ color: '#94a3b8' }}>
+                  <Camera size={36} />
+                  <Typography variant="caption">ไม่มีรูปสินค้า</Typography>
+                </Stack>
+                {getImageUrl(receiveDraftItem.imageName) ? (
+                  <Box
+                    key={receiveDraftItem.imageName}
+                    component="img"
+                    src={getImageUrl(receiveDraftItem.imageName)}
+                    alt={receiveDraftItem.name}
+                    sx={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain', bgcolor: '#fff', p: 1 }}
+                    onError={(event) => { event.currentTarget.style.display = 'none' }}
+                  />
+                ) : null}
+              </Box>
+              <Grid container spacing={1.5} sx={{ flex: 1, minWidth: 0, width: '100%' }}>
                 <Grid size={{ xs: 12, sm: 4 }}>
                   <Typography className="inventory-workspace__detail-label">รหัสสินค้า</Typography>
                   <Typography className="inventory-workspace__detail-value">{receiveDraftItem.code}</Typography>
@@ -2248,15 +2397,15 @@ function InventoryWorkspace({ mode }) {
             <Grid container spacing={2}>
               <Grid size={{ xs: 12, sm: 2.4 }}>
                 <TextField
-                  autoFocus
+                  disabled
                   fullWidth
                   label="รับเข้าเป็น"
                   value={receiveDraftItem.unit}
-                  onChange={(event) => handleReceiveDraftChange('unit', event.target.value)}
                 />
               </Grid>
               <Grid size={{ xs: 12, sm: 2.4 }}>
                 <TextField
+                  autoFocus
                   error={!String(receiveDraftItem.requestQty ?? '').trim() || toPositiveNumber(receiveDraftItem.requestQty) <= 0}
                   fullWidth
                   helperText={
@@ -2291,27 +2440,27 @@ function InventoryWorkspace({ mode }) {
               </Grid>
               <Grid size={{ xs: 12, sm: 2.4 }}>
                 <TextField
+                  disabled
                   fullWidth
                   helperText="หน่วยที่พนักงานใช้ตอนเบิก"
                   label="เบิกออกเป็น"
                   value={receiveDraftItem.issueUnit}
-                  onChange={(event) => handleReceiveDraftChange('issueUnit', event.target.value)}
                 />
               </Grid>
               <Grid size={{ xs: 12, sm: 4.4 }}>
                 <TextField
-                  disabled={shouldUseSameUnitConversion(receiveDraftItem.unit, receiveDraftItem.issueUnit)}
                   error={
                     !shouldUseSameUnitConversion(receiveDraftItem.unit, receiveDraftItem.issueUnit)
                     && (!String(receiveDraftItem.conversionQty ?? '').trim() || toPositiveNumber(receiveDraftItem.conversionQty) <= 0)
                   }
+                  disabled={shouldUseSameUnitConversion(receiveDraftItem.unit, receiveDraftItem.issueUnit)}
                   fullWidth
                   helperText={
                     shouldUseSameUnitConversion(receiveDraftItem.unit, receiveDraftItem.issueUnit)
-                      ? 'หน่วยรับเข้าและหน่วยเบิกเหมือนกัน ช่องนี้จะถูกปิด และระบบแปลง 1 ต่อ 1 ให้อัตโนมัติ'
+                      ? 'หน่วยรับเข้าและหน่วยเบิกเหมือนกัน ระบบกำหนด 1 ต่อ 1'
                       : !String(receiveDraftItem.conversionQty ?? '').trim() || toPositiveNumber(receiveDraftItem.conversionQty) <= 0
                         ? 'กรอกจำนวนแปลงมากกว่า 0'
-                      : `กรอกจำนวน ${receiveDraftItem.issueUnit || 'หน่วยเบิก'} ต่อ 1 ${receiveDraftItem.unit || 'หน่วยรับเข้า'} เช่น 1 แพ็ค = 100 ชิ้น`
+                        : `กรอกจำนวน ${receiveDraftItem.issueUnit || 'หน่วยเบิก'} ต่อ 1 ${receiveDraftItem.unit || 'หน่วยรับเข้า'} เช่น 1 แพ็ค = 100 ชิ้น`
                   }
                   label={
                     shouldUseSameUnitConversion(receiveDraftItem.unit, receiveDraftItem.issueUnit)
@@ -2319,11 +2468,7 @@ function InventoryWorkspace({ mode }) {
                       : `จำนวน${receiveDraftItem.issueUnit || 'หน่วยเบิก'}ต่อ 1 ${receiveDraftItem.unit || 'หน่วยรับเข้า'}`
                   }
                   type="number"
-                  value={
-                    shouldUseSameUnitConversion(receiveDraftItem.unit, receiveDraftItem.issueUnit)
-                      ? 1
-                      : receiveDraftItem.conversionQty ?? 1
-                  }
+                  value={getDisplayConversionQty(receiveDraftItem)}
                   onChange={(event) => handleReceiveDraftChange('conversionQty', event.target.value)}
                   slotProps={{
                     htmlInput: {
@@ -2363,7 +2508,7 @@ function InventoryWorkspace({ mode }) {
           disabled={
             !receiveDraftItem
             || toPositiveNumber(receiveDraftItem.requestQty) <= 0
-            || toPositiveNumber(receiveDraftItem.conversionQty) <= 0
+            || getDisplayConversionQty(receiveDraftItem) <= 0
             || receiveDraftItem.unitCost === ''
             || receiveDraftItem.unitCost === null
             || receiveDraftItem.unitCost === undefined
@@ -2541,11 +2686,11 @@ function InventoryWorkspace({ mode }) {
             <Grid size={{ xs: 12, sm: 4 }}>
               <TextField
                 fullWidth
-                {...getProductFieldErrorProps('name', 'ชื่อที่ผู้ใช้งานเห็นตอนค้นหาและเบิกสินค้า')}
-                required
-                label="ชื่อสินค้า"
-                value={productForm.name}
-                onChange={(event) => handleProductFormChange('name', event.target.value)}
+                {...getProductFieldErrorProps('barcode', 'ใช้ยิงสแกน ถ้าไม่มีให้เว้นว่างได้')}
+                label="บาร์โค้ด"
+                value={productForm.barcode}
+                onChange={(event) => handleProductFormChange('barcode', normalizeBarcodeInput(event.target.value))}
+                onBlur={(event) => handleDuplicateProductCheck('barcode', event.target.value)}
               />
             </Grid>
             <Grid size={{ xs: 12, sm: 4 }}>
@@ -2556,9 +2701,12 @@ function InventoryWorkspace({ mode }) {
                 select
                 label="ประเภทสินค้า"
                 value={productForm.category}
-                onChange={(event) => handleProductFormChange('category', event.target.value)}
+                onChange={(event) => { handleProductFormChange('category', event.target.value); setCategorySearchText('') }}
               >
-                {categories.map((item) => (
+                <MenuItem disableRipple sx={{ cursor: 'default', py: 0.75 }} onKeyDown={(event) => event.stopPropagation()}>
+                  <TextField autoFocus fullWidth placeholder="ค้นหาหมวดหมู่" size="small" value={categorySearchText} onChange={(event) => setCategorySearchText(event.target.value)} onClick={(event) => event.stopPropagation()} />
+                </MenuItem>
+                {categories.filter((item) => item.toLowerCase().includes(categorySearchText.trim().toLowerCase())).map((item) => (
                   <MenuItem key={item} value={item}>
                     {item}
                   </MenuItem>
@@ -2568,14 +2716,14 @@ function InventoryWorkspace({ mode }) {
           </Grid>
 
           <Grid container spacing={2}>
-            <Grid size={{ xs: 12, sm: 7 }}>
+            <Grid size={{ xs: 12 }}>
               <TextField
                 fullWidth
-                {...getProductFieldErrorProps('barcode', 'ใช้ยิงสแกน ถ้าไม่มีให้เว้นว่างได้')}
-                label="บาร์โค้ด"
-                value={productForm.barcode}
-                onChange={(event) => handleProductFormChange('barcode', normalizeBarcodeInput(event.target.value))}
-                onBlur={(event) => handleDuplicateProductCheck('barcode', event.target.value)}
+                {...getProductFieldErrorProps('name', 'ชื่อที่ผู้ใช้งานเห็นตอนค้นหาและเบิกสินค้า')}
+                required
+                label="ชื่อสินค้า"
+                value={productForm.name}
+                onChange={(event) => handleProductFormChange('name', event.target.value)}
               />
             </Grid>
           </Grid>
@@ -2587,9 +2735,12 @@ function InventoryWorkspace({ mode }) {
                 {...getProductFieldErrorProps('receiveUnit', 'หน่วยตอนซื้อหรือรับของเข้า')}
                 required
                 label="รับเข้าเป็น"
+                select
                 value={productForm.receiveUnit}
                 onChange={(event) => handleProductFormChange('receiveUnit', event.target.value)}
-              />
+              >
+                {unitOptions.map((unit) => <MenuItem key={unit} value={unit}>{unit}</MenuItem>)}
+              </TextField>
             </Grid>
             <Grid size={{ xs: 12, sm: 2.4 }}>
               <TextField
@@ -2621,9 +2772,12 @@ function InventoryWorkspace({ mode }) {
                 {...getProductFieldErrorProps('issueUnit', 'หน่วยที่พนักงานใช้ตอนเบิก')}
                 required
                 label="เบิกออกเป็น"
+                select
                 value={productForm.issueUnit}
                 onChange={(event) => handleProductFormChange('issueUnit', event.target.value)}
-              />
+              >
+                {unitOptions.map((unit) => <MenuItem key={unit} value={unit}>{unit}</MenuItem>)}
+              </TextField>
             </Grid>
             <Grid size={{ xs: 12, sm: 4.4 }}>
               <TextField

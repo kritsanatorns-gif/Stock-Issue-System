@@ -65,6 +65,10 @@
   display: grid;
   gap: 12px;
   grid-template-columns: repeat(4, minmax(0, 1fr));
+  max-height: max(320px, calc(100vh - 360px));
+  overflow-y: auto;
+  padding-right: 4px;
+  scrollbar-gutter: stable;
 }
 
 .inventory-workspace__product-card {

@@ -1,3 +1,4 @@
+import { installReportPrinting } from '../../utils/reportPagination'
 ﻿import {
   Alert,
   Box,
@@ -11,20 +12,22 @@
   Grid,
   InputAdornment,
   MenuItem,
+  Radio,
+  RadioGroup,
   Stack,
   TextField,
   Typography,
 } from '@mui/material'
 import { Camera, CheckCircle2, PackageCheck, Search, Send, Trash2 } from 'lucide-react'
-import JsBarcode from 'jsbarcode'
 import { useEffect, useMemo, useState } from 'react'
 import { Navigate } from 'react-router-dom'
 import Swal from 'sweetalert2'
 import { createRequisition, getProducts, getRequisitions } from '../../api/api'
 import { apiOrigin } from '../../api/apiConfig'
 import { useRequestAuthStore } from '../../store/requestAuthStore'
-import { formatDisplayDateTime, getThailandDateParts } from '../../utils/dateUtils'
+import { formatDisplayDateTime } from '../../utils/dateUtils'
 import { normalizeWholeNumberInput } from '../../utils/inputGuards'
+import { printHistorySlip } from './RequestHistoryPage'
 
 function normalizeProduct(row) {
   const productId = row.productId ?? row.ProductId ?? row.code ?? row.Code ?? ''
@@ -101,21 +104,6 @@ const stockStatusOptions = [
 ]
 
 const MAX_ITEMS_PER_REQUEST = 25
-
-function createRequestBarcodeDataUrl(requestNo) {
-  const value = String(requestNo ?? '').trim()
-  if (!value) return ''
-
-  const canvas = document.createElement('canvas')
-  JsBarcode(canvas, value, {
-    displayValue: false,
-    height: 28,
-    margin: 0,
-    width: 1.4,
-  })
-
-  return canvas.toDataURL('image/png')
-}
 
 function printRequestSlipOld({ department, items, remark, requesterName, requestNo = 'รอเลขคำขอ' }) {
   const printedAt = formatDisplayDateTime(new Date())
@@ -206,6 +194,7 @@ function printRequestSlipOld({ department, items, remark, requesterName, request
       </body>
     </html>
   `)
+  installReportPrinting(printWindow)
   printWindow.document.close()
 }
 
@@ -279,413 +268,14 @@ async function getCarryOverBacklogItems({ currentHeaderId, department, employeeI
 }
 
 function printRequestSlip({ department, division = '', isUrgent = false, items, remark, requesterName, requestNo = '' }) {
-  const escapeHtml = (value) =>
-    String(value ?? '')
-      .replaceAll('&', '&amp;')
-      .replaceAll('<', '&lt;')
-      .replaceAll('>', '&gt;')
-      .replaceAll('"', '&quot;')
-      .replaceAll("'", '&#039;')
-
-  const {
-    day: requestDay,
-    month: requestMonth,
-    time: requestTime,
-    year: requestYear,
-  } = getThailandDateParts(new Date())
-  const printItems = items
-  const fixedRowCount = 25
-  const stampText = isUrgent ? 'ด่วน' : ''
-  const barcodeImage = createRequestBarcodeDataUrl(requestNo)
-  const rows = printItems
-    .map(
-      (item, index) => `
-        <tr>
-          <td class="center">${index + 1}</td>
-          <td class="center">${escapeHtml(item.category || '')}</td>
-          <td>${escapeHtml(item.productName)}</td>
-          <td class="center">${Number(item.quantity || 0).toLocaleString('th-TH')}</td>
-          <td class="center">${escapeHtml(item.issueUnit)}</td>
-          <td>${escapeHtml(item.remark || '')}</td>
-        </tr>
-      `,
-    )
-    .join('')
-    + Array.from({ length: Math.max(0, fixedRowCount - printItems.length) }, (_, index) => `
-      <tr>
-        <td class="center">${printItems.length + index + 1}</td>
-        <td></td><td></td><td></td><td></td><td></td>
-      </tr>
-    `).join('')
-  const printWindow = window.open('', '_blank', 'width=900,height=900')
-
-  if (!printWindow) {
-    return
-  }
-
-  printWindow.document.write(`
-    <!doctype html>
-    <html lang="th">
-      <head>
-        <meta charset="utf-8" />
-        <title>ใบเบิกของ</title>
-        <style>
-          @page {
-            size: A4 portrait;
-            margin: 5mm;
-          }
-
-          * {
-            box-sizing: border-box;
-          }
-
-          body {
-            background: #fff;
-            color: #000;
-            font-family: Tahoma, Arial, sans-serif;
-            font-size: 15px;
-            margin: 0;
-          }
-
-          .sheet {
-            border: 2px solid #111;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            min-height: 287mm;
-            padding: 3mm 1mm;
-            position: relative;
-            width: 100%;
-          }
-
-          .urgent-stamp {
-            border: 2px solid #dc2626;
-            color: #dc2626;
-            display: ${stampText ? 'inline-flex' : 'none'};
-            font-size: 22px;
-            font-weight: 900;
-            left: 5mm;
-            letter-spacing: 1px;
-            line-height: 1;
-            padding: 6px 14px;
-            position: absolute;
-            top: 5mm;
-          }
-
-          .document-no {
-            position: absolute;
-            right: 5mm;
-            text-align: right;
-            top: 5mm;
-          }
-
-          .document-barcode {
-            display: block;
-            height: 28px;
-            margin: 9px 0 0 auto;
-            width: 145px;
-          }
-
-          .title {
-            font-size: 28px;
-            font-weight: 900;
-            line-height: 1.1;
-            margin-top: 20px;
-            text-align: center;
-          }
-
-          .subtitle {
-            margin-bottom: 4px;
-            text-align: center;
-          }
-
-          .line {
-            border-bottom: 1px solid #111;
-            display: inline-block;
-            min-height: 17px;
-            padding: 0 5px 1px;
-            vertical-align: bottom;
-          }
-
-          .line-xs {
-            min-width: 36px;
-          }
-
-          .line-sm {
-            min-width: 62px;
-          }
-
-          .line-md {
-            min-width: 88px;
-          }
-
-          .line-lg {
-            min-width: 260px;
-          }
-
-          .line-xl {
-            min-width: 270px;
-          }
-
-          .top-section {
-            display: grid;
-            gap: 10px;
-            grid-template-columns: minmax(0, 1fr) 310px;
-            margin-top: 4px;
-          }
-
-          .approval-box {
-            border: 1px solid #111;
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-          }
-
-          .approval-cell {
-            min-height: 96px;
-            padding: 3px 6px;
-            text-align: center;
-          }
-
-          .approval-cell + .approval-cell {
-            border-left: 1px solid #111;
-          }
-
-          .approval-title {
-            border-bottom: 1px solid #111;
-            font-size: 11px;
-            font-weight: 700;
-            margin: -3px -6px 38px;
-            padding: 3px 2px;
-            white-space: nowrap;
-          }
-
-          .approval-sign-line {
-            border-bottom: 1px solid #111;
-            margin: 0 auto 9px;
-            width: 82%;
-          }
-
-          .approval-date-line {
-            font-size: 11px;
-            line-height: 1;
-            white-space: nowrap;
-          }
-
-          .field-row {
-            margin-bottom: 4px;
-            white-space: nowrap;
-          }
-
-          table {
-            border-collapse: collapse;
-            margin-top: 8px;
-            page-break-inside: auto;
-            width: 100%;
-          }
-
-          thead {
-            display: table-header-group;
-          }
-
-          tr {
-            page-break-inside: avoid;
-            page-break-after: auto;
-          }
-
-          th,
-          td {
-            border: 1px solid #111;
-            font-size: 12px;
-            height: 28px;
-            padding: 1px 3px;
-            text-align: center;
-            vertical-align: middle;
-            word-break: break-word;
-          }
-
-          th {
-            font-weight: 800;
-            text-align: center;
-          }
-
-          .center {
-            text-align: center;
-          }
-
-          .receive-section {
-            display: grid;
-            gap: 10px;
-            grid-template-columns: minmax(0, 1fr) 310px;
-            margin-top: 8px;
-            padding-top: 8px;
-          }
-
-          .receiver-fields {
-            padding-top: 8px;
-          }
-
-          .receiver-fields .field-row { margin-bottom: 10px; }
-          .receiver-fields .field-row:last-child { margin-bottom: 0; }
-
-          .remark-extra-line { margin-left: 0; margin-top: 6px; }
-          .remark-extra-line .remark-line { max-width: 365px; width: 365px; }
-
-          .bottom-sign-box {
-            border: 1px solid #111;
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            min-height: 90px;
-          }
-
-          .bottom-sign-box .approval-sign-line { margin-bottom: 9px; }
-
-          .bottom-sign-cell {
-            padding: 0 8px 6px;
-            text-align: center;
-          }
-
-          .bottom-sign-cell + .bottom-sign-cell {
-            border-left: 1px solid #111;
-          }
-
-          .bottom-sign-title {
-            align-items: center;
-            border-bottom: 1px solid #111;
-            box-sizing: border-box;
-            display: flex;
-            font-size: 11px;
-            font-weight: 700;
-            height: 22px;
-            justify-content: center;
-            margin: 0 -8px 38px;
-            padding: 4px;
-            white-space: nowrap;
-          }
-
-          .remark-line {
-            display: inline-block;
-            margin-left: 6px;
-            max-width: 300px;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-            width: 300px;
-          }
-
-          .print-value {
-            font-weight: 700;
-          }
-
-          @media print {
-            body {
-              -webkit-print-color-adjust: exact;
-              print-color-adjust: exact;
-            }
-
-            .sheet {
-              border: 2px solid #111;
-            }
-          }
-        </style>
-      </head>
-      <body>
-        <main class="sheet">
-          <div class="urgent-stamp">${escapeHtml(stampText)}</div>
-          <div class="document-no">เลขที่เอกสาร <span class="line line-md">${escapeHtml(requestNo)}</span>${barcodeImage ? `<img class="document-barcode" src="${barcodeImage}" alt="${escapeHtml(requestNo)}" />` : ''}</div>
-          <div class="title">ใบเบิกของ</div>
-          <div class="subtitle">แผนกธุรการ ฝ่ายทรัพยากรบุคคล</div>
-
-          <section class="top-section">
-            <div>
-              <div class="field-row">
-                วันที่ส่งใบเบิก
-                <span class="line line-xs print-value">${escapeHtml(requestDay)}</span>
-                /
-                <span class="line line-xs print-value">${escapeHtml(requestMonth)}</span>
-                /
-                <span class="line line-sm print-value">${escapeHtml(requestYear)}</span>
-                เวลา
-                <span class="line line-sm print-value">${escapeHtml(requestTime)}</span>
-                น.
-              </div>
-              <div class="field-row">ชื่อ-สกุล ผู้ขอเบิก <span class="line line-xl print-value">${escapeHtml(requesterName)}</span></div>
-              <div class="field-row">
-                ฝ่าย
-                <span class="line line-md print-value">${escapeHtml(division)}</span>
-                แผนก
-                <span class="line line-md print-value">${escapeHtml(department)}</span>
-                หน่วย
-                <span class="line line-md"></span>
-              </div>
-            </div>
-
-            <div class="approval-box">
-              <div class="approval-cell">
-                <div class="approval-title">ผู้อนุมัติ (ผจก. แผนก)</div>
-                <div class="approval-sign-line"></div>
-                <div class="approval-date-line">____ / ____ / ____</div>
-              </div>
-              <div class="approval-cell">
-                <div class="approval-title">ผู้อนุมัติ (รอง/ผจก.ฝ่าย)</div>
-                <div class="approval-sign-line"></div>
-                <div class="approval-date-line">____ / ____ / ____</div>
-              </div>
-            </div>
-          </section>
-
-          <table>
-            <thead>
-              <tr>
-                <th style="width: 58px;">ลำดับ</th>
-                <th style="width: 130px;">หมวด</th>
-                <th style="width: 175px;">รายการ</th>
-                <th style="width: 68px;">จำนวน</th>
-                <th style="width: 72px;">หน่วยนับ</th>
-                <th style="width: 180px;">หมายเหตุ</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${rows}
-            </tbody>
-          </table>
-
-          <section class="receive-section">
-            <div class="receiver-fields">
-              <div class="field-row">
-                วันที่รับของ
-                <span class="line line-xs"></span>
-                /
-                <span class="line line-xs"></span>
-                /
-                <span class="line line-sm"></span>
-                เวลา
-                <span class="line line-sm"></span>
-                น.
-              </div>
-              <div class="field-row">ชื่อ-สกุล ผู้รับของ <span class="line line-lg"></span></div>
-              <div class="field-row">หมายเหตุ <span class="line remark-line">${escapeHtml(remark?.trim() || '')}</span></div>
-              <div class="remark-extra-line"><span class="line remark-line"></span></div>
-            </div>
-
-            <div class="bottom-sign-box">
-              <div class="bottom-sign-cell">
-                <div class="bottom-sign-title">ผู้รับของ</div>
-                <div class="approval-sign-line"></div>
-                <div class="approval-date-line">____ / ____ / ____</div>
-              </div>
-              <div class="bottom-sign-cell">
-                <div class="bottom-sign-title">ผู้จ่าย (เจ้าหน้าที่ธุรการ)</div>
-                <div class="approval-sign-line"></div>
-                <div class="approval-date-line">____ / ____ / ____</div>
-              </div>
-            </div>
-          </section>
-        </main>
-        <script>window.onload = () => { window.print() }</script>
-      </body>
-    </html>
-  `)
-  printWindow.document.close()
+  printHistorySlip({
+    department, division, isUrgent, requestNo,
+    createdAt: new Date(),
+    employeeName: requesterName,
+    userRemark: remark,
+    statusId: 10,
+    items: items.map((item) => ({ ...item, unit: item.issueUnit ?? item.unit ?? '' })),
+  })
 }
 
 function getEmployeeValue(employee, keys, fallback = '') {
@@ -704,7 +294,8 @@ function RequestPage() {
   const expiresAt = useRequestAuthStore((state) => state.expiresAt)
   const [products, setProducts] = useState([])
   const [selectedItems, setSelectedItems] = useState([])
-  const [isUrgent, setIsUrgent] = useState(false)
+  const [requestType, setRequestType] = useState('')
+  const isUrgent = requestType === 'urgent'
   const [urgentRemark, setUrgentRemark] = useState('')
   const [urgentTouched, setUrgentTouched] = useState(false)
   const [searchText, setSearchText] = useState('')
@@ -826,6 +417,11 @@ function RequestPage() {
       return
     }
 
+    if (!requestType) {
+      Swal.fire('กรุณาเลือกประเภทการเบิก', 'กรุณาเลือกเบิกปกติหรือเบิกด่วนก่อนส่งคำขอ', 'warning')
+      return
+    }
+
     if (isUrgent && !urgentRemark.trim()) {
       setUrgentTouched(true)
       Swal.fire('กรุณาระบุเหตุผลเบิกด่วน', 'ถ้าเลือกเบิกด่วน ต้องใส่เหตุผลเพื่อให้ HR จัดลำดับงานได้ถูกต้อง', 'warning')
@@ -868,7 +464,7 @@ function RequestPage() {
       })
 
       setSelectedItems([])
-      setIsUrgent(false)
+      setRequestType('')
       setUrgentRemark('')
       setUrgentTouched(false)
       const printResult = await Swal.fire({
@@ -890,6 +486,9 @@ function RequestPage() {
           requesterName,
           requestNo: savedRequest?.requestNo ?? savedRequest?.RequestNo ?? 'รอเลขคำขอ',
         })
+
+        // โหลดหน้าใหม่เพื่อให้ตัวเลขและสถานะที่หน้าประวัติคำขออัปเดตทันที
+        window.location.assign('/request/history')
       }
     } catch (error) {
       Swal.fire('ไม่สำเร็จ', error?.response?.data ?? 'ส่งคำขอเบิกไม่สำเร็จ', 'error')
@@ -1160,6 +759,45 @@ function RequestPage() {
                 <Chip label={`${selectedItems.length}/${MAX_ITEMS_PER_REQUEST} รายการ`} size="small" />
               </Stack>
               <Stack divider={<Divider />} spacing={1.5}>
+                <Box
+                  sx={{
+                    bgcolor: requestType === 'urgent' ? '#fff7ed' : '#f8fafc',
+                    border: `1px solid ${requestType === 'urgent' ? '#fed7aa' : '#dbe4f0'}`,
+                    borderRadius: 2,
+                    p: 1.5,
+                  }}
+                >
+                  <Typography sx={{ fontWeight: 900 }}>ประเภทการเบิก *</Typography>
+                  <RadioGroup
+                    row
+                    value={requestType}
+                    onChange={(event) => {
+                      const nextType = event.target.value
+                      setRequestType(nextType)
+                      setUrgentTouched(false)
+                      if (nextType !== 'urgent') setUrgentRemark('')
+                    }}
+                  >
+                    <FormControlLabel control={<Radio />} label="เบิกปกติ" value="normal" />
+                    <FormControlLabel control={<Radio color="error" />} label="เบิกด่วน" value="urgent" />
+                  </RadioGroup>
+                  <Typography sx={{ color: '#64748b', fontSize: 12, mb: isUrgent ? 1 : 0 }}>
+                    เลือกเบิกด่วนเฉพาะกรณีที่ต้องการให้ HR จัดของก่อนรายการทั่วไป
+                  </Typography>
+                  {isUrgent ? (
+                    <TextField
+                      error={urgentTouched && !urgentRemark.trim()}
+                      fullWidth
+                      helperText={urgentTouched && !urgentRemark.trim() ? 'กรุณาระบุเหตุผลเบิกด่วน' : 'เหตุผลนี้จะแสดงให้ HR เห็นในรายการขอเบิก'}
+                      label="เหตุผลเบิกด่วน *"
+                      multiline
+                      minRows={2}
+                      value={urgentRemark}
+                      onBlur={() => setUrgentTouched(true)}
+                      onChange={(event) => setUrgentRemark(event.target.value)}
+                    />
+                  ) : null}
+                </Box>
                 {selectedItems.map((item) => (
                   <Box key={item.productId}>
                     <Stack direction="row" justifyContent="space-between" spacing={1}>
@@ -1208,48 +846,6 @@ function RequestPage() {
                   <Alert severity="info">ยังไม่มีรายการ กรุณาเลือกสินค้าจากตารางด้านซ้าย</Alert>
                 ) : null}
               </Stack>
-              <Box
-                sx={{
-                  bgcolor: isUrgent ? '#fff7ed' : '#ffffff',
-                  border: `1px solid ${isUrgent ? '#fed7aa' : '#e2e8f0'}`,
-                  borderRadius: 2,
-                  mt: 2,
-                  p: 1.5,
-                }}
-              >
-                <FormControlLabel
-                  control={(
-                    <Checkbox
-                      checked={isUrgent}
-                      onChange={(event) => {
-                        setIsUrgent(event.target.checked)
-                        setUrgentTouched(false)
-
-                        if (!event.target.checked) {
-                          setUrgentRemark('')
-                        }
-                      }}
-                    />
-                  )}
-                  label={<Typography sx={{ fontWeight: 900 }}>เบิกด่วน</Typography>}
-                />
-                <Typography sx={{ color: '#64748b', fontSize: 12, mb: isUrgent ? 1 : 0 }}>
-                  ใช้เฉพาะกรณีต้องการให้ HR เห็นและจัดของก่อนรายการทั่วไป
-                </Typography>
-                {isUrgent ? (
-                  <TextField
-                    error={urgentTouched && !urgentRemark.trim()}
-                    fullWidth
-                    helperText={urgentTouched && !urgentRemark.trim() ? 'กรุณาระบุเหตุผลเบิกด่วน' : 'เหตุผลนี้จะแสดงให้ HR เห็นในรายการขอเบิก'}
-                    label="เหตุผลเบิกด่วน *"
-                    multiline
-                    minRows={2}
-                    value={urgentRemark}
-                    onBlur={() => setUrgentTouched(true)}
-                    onChange={(event) => setUrgentRemark(event.target.value)}
-                  />
-                ) : null}
-              </Box>
               <Button
                 disabled={selectedItems.length === 0 || hasInvalidRequestQuantity}
                 fullWidth

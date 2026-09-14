@@ -100,18 +100,18 @@ function DashboardPage() {
         value: summary.issueTodayQty.toLocaleString('th-TH'),
       },
       {
-        color: '#f59e0b',
-        helper: 'นับตามจุดแจ้งเตือนของสินค้า',
-        icon: AlertTriangle,
-        label: 'สินค้าใกล้หมด',
-        value: summary.lowStockCount.toLocaleString('th-TH'),
-      },
-      {
         color: '#dc2626',
         helper: 'คงเหลือ 0 ชิ้น',
         icon: PackageX,
         label: 'สินค้าหมด',
         value: summary.outOfStockCount.toLocaleString('th-TH'),
+      },
+      {
+        color: '#f59e0b',
+        helper: 'นับตามจุดแจ้งเตือนของสินค้า',
+        icon: AlertTriangle,
+        label: 'สินค้าใกล้หมด',
+        value: summary.lowStockCount.toLocaleString('th-TH'),
       },
     ],
     [summary],
@@ -142,9 +142,11 @@ function DashboardPage() {
         <AppTable
           columns={criticalStockColumns}
           defaultSortField="qty"
+          defaultSortDirection="asc"
           isLoading={isLoading}
           maxHeight={520}
           noDataText="ไม่มีสินค้าใกล้หมดหรือสินค้าหมด"
+          prioritySortValue={(row) => (Number(row.qty) <= 0 ? 1 : 0)}
           rowKey={(row) => row.productId}
           rows={summary.criticalStockItems}
           showColumnFilters={false}

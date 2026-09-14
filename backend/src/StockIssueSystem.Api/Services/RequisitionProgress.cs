@@ -11,8 +11,20 @@ public static class RequisitionProgress
         0,
         GetRequestedQty(detail));
 
+    public static int GetDeniedQty(StockDetail detail) => Math.Clamp(
+        detail.DeniedQty ?? 0,
+        0,
+        GetRequestedQty(detail) - GetFulfilledQty(detail));
+
     public static int GetBacklogQty(StockDetail detail) =>
-        GetRequestedQty(detail) - GetFulfilledQty(detail);
+        GetRequestedQty(detail) - GetFulfilledQty(detail) - GetDeniedQty(detail);
+
+    public static void RecordDenial(StockDetail detail)
+    {
+        var remainingQty = GetBacklogQty(detail);
+        if (remainingQty <= 0) throw new InvalidOperationException("This requisition item has no remaining quantity.");
+        detail.DeniedQty = GetDeniedQty(detail) + remainingQty;
+    }
 
     public static void RecordIssue(StockDetail detail, int quantity)
     {
@@ -44,9 +56,15 @@ public static class RequisitionProgress
             return;
         }
 
-        requisition.Status = requisition.Details.Count > 0
-            && requisition.Details.All(detail => GetBacklogQty(detail) == 0)
-                ? RequisitionStatuses.Approved
-                : RequisitionStatuses.Backlog;
+        if (requisition.Details.Count > 0 && requisition.Details.All(detail => GetBacklogQty(detail) == 0))
+        {
+            requisition.Status = requisition.Details.All(detail => GetDeniedQty(detail) > 0)
+                ? RequisitionStatuses.Rejected
+                : RequisitionStatuses.Approved;
+        }
+        else if (requisition.Status != RequisitionStatuses.AwaitingApproval)
+        {
+            requisition.Status = RequisitionStatuses.Backlog;
+        }
     }
 }

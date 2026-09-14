@@ -7,4 +7,9 @@ public sealed class UpdateSupplierDto
     public string ShortName { get; set; } = string.Empty;
     public string AccountName { get; set; } = string.Empty;
     public string Address { get; set; } = string.Empty;
+    public int CreditDays { get; set; }
+    public string Phone { get; set; } = string.Empty;
+    public string TaxId { get; set; } = string.Empty;
+    public string Branch { get; set; } = string.Empty;
+    public string PostalCode { get; set; } = string.Empty;
 }

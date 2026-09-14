@@ -48,6 +48,8 @@ public sealed class StockHeader
     public string Remark { get; set; } = string.Empty;
 
     public int Status { get; set; } = 1;
+    public DateTime? ApprovedAt { get; set; }
+    public int? ApprovedBy { get; set; }
 
     // Links an ISSUE document back to the requisition it fulfills.
     public int? SourceRequisitionId { get; set; }

@@ -26,14 +26,14 @@ import '../../layouts/MainLayout.css'
 
 const requestNavigationItems = [
   {
-    icon: PackageCheck,
-    label: 'เบิกสินค้า',
-    path: '/request',
-  },
-  {
     icon: History,
     label: 'ประวัติของฉัน',
     path: '/request/history',
+  },
+  {
+    icon: PackageCheck,
+    label: 'เบิกสินค้า',
+    path: '/request',
   },
 ]
 
@@ -50,7 +50,7 @@ function getNotificationMeta(statusId) {
 }
 
 function isRequestActionable(statusId) {
-  return statusId === 6 || statusId === 8
+  return statusId === 10 || statusId === 6 || statusId === 8
 }
 
 function RequestLayout() {
@@ -71,10 +71,6 @@ function RequestLayout() {
   const isUserMenuOpen = Boolean(userMenuAnchor)
   const isNotificationOpen = Boolean(notificationAnchor)
   const employeeId = Number(employee?.employeeId ?? employee?.EmployeeId ?? employee?.id ?? 0)
-
-  if (!isSessionActive) {
-    return <Navigate to="/request-login" replace />
-  }
 
   const requesterName = employee?.employeeName || employee?.name || employee?.username || 'ผู้ขอเบิก'
   const department = employee?.department || '-'
@@ -135,6 +131,10 @@ function RequestLayout() {
   }, [matchesCurrentRequester, notificationStorageKey, statusStorageKey])
 
   useEffect(() => {
+    if (!isSessionActive) {
+      return undefined
+    }
+
     setNotifications(JSON.parse(localStorage.getItem(notificationStorageKey) || '[]'))
     checkRequestStatuses()
     let statusCheckInterval
@@ -221,7 +221,11 @@ function RequestLayout() {
       stopFallbackStatusCheck()
       connection?.stop()
     }
-  }, [checkRequestStatuses, employeeId, notificationStorageKey, statusStorageKey])
+  }, [checkRequestStatuses, employeeId, isSessionActive, notificationStorageKey, statusStorageKey])
+
+  if (!isSessionActive) {
+    return <Navigate to="/request-login" replace />
+  }
 
   const unreadNotificationCount = notifications.filter((item) => !item.read).length
   const handleOpenNotifications = (event) => {

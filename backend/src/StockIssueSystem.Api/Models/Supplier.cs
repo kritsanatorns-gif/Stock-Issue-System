@@ -18,6 +18,20 @@ public sealed class Supplier
     [MaxLength(500)]
     public string Address { get; set; } = string.Empty;
 
+    public int CreditDays { get; set; }
+
+    [MaxLength(100)]
+    public string Phone { get; set; } = string.Empty;
+
+    [MaxLength(30)]
+    public string TaxId { get; set; } = string.Empty;
+
+    [MaxLength(100)]
+    public string Branch { get; set; } = string.Empty;
+
+    [MaxLength(5)]
+    public string PostalCode { get; set; } = string.Empty;
+
     [MaxLength(150)]
     public string SupplierName { get; set; } = string.Empty;
 

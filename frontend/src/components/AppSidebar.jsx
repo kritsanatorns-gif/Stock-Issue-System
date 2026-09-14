@@ -24,7 +24,7 @@ function getRequisitionStatusId(row) {
 function isOpenRequisition(row) {
   const statusId = getRequisitionStatusId(row)
 
-  return statusId === 6 || statusId === 8
+  return statusId === 10 || statusId === 6 || statusId === 8
 }
 
 function AppSidebar({ collapsed }) {

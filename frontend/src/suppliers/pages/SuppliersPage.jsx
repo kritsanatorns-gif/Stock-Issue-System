@@ -29,9 +29,15 @@ function SuppliersPage() {
   const [supplierAccountId, setSupplierAccountId] = useState('')
   const [supplierShortName, setSupplierShortName] = useState('')
   const [supplierAddress, setSupplierAddress] = useState('')
+  const [supplierCreditDays, setSupplierCreditDays] = useState('')
+  const [supplierPhone, setSupplierPhone] = useState('')
+  const [supplierTaxId, setSupplierTaxId] = useState('')
+  const [supplierBranch, setSupplierBranch] = useState('')
+  const [supplierPostalCode, setSupplierPostalCode] = useState('')
   const [supplierStatus, setSupplierStatus] = useState(1)
   const [editingSupplier, setEditingSupplier] = useState(null)
   const [isSavingSupplier, setIsSavingSupplier] = useState(false)
+  const [detailSupplier, setDetailSupplier] = useState(null)
   const purchaseRangeKey = showAllDates ? 'all' : `${startDate || 'all'}:${endDate || 'all'}`
 
   const supplierDisplayRows = useMemo(() => {
@@ -138,6 +144,7 @@ function SuppliersPage() {
           shortName: supplierShortName.trim(),
           accountName: name,
           address: supplierAddress.trim(),
+          creditDays: Number(supplierCreditDays || 0), phone: supplierPhone.trim(), taxId: supplierTaxId.trim(), branch: supplierBranch.trim(), postalCode: supplierPostalCode.trim(),
         })
         if (Number(editingSupplier.supplierStatus ?? 1) !== Number(supplierStatus)) {
           await updateSupplierStatus(editingSupplier.supplierId, Number(supplierStatus))
@@ -149,6 +156,7 @@ function SuppliersPage() {
           shortName: supplierShortName.trim(),
           accountName: name,
           address: supplierAddress.trim(),
+          creditDays: Number(supplierCreditDays || 0), phone: supplierPhone.trim(), taxId: supplierTaxId.trim(), branch: supplierBranch.trim(), postalCode: supplierPostalCode.trim(),
         })
         if (Number(supplierStatus) !== 1) {
           await updateSupplierStatus(createdSupplier.supplierId, Number(supplierStatus))
@@ -158,6 +166,8 @@ function SuppliersPage() {
       setSupplierAccountId('')
       setSupplierShortName('')
       setSupplierAddress('')
+      setSupplierCreditDays(''); setSupplierPhone(''); setSupplierTaxId(''); setSupplierBranch('')
+      setSupplierPostalCode('')
       setSupplierStatus(1)
       setEditingSupplier(null)
       await loadSupplierRows()
@@ -245,6 +255,11 @@ function SuppliersPage() {
           setSupplierAccountId(supplier.accountId ?? '')
           setSupplierShortName(supplier.shortName ?? '')
           setSupplierAddress(supplier.address ?? '')
+          setSupplierCreditDays(supplier.creditDays ?? '')
+          setSupplierPhone(supplier.phone ?? '')
+          setSupplierTaxId(supplier.taxId ?? '')
+          setSupplierBranch(supplier.branch ?? '')
+          setSupplierPostalCode(supplier.postalCode ?? '')
           setSupplierStatus(Number(supplier.supplierStatus ?? 1))
           setIsManageOpen(true)
         }}>แก้ไข</Button>
@@ -264,9 +279,10 @@ function SuppliersPage() {
     },
     {
       key: 'address',
-      label: 'ที่อยู่',
-      minWidth: 280,
-      value: (row) => row.address || '-',
+      label: 'รายละเอียด',
+      width: 130,
+      align: 'center',
+      render: (row) => <Button size="small" variant="outlined" onClick={() => setDetailSupplier(supplierRows.find((item) => item.supplierId === row.supplierId) ?? row)}>ดูข้อมูล</Button>,
     },
     { key: 'documentCount', label: 'ใบรับเข้า', width: 110, align: 'center' },
     { key: 'itemCount', label: 'รายการ', width: 100, align: 'center' },
@@ -287,9 +303,10 @@ function SuppliersPage() {
   const itemColumns = [
     { key: 'receivedAt', label: 'วันที่รับเข้า', width: 130, value: (row) => formatDisplayDate(row.receivedAt), sortValue: (row) => getDateSortValue(row.receivedAt) },
     { key: 'poInvoiceNo', label: 'Invoice', width: 160, value: (row) => row.poInvoiceNo || '-' },
-    { key: 'productCode', label: 'รหัสสินค้า', width: 130 },
+    { key: 'productCode', label: 'รหัสสินค้า', width: 160 },
     { key: 'productName', label: 'สินค้า', minWidth: 230 },
-    { key: 'quantity', label: 'จำนวน', width: 100, align: 'center', render: (row) => `${Number(row.quantity ?? 0).toLocaleString('th-TH')} ${row.unit ?? ''}` },
+    { key: 'quantity', label: 'จำนวน', width: 100, align: 'center', render: (row) => Number(row.quantity ?? 0).toLocaleString('th-TH') },
+    { key: 'unit', label: 'หน่วย', width: 90, align: 'center', render: (row) => row.unit || '-' },
     { key: 'unitCost', label: 'ต้นทุน/หน่วย', width: 130, align: 'right', render: (row) => money(row.unitCost) },
     { key: 'totalPurchase', label: 'ยอดซื้อ', width: 140, align: 'right', render: (row) => `${money(row.totalPurchase)} บาท` },
   ]
@@ -385,6 +402,11 @@ function SuppliersPage() {
               <Grid size={12}>
                 <TextField fullWidth label="ที่อยู่" multiline minRows={3} value={supplierAddress} onChange={(event) => setSupplierAddress(event.target.value)} />
               </Grid>
+              <Grid size={{ xs: 12, sm: 6 }}><TextField fullWidth label="เครดิต (วัน)" type="number" value={supplierCreditDays} onChange={(event) => setSupplierCreditDays(event.target.value)} /></Grid>
+              <Grid size={{ xs: 12, sm: 6 }}><TextField fullWidth label="เบอร์โทรศัพท์" value={supplierPhone} onChange={(event) => setSupplierPhone(event.target.value)} /></Grid>
+              <Grid size={{ xs: 12, sm: 6 }}><TextField fullWidth label="เลขประจำตัวผู้เสียภาษี" value={supplierTaxId} onChange={(event) => setSupplierTaxId(event.target.value)} /></Grid>
+              <Grid size={{ xs: 12, sm: 6 }}><TextField fullWidth label="สาขา" value={supplierBranch} onChange={(event) => setSupplierBranch(event.target.value)} /></Grid>
+              <Grid size={{ xs: 12, sm: 6 }}><TextField fullWidth label="รหัสไปรษณีย์" inputProps={{ maxLength: 5 }} value={supplierPostalCode} onChange={(event) => setSupplierPostalCode(event.target.value.replace(/\D/g, ''))} /></Grid>
               <Grid size={{ xs: 12, sm: 6 }}>
                 <TextField fullWidth select label="สถานะ" value={supplierStatus} onChange={(event) => setSupplierStatus(Number(event.target.value))}>
                   <MenuItem value={1}>ใช้งาน</MenuItem>
@@ -398,6 +420,20 @@ function SuppliersPage() {
           <Button color="inherit" onClick={() => setIsManageOpen(false)}>ยกเลิก</Button>
           <Button disabled={isSavingSupplier || !supplierForm.trim()} startIcon={<Save size={18} />} variant="contained" onClick={handleSaveSupplier}>บันทึก</Button>
         </DialogActions>
+      </Dialog>
+      <Dialog fullWidth maxWidth="sm" open={Boolean(detailSupplier)} onClose={() => setDetailSupplier(null)}>
+        <DialogTitle>รายละเอียดผู้ขาย</DialogTitle>
+        <DialogContent><Stack spacing={1.25} sx={{ pt: 1 }}>
+          <Typography><b>รหัสผู้ขาย:</b> {detailSupplier?.accountId || '-'}</Typography>
+          <Typography><b>ชื่อผู้ขาย:</b> {detailSupplier?.accountName || detailSupplier?.supplierName || '-'}</Typography>
+          <Typography><b>ที่อยู่:</b> {detailSupplier?.address || '-'}</Typography>
+          <Typography><b>เครดิต:</b> {detailSupplier?.creditDays || 0} วัน</Typography>
+          <Typography><b>โทรศัพท์:</b> {detailSupplier?.phone || '-'}</Typography>
+          <Typography><b>เลขภาษี:</b> {detailSupplier?.taxId || '-'}</Typography>
+          <Typography><b>สาขา:</b> {detailSupplier?.branch || '-'}</Typography>
+          <Typography><b>รหัสไปรษณีย์:</b> {detailSupplier?.postalCode || '-'}</Typography>
+        </Stack></DialogContent>
+        <DialogActions><Button onClick={() => setDetailSupplier(null)}>ปิด</Button></DialogActions>
       </Dialog>
     </Stack>
   )
