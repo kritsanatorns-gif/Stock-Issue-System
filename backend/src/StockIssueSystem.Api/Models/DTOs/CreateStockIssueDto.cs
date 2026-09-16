@@ -2,6 +2,7 @@ namespace StockIssueSystem.Api.Models.DTOs;
 
 public sealed class CreateStockIssueDto
 {
+    public decimal VatRate { get; set; }
     public DateTime? CreatedAt { get; set; }
     public string Department { get; set; } = string.Empty;
     public string Division { get; set; } = string.Empty;

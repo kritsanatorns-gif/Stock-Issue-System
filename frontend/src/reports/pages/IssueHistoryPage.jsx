@@ -139,6 +139,8 @@ function normalizeReportItem(item, index) {
     category: String(item.category ?? '').trim() || 'General',
     detailId: item.detailId ?? item.DetailId ?? 0,
     lineNo: item.lineNo ?? index + 1,
+    totalVat: Number(item.totalVat ?? item.TotalVat ?? 0),
+    unitVat: Number(item.unitVat ?? item.UnitVat ?? 0),
     totalCost: Number(item.totalCost ?? item.TotalCost ?? 0),
     unitCost: Number(item.unitCost ?? item.UnitCost ?? 0),
   }
@@ -842,14 +844,18 @@ function buildIssueSlipStyleHtml() {
       .receive-summary table { border-collapse: collapse; font-size: 13px; width: 100%; }
       .receive-summary th, .receive-summary td { border: 1px solid #111827; padding: 6px; text-align: center; vertical-align: middle; }
       .receive-summary th { background: #ffffff; text-align: center; }
-      .receive-summary th:nth-child(1) { width: 5%; }
-      .receive-summary th:nth-child(2) { width: 15%; }
-      .receive-summary th:nth-child(3) { width: 14%; }
-      .receive-summary th:nth-child(4) { width: 25%; }
-      .receive-summary th:nth-child(5) { width: 9%; }
-      .receive-summary th:nth-child(6) { width: 10%; }
-      .receive-summary th:nth-child(7) { width: 10%; }
-      .receive-summary th:nth-child(8) { width: 12%; }
+      .receive-summary th:nth-child(1) { width: 4%; }
+      .receive-summary th:nth-child(2) { width: 11%; }
+      .receive-summary th:nth-child(3) { width: 10%; }
+      .receive-summary th:nth-child(4) { width: 18%; }
+      .receive-summary th:nth-child(5) { width: 5%; }
+      .receive-summary th:nth-child(6) { width: 5%; }
+      .receive-summary th:nth-child(7) { width: 8%; }
+      .receive-summary th:nth-child(8) { width: 8%; }
+      .receive-summary th:nth-child(9) { width: 9%; }
+      .receive-summary th:nth-child(10) { width: 6%; }
+      .receive-summary th:nth-child(11) { width: 9%; }
+      .receive-summary th:nth-child(12) { width: 7%; }
       .adjust-summary th:nth-child(1) { width: 5%; }
       .adjust-summary th:nth-child(2) { width: 16%; }
       .adjust-summary th:nth-child(3) { width: 15%; }
@@ -1060,7 +1066,9 @@ function ReportsPage() {
       productName: item.productName ?? item.ProductName ?? '-',
       quantity: Number(item.quantity ?? item.Quantity ?? 0),
       beforeQty: Number(item.stockQty ?? item.StockQty) - Number(item.quantity ?? item.Quantity ?? 0),
-      totalCost: Number(item.totalCost ?? item.TotalCost ?? 0),
+      totalVat: Number(item.totalVat ?? item.TotalVat ?? 0),
+    unitVat: Number(item.unitVat ?? item.UnitVat ?? 0),
+    totalCost: Number(item.totalCost ?? item.TotalCost ?? 0),
       unitCost: Number(item.unitCost ?? item.UnitCost ?? 0),
       reason: reportType === 'cancellation'
         ? (report.documentNo ?? report.DocumentNo ?? '-')
@@ -1588,7 +1596,7 @@ function ReportsPage() {
                       {reportType === 'stockReceive' && (
                         <>
                           <TableCell align="center" sx={{ fontWeight: 900, width: 70 }}>ต้นทุน/<br />หน่วย</TableCell>
-                          <TableCell align="center" sx={{ fontWeight: 900, width: 75 }}>ต้นทุนรวม</TableCell>
+                          <TableCell align="center" sx={{ fontWeight: 900, width: 100 }}>ต้นทุนรวม</TableCell>
                         </>
                       )}
                       {!['stockAdjust', 'stockIssue'].includes(reportType) && (

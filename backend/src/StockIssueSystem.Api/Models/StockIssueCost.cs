@@ -2,6 +2,9 @@ namespace StockIssueSystem.Api.Models;
 
 public sealed class StockIssueCost
 {
+    public decimal VatRate { get; set; }
+    public decimal UnitVat { get; set; }
+    public decimal TotalVat { get; set; }
     public int IssueCostId { get; set; }
     public int IssueDetailId { get; set; }
     public int CostLotId { get; set; }

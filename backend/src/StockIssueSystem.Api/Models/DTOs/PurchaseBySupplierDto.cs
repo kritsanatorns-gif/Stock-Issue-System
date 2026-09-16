@@ -7,6 +7,7 @@ public sealed class PurchaseBySupplierDto
     public int DocumentCount { get; set; }
     public int ItemCount { get; set; }
     public int TotalQty { get; set; }
+    public decimal TotalVat { get; set; }
     public decimal TotalPurchase { get; set; }
 }
 
@@ -19,6 +20,7 @@ public sealed class SupplierPurchaseItemDto
     public string ProductName { get; set; } = string.Empty;
     public int Quantity { get; set; }
     public decimal UnitCost { get; set; }
+    public decimal TotalVat { get; set; }
     public decimal TotalPurchase { get; set; }
     public string Unit { get; set; } = string.Empty;
 }
@@ -26,5 +28,6 @@ public sealed class SupplierPurchaseItemDto
 public sealed class PurchaseTrendDto
 {
     public DateTime PeriodStart { get; set; }
+    public decimal TotalVat { get; set; }
     public decimal TotalPurchase { get; set; }
 }

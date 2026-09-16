@@ -3,6 +3,7 @@ namespace StockIssueSystem.Api.Models.DTOs;
 public sealed class ImportProductRowDto
 {
     public string Barcode { get; set; } = string.Empty;
+    public int BonusQty { get; set; }
     public string CategoryName { get; set; } = "General";
     public decimal ConversionQty { get; set; } = 1;
     public string IssueUnit { get; set; } = string.Empty;

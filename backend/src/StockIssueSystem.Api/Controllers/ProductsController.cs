@@ -892,11 +892,12 @@ public sealed class ProductsController(AppDbContext dbContext) : ControllerBase
             var barcode = item.Barcode.Trim();
             var categoryName = string.IsNullOrWhiteSpace(item.CategoryName) ? "General" : item.CategoryName.Trim();
             var conversionQty = item.ConversionQty <= 0 ? 1 : item.ConversionQty;
-            var stockQty = item.StockQty > 0
+            var baseStockQty = item.StockQty > 0
                 ? item.StockQty
                 : item.ReceiveQty > 0
                     ? Convert.ToInt32(Math.Round(item.ReceiveQty * conversionQty, MidpointRounding.AwayFromZero))
                     : 0;
+            var stockQty = baseStockQty + Math.Max(0, item.BonusQty);
             var receiveQty = item.ReceiveQty > 0 ? item.ReceiveQty : Math.Round(stockQty / conversionQty, 2);
             // Excel uses the same rule as the receive form: this is the total
             // amount paid for the whole received row, not a per-issue-unit cost.
@@ -1187,6 +1188,11 @@ public sealed class ProductsController(AppDbContext dbContext) : ControllerBase
             if (item.StockQty < 0)
             {
                 errors.Add($"Row {rowNo}: StockQty must be zero or greater.");
+            }
+
+            if (item.BonusQty < 0)
+            {
+                errors.Add($"Row {rowNo}: BonusQty must be zero or greater.");
             }
 
             if (item.UnitCost < 0)

@@ -10,6 +10,35 @@ namespace StockIssueSystem.Api.Controllers;
 [Route("api/reports")]
 public sealed class PurchaseReportsController(AppDbContext dbContext) : ControllerBase
 {
+    [HttpGet("purchases-by-product")]
+    public async Task<IActionResult> GetPurchasesByProduct(
+        [FromQuery] DateTime? startDate,
+        [FromQuery] DateTime? endDate)
+    {
+        var endOfDay = endDate?.Date.AddDays(1);
+        var lots = await (
+            from lot in dbContext.StockCostLots.AsNoTracking()
+            join detail in dbContext.StockDetails.AsNoTracking() on lot.ReceiveDetailId equals detail.DetailId
+            join header in dbContext.StockHeaders.AsNoTracking() on lot.ReceiveHeaderId equals header.HeaderId
+            where header.DocType == "RECEIVE" && header.Status != StockHeaderStatuses.Cancelled && lot.Status != 2
+                && (!startDate.HasValue || header.TransactionDate >= startDate.Value.Date)
+                && (!endOfDay.HasValue || header.TransactionDate < endOfDay.Value)
+            select new { detail.ProductId, detail.ProductName, detail.Unit, lot.OriginalQty, lot.UnitCost, lot.VatAmount }
+        ).ToListAsync();
+
+        return Ok(lots.GroupBy(row => new { row.ProductId, row.ProductName, row.Unit })
+            .Select(group => new
+            {
+                productCode = group.Key.ProductId,
+                productName = group.Key.ProductName,
+                unit = group.Key.Unit,
+                purchaseQty = group.Sum(row => row.OriginalQty),
+                purchaseAmount = group.Sum(row => row.OriginalQty * row.UnitCost),
+                totalVat = group.Sum(row => row.VatAmount),
+            })
+            .OrderBy(row => row.productName).ThenBy(row => row.productCode).ToList());
+    }
+
     [HttpGet("purchases-by-supplier")]
     public async Task<ActionResult<IReadOnlyList<PurchaseBySupplierDto>>> GetPurchasesBySupplier(
         [FromQuery] int? year,
@@ -28,7 +57,7 @@ public sealed class PurchaseReportsController(AppDbContext dbContext) : Controll
                 && (!month.HasValue || header.TransactionDate.Month == month.Value)
                 && (!startDate.HasValue || header.TransactionDate >= startDate.Value.Date)
                 && (!endOfDay.HasValue || header.TransactionDate < endOfDay.Value)
-            select new { lot.SupplierId, lot.SupplierName, lot.ReceiveHeaderId, lot.OriginalQty, lot.UnitCost }
+            select new { lot.SupplierId, lot.SupplierName, lot.ReceiveHeaderId, lot.OriginalQty, lot.UnitCost, lot.VatAmount }
         ).ToListAsync();
         
         return Ok(lots.GroupBy(lot => new { lot.SupplierId, lot.SupplierName }).Select(group => new PurchaseBySupplierDto
@@ -38,6 +67,7 @@ public sealed class PurchaseReportsController(AppDbContext dbContext) : Controll
             DocumentCount = group.Select(lot => lot.ReceiveHeaderId).Distinct().Count(),
             ItemCount = group.Count(),
             TotalQty = group.Sum(lot => lot.OriginalQty),
+            TotalVat = group.Sum(lot => lot.VatAmount),
             TotalPurchase = group.Sum(lot => lot.OriginalQty * lot.UnitCost),
         }).OrderByDescending(row => row.TotalPurchase).ThenBy(row => row.SupplierName).ToList());
     }
@@ -74,6 +104,7 @@ public sealed class PurchaseReportsController(AppDbContext dbContext) : Controll
                 Quantity = lot.OriginalQty,
                 Unit = detail.Unit,
                 UnitCost = lot.UnitCost,
+                TotalVat = lot.VatAmount,
                 TotalPurchase = lot.OriginalQty * lot.UnitCost,
             }
         ).ToListAsync();
@@ -96,7 +127,7 @@ public sealed class PurchaseReportsController(AppDbContext dbContext) : Controll
                 && lot.SupplierId.HasValue
                 && (!startDate.HasValue || header.TransactionDate >= startDate.Value.Date)
                 && (!endOfDay.HasValue || header.TransactionDate < endOfDay.Value)
-            select new { header.TransactionDate, TotalPurchase = lot.OriginalQty * lot.UnitCost }
+            select new { header.TransactionDate, TotalPurchase = lot.OriginalQty * lot.UnitCost, TotalVat = lot.VatAmount }
         ).ToListAsync();
 
         var isDaily = string.Equals(period, "daily", StringComparison.OrdinalIgnoreCase);
@@ -108,6 +139,7 @@ public sealed class PurchaseReportsController(AppDbContext dbContext) : Controll
             .Select(group => new PurchaseTrendDto
             {
                 PeriodStart = group.Key,
+                TotalVat = group.Sum(row => row.TotalVat),
                 TotalPurchase = group.Sum(row => row.TotalPurchase),
             })
             .OrderBy(row => row.PeriodStart)

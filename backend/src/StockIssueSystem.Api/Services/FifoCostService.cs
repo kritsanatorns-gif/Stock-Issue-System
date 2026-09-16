@@ -91,6 +91,10 @@ public sealed class FifoCostService(AppDbContext dbContext)
                     SupplierName = lot.SupplierName,
                     Qty = usedQty,
                     UnitCost = lot.UnitCost,
+                    // VAT is calculated on the document summary, never allocated into item costs.
+                    VatRate = 0,
+                    UnitVat = 0,
+                    TotalVat = 0,
                     TotalCost = Math.Round(usedQty * lot.UnitCost, 2, MidpointRounding.AwayFromZero),
                 });
             }

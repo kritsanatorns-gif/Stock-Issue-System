@@ -10,5 +10,4 @@ public sealed class HrEmployeeDto
 
     public string Division { get; set; } = string.Empty;
 
-    public string UnitRef { get; set; } = string.Empty;
 }

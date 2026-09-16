@@ -72,6 +72,7 @@ import './InventoryWorkspace.css'
 
 const defaultProductForm = {
   barcode: '',
+  bonusQty: '0',
   category: '',
   code: '',
   conversionQty: '1',
@@ -163,7 +164,7 @@ function getReceiveStockQty(item) {
     ? 1
     : toPositiveNumber(item.conversionQty)
 
-  return toPositiveNumber(item.requestQty) * conversionQty
+  return (toPositiveNumber(item.requestQty) * conversionQty) + toPositiveNumber(item.bonusQty)
 }
 
 function getIssueAvailableQty(item) {
@@ -346,11 +347,13 @@ function InventoryWorkspace({ mode }) {
 
     return [...new Set(names.map((name) => String(name ?? '').trim()).filter(Boolean))]
   }, [categoryOptions, inventoryItems])
+  const receiveSubtotal = selectedItems.reduce((sum, item) => sum + Math.round(toPositiveNumber(item.unitCost) * 100), 0) / 100
+  const money = (value) => Number(value).toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
   const productFormImageUrl = getImageUrl(productForm.imageName)
   const productFormConversionQty = shouldUseSameUnitConversion(productForm.receiveUnit, productForm.issueUnit)
     ? 1
     : toPositiveNumber(productForm.conversionQty)
-  const productFormStockQty = toPositiveNumber(productForm.requestQty) * productFormConversionQty
+  const productFormStockQty = (toPositiveNumber(productForm.requestQty) * productFormConversionQty) + toPositiveNumber(productForm.bonusQty)
   const existingProductByCode = inventoryItems.find(
     (item) => normalizeCompareText(item.code) === normalizeCompareText(productForm.code),
   )
@@ -672,6 +675,7 @@ function InventoryWorkspace({ mode }) {
       costLot: item.costLot ?? '',
       imageName: item.imageName ?? '',
       requestQty: item.requestQty ?? 1,
+      bonusQty: item.bonusQty ?? 0,
       unitCost: '',
       unit,
     }
@@ -689,7 +693,7 @@ function InventoryWorkspace({ mode }) {
   }
 
   const handleReceiveDraftChange = (field, value) => {
-    const nextValue = field === 'requestQty' || field === 'conversionQty'
+    const nextValue = field === 'requestQty' || field === 'bonusQty' || field === 'conversionQty'
       ? normalizeWholeNumberInput(value)
       : field === 'unitCost'
         ? normalizeDecimalNumberInput(value)
@@ -1175,7 +1179,7 @@ function InventoryWorkspace({ mode }) {
   const handleProductFormChange = (field, value) => {
     const nextValue = field === 'code' || field === 'barcode'
       ? normalizeBarcodeInput(value)
-      : field === 'requestQty' || field === 'conversionQty' || field === 'minQty'
+      : field === 'requestQty' || field === 'bonusQty' || field === 'conversionQty' || field === 'minQty'
         ? normalizeWholeNumberInput(value)
         : field === 'costLot'
           ? normalizeDecimalNumberInput(value)
@@ -1252,6 +1256,7 @@ function InventoryWorkspace({ mode }) {
     const newItem = {
       id: productForm.code.trim(),
       barcode: productForm.barcode.trim(),
+      bonusQty: Number(productForm.bonusQty) || 0,
       category: productForm.category.trim(),
       code: productForm.code.trim(),
       conversionQty: productFormConversionQty || 1,
@@ -2213,8 +2218,8 @@ function InventoryWorkspace({ mode }) {
 
                   <Alert severity={mode === 'issue' ? 'info' : 'warning'}>
                     {mode === 'issue'
-                      ? 'ตัวอย่าง FIFO: ถ้าล็อตแรกซื้อ 8 บาท และล็อตถัดไป 10 บาท ระบบจะตัด 8 บาทก่อน แล้วค่อยตัด 10 บาท'
-                      : 'กรอกราคาต่อหน่วยแยกตามรายการรับเข้า เพื่อสร้างล็อตราคาและใช้ FIFO ตอนเบิกสินค้า'}
+                      ? 'ต้นทุนของใบเบิกคำนวณจากล็อต FIFO ที่ตัดจริงหลังยืนยันรายการ'
+                      : 'กรอกราคาซื้อรวมของแต่ละรายการ ต้นทุน FIFO จะคำนวณจากจำนวนรวมของแถม'}
                   </Alert>
 
                   <Button
@@ -2310,6 +2315,7 @@ function InventoryWorkspace({ mode }) {
           <Typography sx={{ color: '#475569', fontSize: 14 }}>
             จำนวนรายการทั้งหมด <strong>{selectedItems.length.toLocaleString('th-TH')}</strong> รายการ
           </Typography>
+          {mode === 'receive' && <Typography>ราคาซื้อรวม: {money(receiveSubtotal)} บาท</Typography>}
           {mode === 'issue' ? (
             <Stack spacing={0.5}>
               <Typography sx={{ color: '#475569', fontSize: 14 }}>
@@ -2480,10 +2486,21 @@ function InventoryWorkspace({ mode }) {
               </Grid>
               <Grid size={{ xs: 12, sm: 4 }}>
                 <TextField
+                  fullWidth
+                  helperText={`จำนวนของแถมในหน่วย ${receiveDraftItem.issueUnit || 'เบิกออก'}`}
+                  label="ของแถม"
+                  type="number"
+                  value={receiveDraftItem.bonusQty ?? 0}
+                  onChange={(event) => handleReceiveDraftChange('bonusQty', event.target.value)}
+                  slotProps={{ htmlInput: { min: 0, step: 1 } }}
+                />
+              </Grid>
+              <Grid size={{ xs: 12, sm: 4 }}>
+                <TextField
                   disabled
                   fullWidth
-                  helperText={getConversionHelperText(receiveDraftItem)}
-                  label="จำนวนหลังแปลง"
+                  helperText={`${getConversionHelperText(receiveDraftItem)}${toPositiveNumber(receiveDraftItem.bonusQty) > 0 ? ` + ของแถม ${toPositiveNumber(receiveDraftItem.bonusQty).toLocaleString('th-TH')}` : ''}`}
+                  label="รวมรับเข้า (หน่วยเบิกออก)"
                   value={`${getReceiveStockQty(receiveDraftItem).toLocaleString('th-TH')} ${receiveDraftItem.issueUnit}`}
                 />
               </Grid>
@@ -2802,16 +2819,27 @@ function InventoryWorkspace({ mode }) {
             </Grid>
             <Grid size={{ xs: 12, sm: 6 }}>
               <TextField
+                fullWidth
+                helperText={`กรอกจำนวนของแถมเป็นหน่วย ${productForm.issueUnit || 'เบิกออก'} ระบบจะนำไปรวมในสต๊อก`}
+                label="ของแถม"
+                type="number"
+                value={productForm.bonusQty}
+                onChange={(event) => handleProductFormChange('bonusQty', event.target.value)}
+                slotProps={{ htmlInput: { min: 0, step: 1 } }}
+              />
+            </Grid>
+            <Grid size={{ xs: 12, sm: 6 }}>
+              <TextField
                 disabled
                 fullWidth
-                helperText={getConversionHelperText({
+                helperText={`${getConversionHelperText({
                   issueUnit: productForm.issueUnit,
                   receiveUnit: productForm.receiveUnit,
                   requestQty: productForm.requestQty,
                   unit: productForm.receiveUnit,
                   conversionQty: productFormConversionQty,
-                })}
-                label="จำนวนหลังแปลง"
+                })}${toPositiveNumber(productForm.bonusQty) > 0 ? ` + ของแถม ${toPositiveNumber(productForm.bonusQty).toLocaleString('th-TH')}` : ''}`}
+                label="รวมรับเข้า (หน่วยเบิกออก)"
                 value={`${productFormStockQty.toLocaleString('th-TH')} ${productForm.issueUnit || ''}`.trim()}
               />
             </Grid>
@@ -2826,10 +2854,7 @@ function InventoryWorkspace({ mode }) {
                 onChange={(event) => handleProductFormChange('minQty', event.target.value)}
               />
             </Grid>
-          </Grid>
-
-          <Grid container spacing={2}>
-            <Grid size={{ xs: 12, sm: 4 }}>
+            <Grid size={{ xs: 12, sm: 6 }}>
               <TextField
                 fullWidth
                 {...getProductFieldErrorProps('costLot', 'ใช้คำนวณต้นทุนและ FIFO')}
@@ -2839,7 +2864,10 @@ function InventoryWorkspace({ mode }) {
                 onChange={(event) => handleProductFormChange('costLot', event.target.value)}
               />
             </Grid>
-            <Grid size={{ xs: 12, sm: 5 }}>
+          </Grid>
+
+          <Grid container spacing={2}>
+            <Grid size={12}>
               <TextField
                 fullWidth
                 label="หมายเหตุ"
@@ -2963,7 +2991,10 @@ function InventoryWorkspace({ mode }) {
             จำนวนรับเข้า <strong>{productForm.requestQty || 0} {productForm.receiveUnit || ''}</strong>
           </Typography>
           <Typography sx={{ color: '#475569', fontSize: 14 }}>
-            เพิ่ม stock <strong>{productFormStockQty.toLocaleString('th-TH')} {productForm.issueUnit || ''}</strong>
+            ของแถม <strong>{toPositiveNumber(productForm.bonusQty).toLocaleString('th-TH')} {productForm.issueUnit || ''}</strong>
+          </Typography>
+          <Typography sx={{ color: '#475569', fontSize: 14 }}>
+            รวมรับเข้า <strong>{productFormStockQty.toLocaleString('th-TH')} {productForm.issueUnit || ''}</strong>
           </Typography>
         </Stack>
       </DialogContent>

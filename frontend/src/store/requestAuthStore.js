@@ -12,7 +12,7 @@ export const useRequestAuthStore = create(
       isAuthenticated: false,
       token: '',
 
-      login: async ({ username, department, division, employeeCode, employeeName, unitRef }) => {
+      login: async ({ username, department, division, employeeCode, employeeName }) => {
         const expiresAt = Date.now() + SESSION_DURATION_MS
         const safeUsername = username.trim()
         const safeDepartment = department.trim()
@@ -30,7 +30,6 @@ export const useRequestAuthStore = create(
             employeeId: Number(safeEmployeeCode) || 0,
             employeeName: safeEmployeeName,
             name: safeEmployeeName,
-            unitRef: unitRef ?? '',
             username: safeUsername,
           },
           expiresAt,

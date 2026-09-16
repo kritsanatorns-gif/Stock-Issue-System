@@ -46,6 +46,12 @@ export function isAdminEmployee(employee) {
 
 export function getAllowedNavigationItems(employee) {
   const allowedMenuIds = getEmployeeMenuIds(employee)
+  // Administrators must see newly added management menus immediately, even
+  // before their saved browser session is refreshed with the new menu id.
+  if (isAdminEmployee(employee)) {
+    return navigationItems
+  }
+
   return navigationItems.filter((item) => allowedMenuIds.includes(item.menuId))
 }
 

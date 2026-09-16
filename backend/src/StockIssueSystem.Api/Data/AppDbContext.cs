@@ -22,6 +22,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
     public DbSet<StockHeader> StockHeaders => Set<StockHeader>();
     public DbSet<StockDetail> StockDetails => Set<StockDetail>();
     public DbSet<StockIssueCost> StockIssueCosts => Set<StockIssueCost>();
+    public DbSet<VatSetting> VatSettings => Set<VatSetting>();
 
     public override int SaveChanges(bool acceptAllChangesOnSuccess)
     {
@@ -114,6 +115,14 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
             entity.Property(unit => unit.UnitName).HasMaxLength(50).IsRequired();
             entity.Property(unit => unit.UnitStatus).HasDefaultValue(1);
             entity.HasIndex(unit => unit.UnitName).IsUnique();
+        });
+
+        modelBuilder.Entity<VatSetting>(entity =>
+        {
+            entity.ToTable("VatSetting", "dbo");
+            entity.HasKey(setting => setting.VatSettingId);
+            entity.Property(setting => setting.VatRate).HasPrecision(5, 2);
+            entity.Property(setting => setting.UpdatedAt).HasDefaultValueSql("GETDATE()");
         });
 
         modelBuilder.Entity<EmployeeMenuPermission>(entity =>
@@ -215,6 +224,9 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
         {
             entity.ToTable("StockCostLot", "dbo");
             entity.HasKey(lot => lot.CostLotId);
+            entity.Property(lot => lot.VatRate).HasPrecision(5, 2);
+            entity.Property(lot => lot.VatAmount).HasPrecision(18, 2);
+            entity.Property(lot => lot.UnitVat).HasPrecision(18, 6);
             entity.Property(lot => lot.ProductId).HasMaxLength(50).IsRequired();
             entity.Property(lot => lot.SupplierName).HasMaxLength(150).HasDefaultValue(string.Empty);
             entity.Property(lot => lot.UnitCost).HasColumnType("decimal(18, 4)");
@@ -231,6 +243,9 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
         modelBuilder.Entity<StockHeader>(entity =>
         {
             entity.ToTable("StockHeader", "dbo");
+            entity.Property(header => header.VatRate).HasPrecision(5, 2);
+            entity.Property(header => header.VatAmount).HasPrecision(18, 2);
+            entity.Property(header => header.PurchaseSubtotal).HasPrecision(18, 2);
             entity.HasKey(header => header.HeaderId);
             entity.Property(header => header.DocType).HasMaxLength(20).IsRequired();
             entity.Property(header => header.PoInvoiceNo).HasMaxLength(100).HasDefaultValue("");
@@ -293,6 +308,9 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
         {
             entity.ToTable("StockIssueCost", "dbo");
             entity.HasKey(cost => cost.IssueCostId);
+            entity.Property(cost => cost.VatRate).HasPrecision(5, 2);
+            entity.Property(cost => cost.UnitVat).HasPrecision(18, 6);
+            entity.Property(cost => cost.TotalVat).HasPrecision(18, 2);
             entity.Property(cost => cost.UnitCost).HasColumnType("decimal(18, 2)");
             entity.Property(cost => cost.TotalCost).HasColumnType("decimal(18, 2)");
             entity.Property(cost => cost.SupplierName).HasMaxLength(150).HasDefaultValue(string.Empty);
