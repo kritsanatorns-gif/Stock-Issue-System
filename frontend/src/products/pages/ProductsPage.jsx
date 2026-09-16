@@ -175,6 +175,7 @@ const importTemplateHeaders = [
   'บาร์โค้ด',
   'หมวดหมู่',
   'ผู้ขาย',
+  'ของแถม (หน่วยเบิก)',
   'Min Stock',
   'ราคาซื้อรวม',
   'หมายเหตุ',
@@ -184,6 +185,7 @@ const importColumnAliases = {
   barcode: 'barcode',
   category: 'categoryName',
   categoryname: 'categoryName',
+  bonusqty: 'bonusQty',
   conversionqty: 'conversionQty',
   issueunit: 'issueUnit',
   productid: 'productId',
@@ -260,10 +262,12 @@ function mapImportRow(row, defaults = {}) {
     const mappedKey = importColumnAliases[normalizedHeader]
       ?? (normalizedHeader.startsWith(normalizeImportHeader('ยอดคงเหลือ'))
         ? 'stockQty'
-        : (normalizedHeader.startsWith(normalizeImportHeader('min stock'))
+        : (normalizedHeader.startsWith(normalizeImportHeader('ของแถม'))
+          ? 'bonusQty'
+          : (normalizedHeader.startsWith(normalizeImportHeader('min stock'))
           || normalizedHeader.startsWith(normalizeImportHeader('เตือนเมื่อของใกล้หมด')))
           ? 'minQty'
-          : undefined)
+          : undefined))
 
     if (mappedKey) {
       mappedRow[mappedKey] = value
@@ -274,6 +278,7 @@ function mapImportRow(row, defaults = {}) {
   const issueUnit = normalizePlainName(mappedRow.issueUnit ?? '')
   const conversionQty = parseImportNumber(mappedRow.conversionQty, receiveUnit && issueUnit && receiveUnit === issueUnit ? 1 : 1)
   const receiveQty = parseImportNumber(mappedRow.receiveQty, 0)
+  const bonusQty = Math.max(0, Math.trunc(parseImportNumber(mappedRow.bonusQty, 0)))
   const computedStockQty = receiveQty * (conversionQty > 0 ? conversionQty : 1)
   const importedStockQty = parseImportNumber(mappedRow.stockQty, Number.NaN)
   const stockQty = Number.isFinite(importedStockQty)
@@ -284,6 +289,7 @@ function mapImportRow(row, defaults = {}) {
 
   return {
     barcode: normalizeBarcodeInput(mappedRow.barcode ?? ''),
+    bonusQty,
     categoryName: normalizePlainName(mappedRow.categoryName ?? defaults.categoryName ?? 'General') || 'General',
     conversionQty: conversionQty > 0 ? conversionQty : 1,
     issueUnit: issueUnit || receiveUnit,
@@ -765,7 +771,7 @@ function ProductsPage() {
     ]
     worksheet['!cols'] = [
       { wch: 16 }, { wch: 22 }, { wch: 36 }, { wch: 14 }, { wch: 16 }, { wch: 16 },
-      { wch: 14 }, { wch: 25 }, { wch: 22 }, { wch: 25 }, { wch: 20 }, { wch: 16 }, { wch: 28 },
+      { wch: 14 }, { wch: 25 }, { wch: 22 }, { wch: 25 }, { wch: 20 }, { wch: 16 }, { wch: 16 }, { wch: 28 },
     ]
     worksheet['!rows'] = [{ hpt: 28 }, { hpt: 34 }, {}, { hpt: 24 }]
     const workbook = XLSX.utils.book_new()

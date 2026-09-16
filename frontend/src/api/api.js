@@ -168,6 +168,16 @@ export async function updateUnit(unitId, unit) {
   return response.data
 }
 
+export async function getVatSetting() {
+  const response = await api.get('/vat-settings')
+  return response.data
+}
+
+export async function updateVatSetting(setting) {
+  const response = await api.put('/vat-settings', setting)
+  return response.data
+}
+
 export async function createProduct(product) {
   const response = await api.post('/products', product)
 
@@ -370,6 +380,11 @@ export async function updateSupplier(supplierId, supplier) {
 export async function getPurchasesBySupplier(params = {}) {
   const response = await api.get('/reports/purchases-by-supplier', { params })
 
+  return response.data
+}
+
+export async function getPurchasesByProduct(params = {}) {
+  const response = await api.get('/reports/purchases-by-product', { params })
   return response.data
 }
 

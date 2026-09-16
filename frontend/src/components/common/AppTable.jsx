@@ -266,7 +266,7 @@ function AppTable({
               {visibleColumns.map((column) => (
                 <TableCell
                   key={column.key}
-                  align={column.headerAlign ?? column.align ?? 'center'}
+                  align={column.headerAlign ?? (column.key === 'productName' ? 'center' : (column.align ?? 'center'))}
                   sx={{
                     bgcolor: '#f8fafc',
                     color: '#334155',
@@ -388,7 +388,7 @@ function AppTable({
                     {visibleColumns.map((column) => (
                       <TableCell
                         key={column.key}
-                        align={column.align ?? 'center'}
+                        align={column.bodyAlign ?? (column.key === 'productName' ? 'left' : (column.align ?? 'center'))}
                         sx={{
                           color: '#0f172a',
                           fontSize: 13,

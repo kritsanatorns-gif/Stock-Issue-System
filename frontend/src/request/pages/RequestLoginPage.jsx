@@ -276,7 +276,6 @@ function RequestLoginPage() {
         division: checkedEmployee.department,
         employeeCode: checkedEmployee.code,
         employeeName: checkedEmployee.name,
-        unitRef: checkedEmployee.unitRef || '',
         username: checkedEmployee.name,
       })
       navigate('/request/history', { replace: true })
@@ -678,7 +677,6 @@ function RequestLoginPage() {
                     แผนก: <strong>{hrEmployee.department || '-'}</strong>
                   </Typography>
                   <Typography sx={{ fontSize: 13 }}>
-                    UnitRef: <strong>{hrEmployee.unitRef || '-'}</strong>
                   </Typography>
                 </Stack>
               </Box>

@@ -27,8 +27,7 @@ public sealed class HrEmployeesController(AppDbContext dbContext) : ControllerBa
             SELECT CAST(Code AS nvarchar(50)) AS Code,
                 LTRIM(RTRIM(ISNULL(Name1, N'') + N' ' + ISNULL(Lastname1, N''))) AS Name,
                 ISNULL(Department, N'') AS Department,
-                ISNULL(Division, N'') AS Division,
-                ISNULL(UnitRef, N'') AS UnitRef
+                ISNULL(Division, N'') AS Division
             FROM MARSHR.HRM.dbo.EMPLOYEE
             WHERE Division = @Department
             ORDER BY Code
@@ -47,7 +46,6 @@ public sealed class HrEmployeesController(AppDbContext dbContext) : ControllerBa
                 Name = reader["Name"]?.ToString() ?? string.Empty,
                 Department = reader["Department"]?.ToString() ?? string.Empty,
                 Division = reader["Division"]?.ToString() ?? string.Empty,
-                UnitRef = reader["UnitRef"]?.ToString() ?? string.Empty,
             });
         }
 
@@ -73,8 +71,7 @@ public sealed class HrEmployeesController(AppDbContext dbContext) : ControllerBa
                 CAST(Code AS nvarchar(50)) AS Code,
                 LTRIM(RTRIM(ISNULL(Name1, N'') + N' ' + ISNULL(Lastname1, N''))) AS Name,
                 ISNULL(Department, N'') AS Department,
-                ISNULL(Division, N'') AS Division,
-                ISNULL(UnitRef, N'') AS UnitRef
+                ISNULL(Division, N'') AS Division
             FROM MARSHR.HRM.dbo.EMPLOYEE
             WHERE CAST(Code AS nvarchar(50)) = @Code
                 AND (@Department = N'' OR Division = @Department)
@@ -103,7 +100,6 @@ public sealed class HrEmployeesController(AppDbContext dbContext) : ControllerBa
             Name = reader["Name"]?.ToString() ?? string.Empty,
             Department = reader["Department"]?.ToString() ?? string.Empty,
             Division = reader["Division"]?.ToString() ?? string.Empty,
-            UnitRef = reader["UnitRef"]?.ToString() ?? string.Empty,
         });
     }
 }

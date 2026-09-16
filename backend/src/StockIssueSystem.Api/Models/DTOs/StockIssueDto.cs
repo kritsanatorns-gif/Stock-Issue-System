@@ -2,6 +2,10 @@ namespace StockIssueSystem.Api.Models.DTOs;
 
 public sealed class StockIssueDto
 {
+    public decimal VatRate { get; set; }
+    public decimal VatAmount { get; set; }
+    public decimal PurchaseSubtotal { get; set; }
+    public bool HasVatSnapshot { get; set; }
     public int HeaderId { get; set; }
     public DateTime CreatedAt { get; set; }
     public string Department { get; set; } = string.Empty;

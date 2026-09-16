@@ -21,7 +21,7 @@ export function clampReportTableCells(root) {
   documentRef.head.appendChild(style)
 }
 
-export function paginateReportCanvas(canvas, { landscape = false, margin = 5 } = {}) {
+export function paginateReportCanvas(canvas, { landscape = false, margin = 5, repeatHeaderHeight = 260 } = {}) {
   const width = landscape ? 297 : 210
   const height = landscape ? 210 : 297
   let scale = canvas.width / (width - margin * 2)
@@ -32,23 +32,36 @@ export function paginateReportCanvas(canvas, { landscape = false, margin = 5 } =
     scale = Math.max(scale, canvas.height / availableHeight)
   }
   const contentHeight = Math.max(1, Math.round(availableHeight * scale))
-  const count = Math.max(1, Math.ceil(canvas.height / contentHeight))
-  return Array.from({ length: count }, (_, index) => {
+  const headerHeight = Math.min(Math.max(0, repeatHeaderHeight), Math.floor(contentHeight * 0.35), canvas.height)
+  const slices = []
+  let sourceY = 0
+  while (sourceY < canvas.height || !slices.length) {
+    const repeatHeader = slices.length > 0 && headerHeight > 0
+    const availableSliceHeight = Math.max(1, contentHeight - (repeatHeader ? headerHeight : 0))
+    const sliceHeight = Math.min(availableSliceHeight, canvas.height - sourceY)
+    slices.push({ repeatHeader, sliceHeight, sourceY })
+    sourceY += sliceHeight
+  }
+  const count = slices.length
+  return slices.map(({ repeatHeader, sliceHeight, sourceY }, index) => {
     const page = document.createElement('canvas')
     page.width = Math.round(width * scale)
     page.height = Math.round(height * scale)
     const ctx = page.getContext('2d')
     ctx.fillStyle = '#fff'
     ctx.fillRect(0, 0, page.width, page.height)
-    const sliceHeight = Math.min(contentHeight, canvas.height - index * contentHeight)
-    ctx.drawImage(canvas, 0, index * contentHeight, canvas.width, sliceHeight,
-      (page.width - canvas.width) / 2, margin * scale, canvas.width, sliceHeight)
+    const left = (page.width - canvas.width) / 2
+    if (repeatHeader) {
+      ctx.drawImage(canvas, 0, 0, canvas.width, headerHeight,
+        left, margin * scale, canvas.width, headerHeight)
+    }
+    ctx.drawImage(canvas, 0, sourceY, canvas.width, sliceHeight,
+      left, (margin + (repeatHeader ? headerHeight / scale : 0)) * scale, canvas.width, sliceHeight)
     ctx.fillStyle = '#000'
     ctx.font = `${3.5 * scale}px "IBM Plex Sans Thai", Tahoma, sans-serif`
     ctx.textAlign = 'right'
     const footerRight = page.width - margin * scale
     ctx.fillText(`${index + 1}/${count}`, footerRight, (height - 10) * scale)
-    if (index === count - 1) ctx.fillText('จบรายงาน', footerRight, (height - 5) * scale)
     return page
   })
 }
@@ -67,18 +80,17 @@ export function stampReportFooters(pdf) {
   for (let index = 1; index <= count; index += 1) {
     pdf.setPage(index)
     const footer = document.createElement('canvas')
-    footer.width = 1000
+    footer.width = 600
     footer.height = 120
     const ctx = footer.getContext('2d')
     ctx.fillStyle = '#fff'
     ctx.fillRect(0, 0, footer.width, footer.height)
     ctx.fillStyle = '#000'
-    ctx.font = '30px "IBM Plex Sans Thai", Tahoma, sans-serif'
+    ctx.font = 'bold 42px Arial, sans-serif'
     ctx.textAlign = 'right'
-    ctx.fillText(`${index}/${count}`, 950, 42)
-    if (index === count) ctx.fillText('จบรายงาน', 950, 100)
-    pdf.addImage(footer.toDataURL('image/png'), 'PNG', pdf.internal.pageSize.getWidth() - 55,
-      pdf.internal.pageSize.getHeight() - 13, 50, 12)
+    ctx.fillText(`${index}/${count}`, 570, 58)
+    pdf.addImage(footer.toDataURL('image/png'), 'PNG', pdf.internal.pageSize.getWidth() - 45,
+      pdf.internal.pageSize.getHeight() - 13, 40, 10)
   }
 }
 

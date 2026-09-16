@@ -4,6 +4,10 @@ namespace StockIssueSystem.Api.Models;
 
 public sealed class StockHeader
 {
+    public decimal VatRate { get; set; }
+    public decimal VatAmount { get; set; }
+    public decimal PurchaseSubtotal { get; set; }
+    public bool HasVatSnapshot { get; set; }
     public int HeaderId { get; set; }
 
     [MaxLength(20)]

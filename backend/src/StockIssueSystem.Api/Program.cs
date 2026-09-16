@@ -33,11 +33,10 @@ builder.Services.AddCors(options =>
 
 var app = builder.Build();
 
-if (app.Environment.IsDevelopment())
-{
-    app.UseSwagger();
-    app.UseSwaggerUI();
-}
+// This is an internal application. Keep its API reference available when it is
+// started from the IDE or the local executable, regardless of environment.
+app.UseSwagger();
+app.UseSwaggerUI();
 
 app.UseStaticFiles();
 app.UseCors("Frontend");
@@ -89,6 +88,8 @@ await EnsureRequisitionApproval(app);
 await EnsureRequisitionItemDenial(app);
 app.Logger.LogInformation("Preparing database schema: supplier workflow");
 await EnsureSupplierWorkflow(app);
+app.Logger.LogInformation("Preparing database schema: VAT setting");
+await EnsureVatSettings(app);
 await EnsureAuditLogTable(app);
 app.Logger.LogInformation("Database schema preparation completed.");
 
@@ -136,6 +137,37 @@ static async Task EnsureUnitMenu(WebApplication app)
               SELECT 1 FROM dbo.EmployeeMenuPermission permission
               WHERE permission.EmployeeId = employee.EmployeeId AND permission.MenuId = 12
           );
+        """);
+}
+
+static async Task EnsureVatSettings(WebApplication app)
+{
+    await using var scope = app.Services.CreateAsyncScope();
+    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    await db.Database.ExecuteSqlRawAsync("""
+        IF OBJECT_ID(N'dbo.VatSetting', N'U') IS NULL
+            CREATE TABLE dbo.VatSetting (VatSettingId int NOT NULL PRIMARY KEY, VatRate decimal(5,2) NOT NULL, UpdatedAt datetime2 NOT NULL CONSTRAINT DF_VatSetting_UpdatedAt DEFAULT GETDATE());
+        IF NOT EXISTS (SELECT 1 FROM dbo.VatSetting WHERE VatSettingId = 1)
+            INSERT INTO dbo.VatSetting (VatSettingId, VatRate, UpdatedAt) VALUES (1, 7.00, GETDATE());
+        """);
+}
+
+static async Task EnsureVatSettingsMenu(WebApplication app)
+{
+    await using var scope = app.Services.CreateAsyncScope();
+    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    await db.Database.ExecuteSqlRawAsync("""
+        IF NOT EXISTS (SELECT 1 FROM dbo.Menu WHERE MenuId = 13 OR MenuCode = 'VAT_SETTINGS')
+        BEGIN
+            SET IDENTITY_INSERT dbo.Menu ON;
+            INSERT INTO dbo.Menu (MenuId, MenuCode, MenuName, MenuPath, SortOrder, IsActive) VALUES (13, 'VAT_SETTINGS', N'จัดการ VAT', '/vat-settings', 13, 1);
+            SET IDENTITY_INSERT dbo.Menu OFF;
+        END
+        ELSE UPDATE dbo.Menu SET MenuCode = 'VAT_SETTINGS', MenuName = N'จัดการ VAT', MenuPath = '/vat-settings', SortOrder = 13, IsActive = 1 WHERE MenuId = 13 OR MenuCode = 'VAT_SETTINGS';
+        INSERT INTO dbo.EmployeeMenuPermission (EmployeeId, MenuId, CreatedDate)
+        SELECT employee.EmployeeId, 13, GETDATE() FROM dbo.Employee employee
+        WHERE (employee.Permission = '1' OR employee.Permission LIKE N'%admin%' OR employee.Permission LIKE N'%ผู้ดูแล%')
+          AND NOT EXISTS (SELECT 1 FROM dbo.EmployeeMenuPermission permission WHERE permission.EmployeeId = employee.EmployeeId AND permission.MenuId = 13);
         """);
 }
 

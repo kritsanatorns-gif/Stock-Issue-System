@@ -48,8 +48,12 @@ public sealed class StockIssueController(AppDbContext dbContext, FifoCostService
         var employees = await GetEmployeesByStockHeaders(reports);
         var costs = await GetIssueCostsByStockHeaders(reports);
         var statusNames = await StockHeaderStatuses.GetNames(dbContext);
+        var requestHeaderIds = reports.Where(report => report.SourceRequisitionId is not null).Select(report => report.SourceRequisitionId!.Value).Distinct().ToList();
+        var requestNumbers = await dbContext.StockHeaders
+            .Where(header => requestHeaderIds.Contains(header.HeaderId))
+            .ToDictionaryAsync(header => header.HeaderId, header => header.RequestNo);
 
-        return Ok(reports.Select(report => ToDto(report, products, balances, employees, costs, statusNames)).ToList());
+        return Ok(reports.Select(report => ToDto(report, products, balances, employees, costs, statusNames, requestNumbers)).ToList());
     }
 
     [HttpGet("{headerId:int}")]
@@ -526,7 +530,8 @@ public sealed class StockIssueController(AppDbContext dbContext, FifoCostService
         IReadOnlyDictionary<string, StockBalance> balances,
         IReadOnlyDictionary<int, EmployeeReportInfo> employees,
         IReadOnlyDictionary<int, List<StockIssueCost>> costs,
-        IReadOnlyDictionary<int, string> statusNames)
+        IReadOnlyDictionary<int, string> statusNames,
+        IReadOnlyDictionary<int, string>? requestNumbers = null)
     {
         var details = report.Details
             .OrderBy(detail => detail.DetailId)
@@ -553,6 +558,8 @@ public sealed class StockIssueController(AppDbContext dbContext, FifoCostService
                     ReceiveUnit = detail.ReceiveUnit,
                     StockQty = balance?.Qty ?? 0,
                     TotalCost = issueCosts?.Sum(cost => cost.TotalCost) ?? 0,
+                    TotalVat = issueCosts?.Sum(cost => cost.TotalVat) ?? 0,
+                    UnitVat = (issueCosts?.Sum(cost => cost.TotalVat) ?? 0) / Math.Max(1, detail.Qty),
                     UnitCost = issueCosts is { Count: > 0 }
                         ? Math.Round(issueCosts.Sum(cost => cost.TotalCost) / Math.Max(1, detail.Qty), 2)
                         : 0,
@@ -569,7 +576,9 @@ public sealed class StockIssueController(AppDbContext dbContext, FifoCostService
             CreatedAt = report.TransactionDate,
             Department = report.Remark,
             Division = report.Department,
-            DocumentNo = report.HeaderId.ToString(),
+            DocumentNo = report.SourceRequisitionId is int requestHeaderId && requestNumbers?.TryGetValue(requestHeaderId, out var requestNo) == true && !string.IsNullOrWhiteSpace(requestNo)
+                ? requestNo
+                : (!string.IsNullOrWhiteSpace(report.RequestNo) ? report.RequestNo : report.HeaderId.ToString()),
             CancelNo = report.CancelNo,
             RequestHeaderId = report.SourceRequisitionId,
             EmployeeId = parsedEmployeeId,

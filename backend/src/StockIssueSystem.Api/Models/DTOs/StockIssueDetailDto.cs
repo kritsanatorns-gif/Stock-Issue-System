@@ -2,6 +2,10 @@ namespace StockIssueSystem.Api.Models.DTOs;
 
 public sealed class StockIssueDetailDto
 {
+    public decimal UnitVat { get; set; }
+    public decimal TotalVat { get; set; }
+    public decimal UnitCostIncludingVat => UnitCost + UnitVat;
+    public decimal TotalCostIncludingVat => TotalCost + TotalVat;
     public string Barcode { get; set; } = string.Empty;
     public string Category { get; set; } = string.Empty;
     public string Code { get; set; } = string.Empty;

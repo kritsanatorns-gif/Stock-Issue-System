@@ -46,6 +46,37 @@ export function exportRowsToExcel(rows, columns, fileName, options = {}) {
   saveAs(blob, fileName)
 }
 
+export function exportProductPurchaseIssueToExcel(rows, fileName, periodLabel) {
+  const headers = ['ลำดับ', 'รายการสินค้า / รหัส', 'หน่วย', 'จำนวนรับเข้า', 'ยอดซื้อ', 'จำนวนเบิก', 'ต้นทุน FIFO ที่เบิก']
+  const data = [
+    ['รายงานสรุปสินค้า แยกตามรายการซื้อและเบิก'],
+    [`ช่วงเวลา: ${periodLabel}`],
+    [],
+    headers,
+    ...rows.map((row, index) => [index + 1, `${row.productName || row.productCode} / ${row.productCode}`, row.unit || '-', Number(row.purchaseQty ?? 0), Number(row.purchaseAmount ?? 0), Number(row.issueQty ?? 0), Number(row.issueAmount ?? 0)]),
+  ]
+  const totalRow = data.length
+  data.push(['', 'รวมทั้งหมด', '', rows.reduce((sum, row) => sum + Number(row.purchaseQty ?? 0), 0), rows.reduce((sum, row) => sum + Number(row.purchaseAmount ?? 0), 0), rows.reduce((sum, row) => sum + Number(row.issueQty ?? 0), 0), rows.reduce((sum, row) => sum + Number(row.issueAmount ?? 0), 0)])
+  const worksheet = XLSX.utils.aoa_to_sheet(data)
+  worksheet['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: headers.length - 1 } }, { s: { r: 1, c: 0 }, e: { r: 1, c: headers.length - 1 } }]
+  worksheet['!cols'] = [{ wch: 9 }, { wch: 48 }, { wch: 12 }, { wch: 16 }, { wch: 18 }, { wch: 14 }, { wch: 22 }]
+  const border = { bottom: { style: 'thin', color: { rgb: '000000' } }, left: { style: 'thin', color: { rgb: '000000' } }, right: { style: 'thin', color: { rgb: '000000' } }, top: { style: 'thin', color: { rgb: '000000' } } }
+  data.forEach((row, rowIndex) => row.forEach((_, columnIndex) => {
+    const cell = worksheet[XLSX.utils.encode_cell({ r: rowIndex, c: columnIndex })]
+    if (!cell) return
+    cell.s = { border, alignment: { horizontal: columnIndex >= 3 ? 'right' : 'center', vertical: 'center', wrapText: columnIndex === 1 }, font: { name: 'Tahoma', sz: 11 } }
+    if (rowIndex === 0) cell.s = { ...cell.s, alignment: { horizontal: 'center', vertical: 'center' }, font: { bold: true, name: 'Tahoma', sz: 15 } }
+    if (rowIndex === 1) cell.s = { ...cell.s, alignment: { horizontal: 'center', vertical: 'center' }, font: { name: 'Tahoma', sz: 11 } }
+    if (rowIndex === 3) cell.s = { ...cell.s, alignment: { horizontal: 'center', vertical: 'center', wrapText: true }, fill: { fgColor: { rgb: 'FFFEC8' } }, font: { bold: true, name: 'Tahoma', sz: 11 } }
+    if (rowIndex === totalRow) cell.s = { ...cell.s, fill: { fgColor: { rgb: 'E0F2FE' } }, font: { bold: true, name: 'Tahoma', sz: 11 } }
+    if (rowIndex >= 4 && columnIndex >= 3) cell.z = '#,##0.00'
+  }))
+  const workbook = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(workbook, worksheet, 'สรุปสินค้า')
+  const buffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' })
+  saveAs(new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), fileName)
+}
+
 export function exportPurchaseSummaryToExcel(rows, fileName, periodLabel) {
   const data = [[`รายงานการซื้อวัสดุอุปกรณ์ ประจำเดือน ${periodLabel}`], [], ['ลำดับ', 'ร้าน', 'จำนวนเงิน/หน่วย']]
   rows.forEach((row, index) => data.push([index + 1, row.supplierName, Number(row.totalPurchase ?? 0)]))
@@ -73,35 +104,44 @@ export function exportPurchaseSummaryToExcel(rows, fileName, periodLabel) {
 
 // รายงานนี้ต้องรักษาการจัดกลุ่มฝ่ายเหมือนตารางบนหน้าจอ จึงสร้าง sheet แบบ AOA
 // เพื่อ merge ช่องของฝ่ายและยอดรวมฝ่ายได้จริง.
-export function exportProductIssueByCategoryToExcel(groups, fileName, periodLabel) {
-  const rows = [[`รายงานสินค้าที่เบิก แยกตามหมวดหมู่ ประจำเดือน ${periodLabel}`], []]
-  const merges = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 2 } }]
+export function exportProductIssueByCategoryToExcel(groups, fileName, periodLabel, title = 'รายงานสินค้าที่เบิก แยกตามหมวดหมู่') {
+  const headers = ['ลำดับ', 'รายการสินค้า / รหัส', 'จำนวนเบิก', 'หน่วย', 'ต้นทุน FIFO/หน่วย', 'ยอดเบิก']
+  const rows = [[`${title} ประจำเดือน ${periodLabel}`], [], headers]
+  const merges = [{ s: { r: 0, c: 0 }, e: { r: 0, c: headers.length - 1 } }]
 
   groups.forEach((group) => {
     const categoryRow = rows.length
-    rows.push([`หมวด : ${group.category}`, '', ''])
-    merges.push({ s: { r: categoryRow, c: 0 }, e: { r: categoryRow, c: 2 } })
-    group.products.forEach((product) => rows.push(['', `${product.productName} / ${product.productCode}`, Number(product.totalQty ?? 0)]))
-    rows.push(['', '', ''])
+    rows.push([`หมวด : ${group.category}`, '', '', '', '', ''])
+    merges.push({ s: { r: categoryRow, c: 0 }, e: { r: categoryRow, c: headers.length - 1 } })
+    group.products.forEach((product, index) => {
+      const qty = Number(product.totalQty ?? 0)
+      const total = Number(product.totalCost ?? 0)
+      rows.push([index + 1, `${product.productName} / ${product.productCode}`, qty, product.unit || '-', qty ? total / qty : 0, total])
+    })
+    rows.push(['', 'รวมหมวด', group.products.reduce((sum, product) => sum + Number(product.totalQty ?? 0), 0), '', '', group.products.reduce((sum, product) => sum + Number(product.totalCost ?? 0), 0)])
+    rows.push(['', '', '', '', '', ''])
   })
 
-  if (!groups.length) rows.push(['ไม่พบรายการเบิกในช่วงเวลาที่เลือก', '', ''])
+  if (!groups.length) rows.push(['ไม่พบรายการเบิกในช่วงเวลาที่เลือก', '', '', '', '', ''])
 
   const worksheet = XLSX.utils.aoa_to_sheet(rows)
   worksheet['!merges'] = merges
-  worksheet['!cols'] = [{ wch: 6 }, { wch: 68 }, { wch: 16 }]
+  worksheet['!cols'] = [{ wch: 8 }, { wch: 58 }, { wch: 14 }, { wch: 12 }, { wch: 20 }, { wch: 20 }]
   rows.forEach((row, rowIndex) => row.forEach((_, columnIndex) => {
     const cell = worksheet[XLSX.utils.encode_cell({ r: rowIndex, c: columnIndex })]
     if (!cell) return
     const isTitle = rowIndex === 0
-    const isCategory = rowIndex > 1 && String(row[0] ?? '').startsWith('หมวด :')
+    const isCategory = rowIndex > 2 && String(row[0] ?? '').startsWith('หมวด :')
+    const isCategoryTotal = rowIndex > 2 && row[1] === 'รวมหมวด'
     cell.s = {
-      alignment: { horizontal: columnIndex === 2 ? 'right' : 'left', vertical: 'center' },
-      font: { name: 'Tahoma', sz: isTitle ? 14 : 11, bold: isTitle || isCategory, color: isCategory ? { rgb: '1D4ED8' } : undefined },
+      alignment: { horizontal: columnIndex >= 2 ? 'right' : 'left', vertical: 'center' },
+      font: { name: 'Tahoma', sz: isTitle ? 14 : 11, bold: isTitle || isCategory || isCategoryTotal, color: isCategory ? { rgb: '1D4ED8' } : undefined },
     }
     if (isTitle) cell.s.alignment = { horizontal: 'center', vertical: 'center' }
+    if (rowIndex === 2) cell.s = { ...cell.s, alignment: { horizontal: 'center', vertical: 'center' }, fill: { fgColor: { rgb: 'FFFEC8' } }, font: { bold: true, name: 'Tahoma', sz: 11 } }
     if (isCategory) cell.s.fill = { fgColor: { rgb: 'EFF6FF' } }
-    if (rowIndex > 1 && columnIndex === 2 && !isCategory) cell.z = '#,##0'
+    if (isCategoryTotal) cell.s.fill = { fgColor: { rgb: 'E0F2FE' } }
+    if (rowIndex > 2 && columnIndex >= 2 && !isCategory) cell.z = columnIndex === 2 ? '#,##0' : '#,##0.00'
   }))
   const workbook = XLSX.utils.book_new()
   XLSX.utils.book_append_sheet(workbook, worksheet, 'รายงานสินค้า')
@@ -109,38 +149,80 @@ export function exportProductIssueByCategoryToExcel(groups, fileName, periodLabe
   saveAs(new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), fileName)
 }
 
-export function exportDepartmentIssueToExcel(groups, fileName, periodLabel) {
-  const rows = [[`รายงานการเบิก แยกตามแผนก ประจำเดือน ${periodLabel}`], []]
-  const merges = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 2 } }]
+export function exportDepartmentIssueToExcel(groups, fileName, periodLabel, vatRate = 0, title = 'รายงานสรุปแยกตามลูกค้า (แผนก)', groupLabel = 'แผนก') {
+  const headers = ['ลำดับ', 'รายการสินค้า / รหัส', 'จำนวนเบิก', 'หน่วย', 'ต้นทุน FIFO/หน่วย', 'ยอดเบิก']
+  const rows = [[`${title} ประจำเดือน ${periodLabel}`], [], headers]
+  const merges = [{ s: { r: 0, c: 0 }, e: { r: 0, c: headers.length - 1 } }]
 
   groups.forEach((group) => {
     const departmentRow = rows.length
-    rows.push([`แผนก : ${group.department}`, '', ''])
-    merges.push({ s: { r: departmentRow, c: 0 }, e: { r: departmentRow, c: 2 } })
-    group.products.forEach((product) => rows.push(['', `${product.productName} / ${product.productCode}`, Number(product.totalQty ?? 0)]))
-    rows.push(['', '', ''])
+    rows.push([`${groupLabel} : ${group.department}`, '', '', '', '', ''])
+    merges.push({ s: { r: departmentRow, c: 0 }, e: { r: departmentRow, c: headers.length - 1 } })
+    group.products.forEach((product, index) => {
+      const qty = Number(product.totalQty ?? 0)
+      const total = Number(product.totalCost ?? 0)
+      rows.push([index + 1, `${product.productName} / ${product.productCode}`, qty, product.unit || '-', qty ? total / qty : 0, total])
+    })
+    const subtotal = group.products.reduce((sum, product) => sum + Number(product.totalCost ?? 0), 0)
+    rows.push(['', vatRate === null || vatRate === undefined ? 'รวมแผนก' : 'รวมแผนก (ไม่รวม VAT)', group.products.reduce((sum, product) => sum + Number(product.totalQty ?? 0), 0), '', '', subtotal])
+    if (vatRate !== null && vatRate !== undefined) {
+      const totalWithVat = subtotal + (subtotal * Number(vatRate || 0) / 100)
+      rows.push(['', `รวมแผนก (รวม VAT ${vatRate}%)`, '', '', '', totalWithVat])
+    }
+    rows.push(['', '', '', '', '', ''])
   })
 
-  if (!groups.length) rows.push(['ไม่พบรายการเบิกในช่วงเวลาที่เลือก', '', ''])
+  if (!groups.length) rows.push(['ไม่พบรายการเบิกในช่วงเวลาที่เลือก', '', '', '', '', ''])
 
   const worksheet = XLSX.utils.aoa_to_sheet(rows)
   worksheet['!merges'] = merges
-  worksheet['!cols'] = [{ wch: 6 }, { wch: 68 }, { wch: 16 }]
+  worksheet['!cols'] = [{ wch: 8 }, { wch: 58 }, { wch: 14 }, { wch: 12 }, { wch: 20 }, { wch: 20 }]
   rows.forEach((row, rowIndex) => row.forEach((_, columnIndex) => {
     const cell = worksheet[XLSX.utils.encode_cell({ r: rowIndex, c: columnIndex })]
     if (!cell) return
     const isTitle = rowIndex === 0
-    const isDepartment = rowIndex > 1 && String(row[0] ?? '').startsWith('แผนก :')
+    const isDepartment = rowIndex > 2 && String(row[0] ?? '').startsWith(`${groupLabel} :`)
+    const isDepartmentTotal = rowIndex > 2 && String(row[1] ?? '').startsWith('รวมแผนก')
     cell.s = {
-      alignment: { horizontal: columnIndex === 2 ? 'right' : 'left', vertical: 'center' },
+      alignment: { horizontal: columnIndex >= 2 ? 'right' : 'left', vertical: 'center' },
       font: { name: 'Tahoma', sz: isTitle ? 14 : 11, bold: isTitle || isDepartment, color: isDepartment ? { rgb: '1D4ED8' } : undefined },
     }
     if (isTitle) cell.s.alignment = { horizontal: 'center', vertical: 'center' }
+    if (rowIndex === 2) cell.s = { ...cell.s, alignment: { horizontal: 'center', vertical: 'center' }, fill: { fgColor: { rgb: 'FFFEC8' } }, font: { bold: true, name: 'Tahoma', sz: 11 } }
     if (isDepartment) cell.s.fill = { fgColor: { rgb: 'EFF6FF' } }
-    if (rowIndex > 1 && columnIndex === 2 && !isDepartment) cell.z = '#,##0'
+    if (isDepartmentTotal) cell.s = { ...cell.s, fill: { fgColor: { rgb: 'E0F2FE' } }, font: { bold: true, name: 'Tahoma', sz: 11 } }
+    if (rowIndex > 2 && columnIndex >= 2 && !isDepartment) cell.z = columnIndex === 2 ? '#,##0' : '#,##0.00'
   }))
   const workbook = XLSX.utils.book_new()
-  XLSX.utils.book_append_sheet(workbook, worksheet, 'รายงานการเบิก')
+  XLSX.utils.book_append_sheet(workbook, worksheet, 'สรุปตามลูกค้า')
+  const buffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' })
+  saveAs(new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), fileName)
+}
+
+export function exportDepartmentCostSummaryToExcel(rows, fileName, periodLabel) {
+  const headers = ['ลำดับ', 'แผนก', 'จำนวนที่เบิก', 'ค่าใช้จ่าย', 'ยอดรวม']
+  const data = [
+    [`รายงานสรุปค่าใช้จ่ายแยกตามแผนก ประจำเดือน ${periodLabel}`],
+    [],
+    headers,
+    ...rows.map((row, index) => [index + 1, row.label || '-', Number(row.totalQty ?? 0), Number(row.totalCost ?? 0), Number(row.totalCost ?? 0)]),
+  ]
+  const total = rows.reduce((sum, row) => sum + Number(row.totalCost ?? 0), 0)
+  data.push(['', `รวมทั้งสิ้น ${rows.length} แผนก`, '', total, total])
+  const worksheet = XLSX.utils.aoa_to_sheet(data)
+  worksheet['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: headers.length - 1 } }]
+  worksheet['!cols'] = [{ wch: 9 }, { wch: 36 }, { wch: 16 }, { wch: 20 }, { wch: 20 }]
+  data.forEach((row, rowIndex) => row.forEach((_, columnIndex) => {
+    const cell = worksheet[XLSX.utils.encode_cell({ r: rowIndex, c: columnIndex })]
+    if (!cell) return
+    cell.s = { alignment: { horizontal: columnIndex >= 2 ? 'right' : 'center', vertical: 'center' }, font: { name: 'Tahoma', sz: 11 } }
+    if (rowIndex === 0) cell.s = { ...cell.s, alignment: { horizontal: 'center', vertical: 'center' }, font: { bold: true, name: 'Tahoma', sz: 14 } }
+    if (rowIndex === 2) cell.s = { ...cell.s, fill: { fgColor: { rgb: 'FFFEC8' } }, font: { bold: true, name: 'Tahoma', sz: 11 } }
+    if (rowIndex === data.length - 1) cell.s = { ...cell.s, fill: { fgColor: { rgb: 'E0F2FE' } }, font: { bold: true, name: 'Tahoma', sz: 11 } }
+    if (rowIndex >= 3 && columnIndex >= 2) cell.z = columnIndex === 2 ? '#,##0' : '#,##0.00'
+  }))
+  const workbook = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(workbook, worksheet, 'สรุปค่าใช้จ่าย')
   const buffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' })
   saveAs(new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), fileName)
 }

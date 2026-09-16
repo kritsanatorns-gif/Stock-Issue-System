@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using StockIssueSystem.Api.Data;
 using StockIssueSystem.Api.Models;
 using StockIssueSystem.Api.Models.DTOs;
+using StockIssueSystem.Api.Services;
 
 namespace StockIssueSystem.Api.Controllers;
 
@@ -77,8 +78,13 @@ public sealed class StockReceiveController(AppDbContext dbContext) : ControllerB
 
         await UpsertProducts(request);
 
+        var subtotal = request.Items.Sum(item => VatCalculator.Money(TryParseCost(item.CostLot)));
         var stockHeader = new StockHeader
         {
+            VatRate = 0,
+            VatAmount = 0,
+            PurchaseSubtotal = subtotal,
+            HasVatSnapshot = false,
             CreateBy = request.EmployeeId.ToString(),
             CreateDate = DateTime.Now,
             Details = request.Items.Select(item => new StockDetail
@@ -210,7 +216,7 @@ public sealed class StockReceiveController(AppDbContext dbContext) : ControllerB
 
             var originalQty = Convert.ToInt32(item.Quantity);
             var receiveQty = item.Quantity;
-            var purchaseCost = TryParseCost(item.CostLot);
+            var purchaseCost = VatCalculator.Money(TryParseCost(item.CostLot));
             var unitCost = receiveQty <= 0 ? 0 : Math.Round(purchaseCost / receiveQty, 2);
             var supplier = suppliersById[item.SupplierId!.Value];
 
@@ -226,6 +232,10 @@ public sealed class StockReceiveController(AppDbContext dbContext) : ControllerB
                 SupplierName = supplier.SupplierName,
                 Status = 1,
                 UnitCost = unitCost,
+                // VAT belongs to the receiving document total only; FIFO costs stay before VAT.
+                VatRate = 0,
+                VatAmount = 0,
+                UnitVat = 0,
             });
         }
     }
@@ -623,6 +633,8 @@ public sealed class StockReceiveController(AppDbContext dbContext) : ControllerB
                     StockQty = balance?.Qty ?? 0,
                     TotalCost = costLot is null ? 0 : detail.Qty * costLot.UnitCost,
                     UnitCost = costLot?.UnitCost ?? 0,
+                    UnitVat = costLot?.UnitVat ?? 0,
+                    TotalVat = costLot?.VatAmount ?? 0,
                     Unit = detail.Unit,
                 };
             })
@@ -633,6 +645,10 @@ public sealed class StockReceiveController(AppDbContext dbContext) : ControllerB
         return new StockIssueDto
         {
             HeaderId = report.HeaderId,
+            VatRate = report.VatRate,
+            VatAmount = report.VatAmount,
+            PurchaseSubtotal = report.PurchaseSubtotal,
+            HasVatSnapshot = report.HasVatSnapshot,
             CreatedAt = report.TransactionDate,
             Department = report.Remark,
             Division = report.Department,
