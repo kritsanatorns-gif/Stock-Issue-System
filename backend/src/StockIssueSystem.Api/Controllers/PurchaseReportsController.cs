@@ -23,14 +23,15 @@ public sealed class PurchaseReportsController(AppDbContext dbContext) : Controll
             where header.DocType == "RECEIVE" && header.Status != StockHeaderStatuses.Cancelled && lot.Status != 2
                 && (!startDate.HasValue || header.TransactionDate >= startDate.Value.Date)
                 && (!endOfDay.HasValue || header.TransactionDate < endOfDay.Value)
-            select new { detail.ProductId, detail.ProductName, detail.Unit, lot.OriginalQty, lot.UnitCost, lot.VatAmount }
+            select new { detail.ProductId, detail.ProductName, detail.Category, detail.Unit, lot.OriginalQty, lot.UnitCost, lot.VatAmount }
         ).ToListAsync();
 
-        return Ok(lots.GroupBy(row => new { row.ProductId, row.ProductName, row.Unit })
+        return Ok(lots.GroupBy(row => new { row.ProductId, row.ProductName, row.Category, row.Unit })
             .Select(group => new
             {
                 productCode = group.Key.ProductId,
                 productName = group.Key.ProductName,
+                category = group.Key.Category,
                 unit = group.Key.Unit,
                 purchaseQty = group.Sum(row => row.OriginalQty),
                 purchaseAmount = group.Sum(row => row.OriginalQty * row.UnitCost),
@@ -127,7 +128,7 @@ public sealed class PurchaseReportsController(AppDbContext dbContext) : Controll
                 && lot.SupplierId.HasValue
                 && (!startDate.HasValue || header.TransactionDate >= startDate.Value.Date)
                 && (!endOfDay.HasValue || header.TransactionDate < endOfDay.Value)
-            select new { header.TransactionDate, TotalPurchase = lot.OriginalQty * lot.UnitCost, TotalVat = lot.VatAmount }
+            select new { header.TransactionDate, lot.OriginalQty, TotalPurchase = lot.OriginalQty * lot.UnitCost, TotalVat = lot.VatAmount }
         ).ToListAsync();
 
         var isDaily = string.Equals(period, "daily", StringComparison.OrdinalIgnoreCase);
@@ -138,6 +139,7 @@ public sealed class PurchaseReportsController(AppDbContext dbContext) : Controll
                 : new DateTime(row.TransactionDate.Year, row.TransactionDate.Month, 1))
             .Select(group => new PurchaseTrendDto
             {
+                TotalQty = group.Sum(row => row.OriginalQty),
                 PeriodStart = group.Key,
                 TotalVat = group.Sum(row => row.TotalVat),
                 TotalPurchase = group.Sum(row => row.TotalPurchase),

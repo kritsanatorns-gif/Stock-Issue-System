@@ -35,7 +35,7 @@ import {
   Trash2,
   Upload,
 } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import toast from 'react-hot-toast'
 import { useNavigate } from 'react-router-dom'
 import Swal from 'sweetalert2'
@@ -61,6 +61,7 @@ import AppTable from '../../components/common/AppTable'
 import DateInputField from '../../components/common/DateInputField'
 import { useAuthStore } from '../../store/authStore'
 import { useInventoryDraftStore } from '../../store/inventoryDraftStore'
+import { ColorModeContext } from '../../theme/ColorModeContext'
 import {
   normalizeBarcodeInput,
   normalizeDecimalNumberInput,
@@ -87,7 +88,7 @@ const defaultProductForm = {
 }
 
 const departmentSearchOptionValue = '__department_search__'
-const MAX_ISSUE_ITEMS_PER_REQUEST = 25
+const MAX_ISSUE_ITEMS_PER_REQUEST = 15
 
 const getThailandTodayInputValue = () => {
   const parts = new Intl.DateTimeFormat('en-GB', {
@@ -144,7 +145,12 @@ function normalizeProductRow(row) {
     receiveUnit: row.receiveUnit ?? row.ReceiveUnit ?? unit,
     requestQty: Number(row.requestQty ?? row.RequestQty ?? 1),
     stockQty: Number(row.stockQty ?? row.StockQty ?? 0),
+    status: String(row.status ?? row.Status ?? 'Active').trim(),
   }
+}
+
+function isActiveProduct(row) {
+  return String(row.status ?? row.Status ?? 'Active').trim().toLowerCase() === 'active'
 }
 
 function toPositiveNumber(value) {
@@ -266,6 +272,8 @@ function getStockStatusValue(item) {
 }
 
 function InventoryWorkspace({ mode }) {
+  const { mode: colorMode } = useContext(ColorModeContext)
+  const isDarkMode = colorMode === 'dark'
   const config = pageConfig[mode]
   const navigate = useNavigate()
   const employee = useAuthStore((state) => state.employee)
@@ -393,7 +401,7 @@ function InventoryWorkspace({ mode }) {
         mode === 'receive' && supplierFilter ? { supplierId: supplierFilter } : {},
       )
 
-      setInventoryItems((products ?? []).map(normalizeProductRow))
+      setInventoryItems((products ?? []).filter(isActiveProduct).map(normalizeProductRow))
     } catch {
       setLoadError('โหลดข้อมูลสินค้าไม่สำเร็จ กรุณาตรวจสอบว่า Backend API เปิดอยู่')
       setInventoryItems([])
@@ -613,13 +621,6 @@ function InventoryWorkspace({ mode }) {
 
     selectIssueDepartment(department)
     toast.success(`เลือกแผนก ${department.name}`)
-  }
-
-  const handleDepartmentCodeKeyDown = (event) => {
-    if (event.key === 'Enter') {
-      event.preventDefault()
-      handleDepartmentCodeCheck()
-    }
   }
 
   const handleDepartmentSelect = (departmentCode) => {
@@ -1876,6 +1877,7 @@ function InventoryWorkspace({ mode }) {
 
                   {mode === 'issue' ? (
                     <Box
+                      className="inventory-workspace__issue-type-card"
                       sx={{
                         bgcolor: issueRequestType === 'urgent' ? '#fff7ed' : '#f8fafc',
                         border: `1px solid ${issueRequestType === 'urgent' ? '#fed7aa' : '#dbe4f0'}`,
@@ -1883,7 +1885,7 @@ function InventoryWorkspace({ mode }) {
                         p: 1.25,
                       }}
                     >
-                      <Typography sx={{ color: '#0f172a', fontSize: 14, fontWeight: 900 }}>ประเภทการเบิก *</Typography>
+                      <Typography className="inventory-workspace__issue-type-title" sx={{ color: '#0f172a', fontSize: 14, fontWeight: 900 }}>ประเภทการเบิก *</Typography>
                       <RadioGroup
                         row
                         value={issueRequestType}
@@ -2884,14 +2886,19 @@ function InventoryWorkspace({ mode }) {
             </Typography>
             <Box
               className="inventory-workspace__dialog-upload-box"
-              sx={
-                isProductFormSubmitted && productFormErrors.imageName
-                  ? {
-                      borderColor: '#d32f2f',
-                      color: '#d32f2f',
-                    }
-                  : undefined
-              }
+              style={{
+                backgroundColor: isDarkMode ? '#0f172a' : '#f8fafc',
+                borderColor: isProductFormSubmitted && productFormErrors.imageName
+                  ? '#d32f2f'
+                  : isDarkMode
+                    ? '#334155'
+                    : undefined,
+                color: isProductFormSubmitted && productFormErrors.imageName
+                  ? '#d32f2f'
+                  : isDarkMode
+                    ? '#94a3b8'
+                    : undefined,
+              }}
             >
               {productFormImageUrl ? (
                 <Box

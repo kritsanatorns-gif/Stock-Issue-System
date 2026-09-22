@@ -168,8 +168,8 @@ export async function updateUnit(unitId, unit) {
   return response.data
 }
 
-export async function getVatSetting() {
-  const response = await api.get('/vat-settings')
+export async function getVatSetting(date) {
+  const response = await api.get('/vat-settings', { params: { date } })
   return response.data
 }
 

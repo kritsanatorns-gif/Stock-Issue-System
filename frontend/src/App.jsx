@@ -74,6 +74,7 @@ function App() {
               backgroundColor: '#0f172a',
             },
             'body[data-color-mode="dark"] .MuiCard-root, body[data-color-mode="dark"] .MuiDialog-paper, body[data-color-mode="dark"] .MuiMenu-paper': {
+              background: '#111827 !important',
               backgroundColor: '#111827 !important',
               borderColor: '#334155 !important',
               color: '#e5e7eb !important',
@@ -106,6 +107,18 @@ function App() {
             },
             'body[data-color-mode="dark"] .MuiChip-root': {
               borderColor: '#475569',
+            },
+            'body[data-color-mode="dark"] .approvals-page__summary-card .MuiTypography-root': {
+              color: '#e5e7eb !important',
+            },
+            'body[data-color-mode="dark"] .approvals-page__summary-card .MuiTypography-root:first-child': {
+              color: '#cbd5e1 !important',
+            },
+            'body[data-color-mode="dark"] .report-trend-chart__value': {
+              fill: '#f8fafc !important',
+            },
+            'body[data-color-mode="dark"] .report-trend-chart__axis-label': {
+              fill: '#cbd5e1 !important',
             },
           }}
         />

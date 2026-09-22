@@ -18,7 +18,7 @@ import {
 } from '@mui/material'
 import { AlertTriangle, CircleCheck, Download, FileDown, FileSpreadsheet, FolderCog, Package, PackageX, Pencil, Plus, Printer, Save, Upload } from 'lucide-react'
 import dayjs from 'dayjs'
-import { useEffect, useMemo, useState } from 'react'
+import { useContext, useEffect, useMemo, useState } from 'react'
 import toast from 'react-hot-toast'
 import Swal from 'sweetalert2'
 import * as XLSX from 'xlsx'
@@ -41,6 +41,7 @@ import { apiOrigin } from '../../api/apiConfig'
 import AppTable from '../../components/common/AppTable'
 import SummaryCard from '../../Dashboard/components/SummaryCard'
 import { useAuthStore } from '../../store/authStore'
+import { ColorModeContext } from '../../theme/ColorModeContext'
 import { formatDisplayDateTime } from '../../utils/dateUtils'
 import { exportRowsToExcel } from '../../utils/excelUtils'
 import { normalizeBarcodeInput, normalizePlainName } from '../../utils/inputGuards'
@@ -364,6 +365,8 @@ function readCatalogRows(workbook) {
 }
 
 function ProductsPage() {
+  const { mode: colorMode } = useContext(ColorModeContext)
+  const isDarkMode = colorMode === 'dark'
   const employee = useAuthStore((state) => state.employee)
   const employeeId = getEmployeeId(employee)
   const employeeName = getEmployeeName(employee)
@@ -2006,7 +2009,7 @@ function ProductsPage() {
 
             <Grid container spacing={1.5}>
               <Grid size={3}>
-                <Box sx={{ bgcolor: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 1.5, p: 1.5 }}>
+                <Box sx={{ bgcolor: isDarkMode ? '#111827' : '#eff6ff', border: `1px solid ${isDarkMode ? '#334155' : '#bfdbfe'}`, borderRadius: 1.5, p: 1.5 }}>
                   <Typography sx={{ color: '#475569', fontSize: 12, fontWeight: 700 }}>จำนวนล็อตที่เหลือ</Typography>
                   <Typography sx={{ color: '#0f172a', fontSize: 22, fontWeight: 900 }}>
                     {Number(costLotsData?.totalLots ?? 0).toLocaleString('th-TH')}
@@ -2014,7 +2017,7 @@ function ProductsPage() {
                 </Box>
               </Grid>
               <Grid size={3}>
-                <Box sx={{ bgcolor: '#f5f3ff', border: '1px solid #ddd6fe', borderRadius: 1.5, p: 1.5 }}>
+                <Box sx={{ bgcolor: isDarkMode ? '#111827' : '#f5f3ff', border: `1px solid ${isDarkMode ? '#334155' : '#ddd6fe'}`, borderRadius: 1.5, p: 1.5 }}>
                   <Typography sx={{ color: '#475569', fontSize: 12, fontWeight: 700 }}>จำนวนคงเหลือ</Typography>
                   <Typography sx={{ color: '#0f172a', fontSize: 22, fontWeight: 900 }}>
                     {Number(costLotsData?.totalRemainingQty ?? 0).toLocaleString('th-TH')}
@@ -2022,7 +2025,7 @@ function ProductsPage() {
                 </Box>
               </Grid>
               <Grid size={3}>
-                <Box sx={{ bgcolor: '#fff7ed', border: '1px solid #fed7aa', borderRadius: 1.5, p: 1.5 }}>
+                <Box sx={{ bgcolor: isDarkMode ? '#111827' : '#fff7ed', border: `1px solid ${isDarkMode ? '#334155' : '#fed7aa'}`, borderRadius: 1.5, p: 1.5 }}>
                   <Typography sx={{ color: '#475569', fontSize: 12, fontWeight: 700 }}>ต้นทุนเฉลี่ยรวม/หน่วย</Typography>
                   <Typography sx={{ color: '#0f172a', fontSize: 22, fontWeight: 900 }}>
                     {Number(costLotsData?.averageUnitCost ?? 0).toLocaleString('th-TH', {
@@ -2033,7 +2036,7 @@ function ProductsPage() {
                 </Box>
               </Grid>
               <Grid size={3}>
-                <Box sx={{ bgcolor: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 1.5, p: 1.5 }}>
+                <Box sx={{ bgcolor: isDarkMode ? '#111827' : '#f0fdf4', border: `1px solid ${isDarkMode ? '#334155' : '#bbf7d0'}`, borderRadius: 1.5, p: 1.5 }}>
                   <Typography sx={{ color: '#475569', fontSize: 12, fontWeight: 700 }}>มูลค่าต้นทุนรวม</Typography>
                   <Typography sx={{ color: '#0f172a', fontSize: 22, fontWeight: 900 }}>
                     {Number(costLotsData?.totalRemainingCostValue ?? 0).toLocaleString('th-TH', {

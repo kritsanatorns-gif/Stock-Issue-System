@@ -12,7 +12,13 @@ export function getRequisitionStatusLabel(row) {
   const partial = isPartiallyAllowedRequisition(row)
   const label = ({ 10: 'รออนุมัติ', 6: 'รอจัดของ', 8: 'ค้าง', 7: 'ได้ของครบ', 9: 'ไม่ให้เบิก' })[statusId]
     ?? row.status ?? row.Status ?? ''
-  return partial ? 'เบิกได้บางส่วน' : label
+  if (!partial) return label
+  const backlog = (row.items ?? row.Items ?? []).reduce((sum, item) =>
+    sum + getRequisitionItemQuantities(item, statusId).backlogQty, 0)
+  if (backlog > 0) {
+    return `${statusId === 10 ? 'รออนุมัติ' : 'ค้าง'} · มีรายการไม่ให้เบิก`
+  }
+  return 'เบิกได้บางส่วน'
 }
 
 export function getRequisitionItemQuantities(item, statusId) {

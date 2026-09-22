@@ -230,13 +230,15 @@ function UsersPage() {
   const loadMenus = async () => {
     try {
       const data = await getEmployeeMenus()
-      const options = data.map((menu) => ({
-        id: Number(menu.menuId),
-        code: menu.menuCode,
-        label: menu.menuName,
-        path: menu.menuPath,
-        sortOrder: menu.sortOrder,
-      }))
+      const options = data
+        .filter((menu) => String(menu.menuCode ?? '') !== 'VAT_SETTINGS')
+        .map((menu) => ({
+          id: Number(menu.menuId),
+          code: menu.menuCode,
+          label: menu.menuName,
+          path: menu.menuPath,
+          sortOrder: menu.sortOrder,
+        }))
 
       setMenuOptions(options)
       setForm((current) => ({

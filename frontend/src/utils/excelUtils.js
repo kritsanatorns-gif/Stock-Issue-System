@@ -1,5 +1,19 @@
-import { saveAs } from 'file-saver'
+﻿import { saveAs } from 'file-saver'
 import * as XLSX from 'xlsx-js-style'
+
+function writeReportWorkbook(workbook, options) {
+  workbook.SheetNames.forEach((name) => {
+    const sheet = workbook.Sheets[name]
+    Object.entries(sheet).forEach(([address, cell]) => {
+      if (address.startsWith('!') || typeof cell?.v !== 'string' || !cell.v.includes('มูลค่าก่อน VAT:')) return
+      cell.s = { ...cell.s, alignment: { ...cell.s?.alignment, wrapText: true, horizontal: 'left', vertical: 'center' } }
+      const { r } = XLSX.utils.decode_cell(address)
+      sheet['!rows'] ??= []
+      sheet['!rows'][r] = { ...sheet['!rows'][r], hpt: 90 }
+    })
+  })
+  return XLSX.write(workbook, options)
+}
 
 export function exportRowsToExcel(rows, columns, fileName, options = {}) {
   const exportData = rows.map((row) =>
@@ -10,32 +24,43 @@ export function exportRowsToExcel(rows, columns, fileName, options = {}) {
   )
 
   const { reportContext } = options
-  const contextSplitAt = Math.max(1, Math.ceil(columns.length / 2))
   const contextRow = Array(Math.max(columns.length, 1)).fill('')
-  contextRow[0] = reportContext?.period
-  contextRow[contextSplitAt] = reportContext?.type
+  contextRow[0] = reportContext?.title || 'รายงาน'
+  const periodRow = Array(Math.max(columns.length, 1)).fill('')
+  periodRow[0] = `ประจำเดือน ${reportContext?.period || ''}`.trim()
   const worksheet = reportContext
-    ? XLSX.utils.aoa_to_sheet([contextRow, []])
+    ? XLSX.utils.aoa_to_sheet([contextRow, periodRow, []])
     : XLSX.utils.json_to_sheet(exportData)
 
   if (reportContext) {
     XLSX.utils.sheet_add_json(worksheet, exportData, {
-      origin: 'A3',
+      origin: 'A4',
       skipHeader: false,
     })
 
     if (columns.length > 1) {
       worksheet['!merges'] = [
-        { s: { r: 0, c: 0 }, e: { r: 0, c: contextSplitAt - 1 } },
-        { s: { r: 0, c: contextSplitAt }, e: { r: 0, c: columns.length - 1 } },
+        { s: { r: 0, c: 0 }, e: { r: 0, c: columns.length - 1 } },
+        { s: { r: 1, c: 0 }, e: { r: 1, c: columns.length - 1 } },
       ]
     }
+  }
+  if (reportContext) {
+    worksheet['!cols'] = columns.map((column) => ({ wch: Math.max(14, Math.min(34, String(column.header).length + 10)) }))
+    ;[0, 1].forEach((rowIndex) => {
+      const cell = worksheet[XLSX.utils.encode_cell({ r: rowIndex, c: 0 })]
+      if (cell) cell.s = { alignment: { horizontal: 'left', vertical: 'center' }, font: { bold: rowIndex === 0, name: 'Tahoma', sz: rowIndex === 0 ? 16 : 12 } }
+    })
+    columns.forEach((_, columnIndex) => {
+      const cell = worksheet[XLSX.utils.encode_cell({ r: 3, c: columnIndex })]
+      if (cell) cell.s = { alignment: { horizontal: 'center', vertical: 'center' }, font: { bold: true, name: 'Tahoma', sz: 12 } }
+    })
   }
   const workbook = XLSX.utils.book_new()
 
   XLSX.utils.book_append_sheet(workbook, worksheet, 'Data')
 
-  const excelBuffer = XLSX.write(workbook, {
+  const excelBuffer = writeReportWorkbook(workbook, {
     bookType: 'xlsx',
     type: 'array',
   })
@@ -64,16 +89,16 @@ export function exportProductPurchaseIssueToExcel(rows, fileName, periodLabel) {
   data.forEach((row, rowIndex) => row.forEach((_, columnIndex) => {
     const cell = worksheet[XLSX.utils.encode_cell({ r: rowIndex, c: columnIndex })]
     if (!cell) return
-    cell.s = { border, alignment: { horizontal: columnIndex >= 3 ? 'right' : 'center', vertical: 'center', wrapText: columnIndex === 1 }, font: { name: 'Tahoma', sz: 11 } }
-    if (rowIndex === 0) cell.s = { ...cell.s, alignment: { horizontal: 'center', vertical: 'center' }, font: { bold: true, name: 'Tahoma', sz: 15 } }
-    if (rowIndex === 1) cell.s = { ...cell.s, alignment: { horizontal: 'center', vertical: 'center' }, font: { name: 'Tahoma', sz: 11 } }
-    if (rowIndex === 3) cell.s = { ...cell.s, alignment: { horizontal: 'center', vertical: 'center', wrapText: true }, fill: { fgColor: { rgb: 'FFFEC8' } }, font: { bold: true, name: 'Tahoma', sz: 11 } }
-    if (rowIndex === totalRow) cell.s = { ...cell.s, fill: { fgColor: { rgb: 'E0F2FE' } }, font: { bold: true, name: 'Tahoma', sz: 11 } }
+    cell.s = { border, alignment: { horizontal: columnIndex >= 3 ? 'right' : 'center', vertical: 'center', wrapText: columnIndex === 1 }, font: { name: 'Tahoma', sz: 12 } }
+    if (rowIndex === 0) cell.s = { ...cell.s, alignment: { horizontal: 'left', vertical: 'center' }, font: { bold: true, name: 'Tahoma', sz: 16 } }
+    if (rowIndex === 1) cell.s = { ...cell.s, alignment: { horizontal: 'center', vertical: 'center' }, font: { name: 'Tahoma', sz: 12 } }
+    if (rowIndex === 3) cell.s = { ...cell.s, alignment: { horizontal: 'center', vertical: 'center', wrapText: true }, fill: { fgColor: { rgb: 'FFFFFF' } }, font: { bold: true, name: 'Tahoma', sz: 12 } }
+    if (rowIndex === totalRow) cell.s = { ...cell.s, fill: { fgColor: { rgb: 'FFFFFF' } }, font: { bold: true, name: 'Tahoma', sz: 12 } }
     if (rowIndex >= 4 && columnIndex >= 3) cell.z = '#,##0.00'
   }))
   const workbook = XLSX.utils.book_new()
   XLSX.utils.book_append_sheet(workbook, worksheet, 'สรุปสินค้า')
-  const buffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' })
+  const buffer = writeReportWorkbook(workbook, { bookType: 'xlsx', type: 'array' })
   saveAs(new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), fileName)
 }
 
@@ -90,21 +115,21 @@ export function exportPurchaseSummaryToExcel(rows, fileName, periodLabel) {
   data.forEach((row, rowIndex) => row.forEach((_, columnIndex) => {
     const cell = worksheet[XLSX.utils.encode_cell({ r: rowIndex, c: columnIndex })]
     if (!cell) return
-    cell.s = { alignment: { horizontal: columnIndex === 2 ? 'right' : 'center', vertical: 'center' }, border, font: { name: 'Tahoma', sz: 11 } }
-    if (rowIndex === 0) cell.s = { ...cell.s, alignment: { horizontal: 'center', vertical: 'center' }, font: { bold: true, name: 'Tahoma', sz: 14 } }
-    if (rowIndex === 2) cell.s = { ...cell.s, alignment: { horizontal: 'center', vertical: 'center' }, fill: { fgColor: { rgb: 'FFFEC8' } }, font: { bold: true, name: 'Tahoma', sz: 11 } }
-    if (rowIndex === totalRow) cell.s = { ...cell.s, fill: { fgColor: { rgb: columnIndex === 2 ? 'C8FACC' : 'FFFFFF' } }, font: { bold: true, name: 'Tahoma', sz: 11 } }
+    cell.s = { alignment: { horizontal: columnIndex === 2 ? 'right' : 'center', vertical: 'center' }, border, font: { name: 'Tahoma', sz: 12 } }
+    if (rowIndex === 0) cell.s = { ...cell.s, alignment: { horizontal: 'left', vertical: 'center' }, font: { bold: true, name: 'Tahoma', sz: 16 } }
+    if (rowIndex === 2) cell.s = { ...cell.s, alignment: { horizontal: 'center', vertical: 'center' }, fill: { fgColor: { rgb: 'FFFFFF' } }, font: { bold: true, name: 'Tahoma', sz: 12 } }
+    if (rowIndex === totalRow) cell.s = { ...cell.s, fill: { fgColor: { rgb: columnIndex === 2 ? 'FFFFFF' : 'FFFFFF' } }, font: { bold: true, name: 'Tahoma', sz: 12 } }
     if (rowIndex >= 3 && columnIndex === 2) cell.z = '#,##0.00'
   }))
   const workbook = XLSX.utils.book_new()
   XLSX.utils.book_append_sheet(workbook, worksheet, 'รายงานยอดซื้อ')
-  const buffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' })
+  const buffer = writeReportWorkbook(workbook, { bookType: 'xlsx', type: 'array' })
   saveAs(new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), fileName)
 }
 
 // รายงานนี้ต้องรักษาการจัดกลุ่มฝ่ายเหมือนตารางบนหน้าจอ จึงสร้าง sheet แบบ AOA
 // เพื่อ merge ช่องของฝ่ายและยอดรวมฝ่ายได้จริง.
-export function exportProductIssueByCategoryToExcel(groups, fileName, periodLabel, title = 'รายงานสินค้าที่เบิก แยกตามหมวดหมู่') {
+export function exportProductIssueByCategoryToExcel(groups, fileName, periodLabel, title = 'รายงานสินค้าที่เบิก แยกตามหมวดหมู่', vatRate = 0) {
   const headers = ['ลำดับ', 'รายการสินค้า / รหัส', 'จำนวนเบิก', 'หน่วย', 'ต้นทุน FIFO/หน่วย', 'ยอดเบิก']
   const rows = [[`${title} ประจำเดือน ${periodLabel}`], [], headers]
   const merges = [{ s: { r: 0, c: 0 }, e: { r: 0, c: headers.length - 1 } }]
@@ -118,7 +143,11 @@ export function exportProductIssueByCategoryToExcel(groups, fileName, periodLabe
       const total = Number(product.totalCost ?? 0)
       rows.push([index + 1, `${product.productName} / ${product.productCode}`, qty, product.unit || '-', qty ? total / qty : 0, total])
     })
-    rows.push(['', 'รวมหมวด', group.products.reduce((sum, product) => sum + Number(product.totalQty ?? 0), 0), '', '', group.products.reduce((sum, product) => sum + Number(product.totalCost ?? 0), 0)])
+    const subtotal = group.products.reduce((sum, product) => sum + Number(product.totalCost ?? 0), 0)
+    const vatAmount = Math.round(subtotal * Number(vatRate || 0)) / 100
+    rows.push(['', 'รวมหมวด', group.products.reduce((sum, product) => sum + Number(product.totalQty ?? 0), 0), '', '', subtotal])
+    rows.push(['', `VAT ${vatRate}%`, '', '', '', vatAmount])
+    rows.push(['', `รวมหมวด (รวม VAT ${vatRate}%)`, '', '', '', Math.round((subtotal + vatAmount) * 100) / 100])
     rows.push(['', '', '', '', '', ''])
   })
 
@@ -132,20 +161,20 @@ export function exportProductIssueByCategoryToExcel(groups, fileName, periodLabe
     if (!cell) return
     const isTitle = rowIndex === 0
     const isCategory = rowIndex > 2 && String(row[0] ?? '').startsWith('หมวด :')
-    const isCategoryTotal = rowIndex > 2 && row[1] === 'รวมหมวด'
+    const isCategoryTotal = rowIndex > 2 && /^(รวมหมวด|VAT )/.test(String(row[1] ?? ''))
     cell.s = {
       alignment: { horizontal: columnIndex >= 2 ? 'right' : 'left', vertical: 'center' },
       font: { name: 'Tahoma', sz: isTitle ? 14 : 11, bold: isTitle || isCategory || isCategoryTotal, color: isCategory ? { rgb: '1D4ED8' } : undefined },
     }
-    if (isTitle) cell.s.alignment = { horizontal: 'center', vertical: 'center' }
-    if (rowIndex === 2) cell.s = { ...cell.s, alignment: { horizontal: 'center', vertical: 'center' }, fill: { fgColor: { rgb: 'FFFEC8' } }, font: { bold: true, name: 'Tahoma', sz: 11 } }
-    if (isCategory) cell.s.fill = { fgColor: { rgb: 'EFF6FF' } }
-    if (isCategoryTotal) cell.s.fill = { fgColor: { rgb: 'E0F2FE' } }
+    if (isTitle) cell.s.alignment = { horizontal: 'left', vertical: 'center' }
+    if (rowIndex === 2) cell.s = { ...cell.s, alignment: { horizontal: 'center', vertical: 'center' }, fill: { fgColor: { rgb: 'FFFFFF' } }, font: { bold: true, name: 'Tahoma', sz: 12 } }
+    if (isCategory) cell.s.fill = { fgColor: { rgb: 'FFFFFF' } }
+    if (isCategoryTotal) cell.s.fill = { fgColor: { rgb: 'FFFFFF' } }
     if (rowIndex > 2 && columnIndex >= 2 && !isCategory) cell.z = columnIndex === 2 ? '#,##0' : '#,##0.00'
   }))
   const workbook = XLSX.utils.book_new()
   XLSX.utils.book_append_sheet(workbook, worksheet, 'รายงานสินค้า')
-  const buffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' })
+  const buffer = writeReportWorkbook(workbook, { bookType: 'xlsx', type: 'array' })
   saveAs(new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), fileName)
 }
 
@@ -164,9 +193,11 @@ export function exportDepartmentIssueToExcel(groups, fileName, periodLabel, vatR
       rows.push([index + 1, `${product.productName} / ${product.productCode}`, qty, product.unit || '-', qty ? total / qty : 0, total])
     })
     const subtotal = group.products.reduce((sum, product) => sum + Number(product.totalCost ?? 0), 0)
-    rows.push(['', vatRate === null || vatRate === undefined ? 'รวมแผนก' : 'รวมแผนก (ไม่รวม VAT)', group.products.reduce((sum, product) => sum + Number(product.totalQty ?? 0), 0), '', '', subtotal])
+    rows.push(['', 'รวมแผนก', group.products.reduce((sum, product) => sum + Number(product.totalQty ?? 0), 0), '', '', subtotal])
     if (vatRate !== null && vatRate !== undefined) {
-      const totalWithVat = subtotal + (subtotal * Number(vatRate || 0) / 100)
+      const vatAmount = Math.round(subtotal * Number(vatRate || 0)) / 100
+      const totalWithVat = Math.round((subtotal + vatAmount) * 100) / 100
+      rows.push(['', `VAT ${vatRate}%`, '', '', '', vatAmount])
       rows.push(['', `รวมแผนก (รวม VAT ${vatRate}%)`, '', '', '', totalWithVat])
     }
     rows.push(['', '', '', '', '', ''])
@@ -182,24 +213,24 @@ export function exportDepartmentIssueToExcel(groups, fileName, periodLabel, vatR
     if (!cell) return
     const isTitle = rowIndex === 0
     const isDepartment = rowIndex > 2 && String(row[0] ?? '').startsWith(`${groupLabel} :`)
-    const isDepartmentTotal = rowIndex > 2 && String(row[1] ?? '').startsWith('รวมแผนก')
+    const isDepartmentTotal = rowIndex > 2 && /^(รวมแผนก|VAT )/.test(String(row[1] ?? ''))
     cell.s = {
       alignment: { horizontal: columnIndex >= 2 ? 'right' : 'left', vertical: 'center' },
       font: { name: 'Tahoma', sz: isTitle ? 14 : 11, bold: isTitle || isDepartment, color: isDepartment ? { rgb: '1D4ED8' } : undefined },
     }
-    if (isTitle) cell.s.alignment = { horizontal: 'center', vertical: 'center' }
-    if (rowIndex === 2) cell.s = { ...cell.s, alignment: { horizontal: 'center', vertical: 'center' }, fill: { fgColor: { rgb: 'FFFEC8' } }, font: { bold: true, name: 'Tahoma', sz: 11 } }
-    if (isDepartment) cell.s.fill = { fgColor: { rgb: 'EFF6FF' } }
-    if (isDepartmentTotal) cell.s = { ...cell.s, fill: { fgColor: { rgb: 'E0F2FE' } }, font: { bold: true, name: 'Tahoma', sz: 11 } }
+    if (isTitle) cell.s.alignment = { horizontal: 'left', vertical: 'center' }
+    if (rowIndex === 2) cell.s = { ...cell.s, alignment: { horizontal: 'center', vertical: 'center' }, fill: { fgColor: { rgb: 'FFFFFF' } }, font: { bold: true, name: 'Tahoma', sz: 12 } }
+    if (isDepartment) cell.s.fill = { fgColor: { rgb: 'FFFFFF' } }
+    if (isDepartmentTotal) cell.s = { ...cell.s, fill: { fgColor: { rgb: 'FFFFFF' } }, font: { bold: true, name: 'Tahoma', sz: 12 } }
     if (rowIndex > 2 && columnIndex >= 2 && !isDepartment) cell.z = columnIndex === 2 ? '#,##0' : '#,##0.00'
   }))
   const workbook = XLSX.utils.book_new()
   XLSX.utils.book_append_sheet(workbook, worksheet, 'สรุปตามลูกค้า')
-  const buffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' })
+  const buffer = writeReportWorkbook(workbook, { bookType: 'xlsx', type: 'array' })
   saveAs(new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), fileName)
 }
 
-export function exportDepartmentCostSummaryToExcel(rows, fileName, periodLabel) {
+export function exportDepartmentCostSummaryToExcel(rows, fileName, periodLabel, vatRate = 0) {
   const headers = ['ลำดับ', 'แผนก', 'จำนวนที่เบิก', 'ค่าใช้จ่าย', 'ยอดรวม']
   const data = [
     [`รายงานสรุปค่าใช้จ่ายแยกตามแผนก ประจำเดือน ${periodLabel}`],
@@ -208,22 +239,25 @@ export function exportDepartmentCostSummaryToExcel(rows, fileName, periodLabel) 
     ...rows.map((row, index) => [index + 1, row.label || '-', Number(row.totalQty ?? 0), Number(row.totalCost ?? 0), Number(row.totalCost ?? 0)]),
   ]
   const total = rows.reduce((sum, row) => sum + Number(row.totalCost ?? 0), 0)
+  const vatAmount = Math.round(total * Number(vatRate || 0)) / 100
   data.push(['', `รวมทั้งสิ้น ${rows.length} แผนก`, '', total, total])
+  data.push(['', `VAT ${vatRate}%`, '', '', vatAmount])
+  data.push(['', `รวมทั้งสิ้น (รวม VAT ${vatRate}%)`, '', '', Math.round((total + vatAmount) * 100) / 100])
   const worksheet = XLSX.utils.aoa_to_sheet(data)
   worksheet['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: headers.length - 1 } }]
   worksheet['!cols'] = [{ wch: 9 }, { wch: 36 }, { wch: 16 }, { wch: 20 }, { wch: 20 }]
   data.forEach((row, rowIndex) => row.forEach((_, columnIndex) => {
     const cell = worksheet[XLSX.utils.encode_cell({ r: rowIndex, c: columnIndex })]
     if (!cell) return
-    cell.s = { alignment: { horizontal: columnIndex >= 2 ? 'right' : 'center', vertical: 'center' }, font: { name: 'Tahoma', sz: 11 } }
-    if (rowIndex === 0) cell.s = { ...cell.s, alignment: { horizontal: 'center', vertical: 'center' }, font: { bold: true, name: 'Tahoma', sz: 14 } }
-    if (rowIndex === 2) cell.s = { ...cell.s, fill: { fgColor: { rgb: 'FFFEC8' } }, font: { bold: true, name: 'Tahoma', sz: 11 } }
-    if (rowIndex === data.length - 1) cell.s = { ...cell.s, fill: { fgColor: { rgb: 'E0F2FE' } }, font: { bold: true, name: 'Tahoma', sz: 11 } }
+    cell.s = { alignment: { horizontal: columnIndex >= 2 ? 'right' : 'center', vertical: 'center' }, font: { name: 'Tahoma', sz: 12 } }
+    if (rowIndex === 0) cell.s = { ...cell.s, alignment: { horizontal: 'left', vertical: 'center' }, font: { bold: true, name: 'Tahoma', sz: 16 } }
+    if (rowIndex === 2) cell.s = { ...cell.s, fill: { fgColor: { rgb: 'FFFFFF' } }, font: { bold: true, name: 'Tahoma', sz: 12 } }
+    if (rowIndex >= data.length - 3) cell.s = { ...cell.s, fill: { fgColor: { rgb: 'FFFFFF' } }, font: { bold: true, name: 'Tahoma', sz: 12 } }
     if (rowIndex >= 3 && columnIndex >= 2) cell.z = columnIndex === 2 ? '#,##0' : '#,##0.00'
   }))
   const workbook = XLSX.utils.book_new()
   XLSX.utils.book_append_sheet(workbook, worksheet, 'สรุปค่าใช้จ่าย')
-  const buffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' })
+  const buffer = writeReportWorkbook(workbook, { bookType: 'xlsx', type: 'array' })
   saveAs(new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), fileName)
 }
 
@@ -265,21 +299,21 @@ export function exportDivisionCostToExcel(groups, fileName, periodLabel) {
   rows.forEach((row, rowIndex) => row.forEach((_, columnIndex) => {
     const cell = worksheet[XLSX.utils.encode_cell({ r: rowIndex, c: columnIndex })]
     if (!cell) return
-    cell.s = { alignment: columnIndex >= 3 ? right : center, border, font: { name: 'Tahoma', sz: 11 } }
+    cell.s = { alignment: columnIndex >= 3 ? right : center, border, font: { name: 'Tahoma', sz: 12 } }
     if (rowIndex === 0) {
-      cell.s = { ...cell.s, alignment: center, font: { bold: true, name: 'Tahoma', sz: 14 } }
+      cell.s = { ...cell.s, alignment: center, font: { bold: true, name: 'Tahoma', sz: 16 } }
     } else if (rowIndex === 2) {
-      cell.s = { ...cell.s, fill: { fgColor: { rgb: 'FFFEC8' } }, font: { bold: true, name: 'Tahoma', sz: 11 } }
+      cell.s = { ...cell.s, fill: { fgColor: { rgb: 'FFFFFF' } }, font: { bold: true, name: 'Tahoma', sz: 12 } }
     } else if (rowIndex === totalRow) {
-      cell.s = { ...cell.s, fill: { fgColor: { rgb: columnIndex === 4 ? 'BAE6FD' : 'FFFFFF' } }, font: { bold: true, name: 'Tahoma', sz: 11 } }
+      cell.s = { ...cell.s, fill: { fgColor: { rgb: columnIndex === 4 ? 'FFFFFF' : 'FFFFFF' } }, font: { bold: true, name: 'Tahoma', sz: 12 } }
     } else if (columnIndex === 4 && cell.v !== '') {
-      cell.s = { ...cell.s, font: { bold: true, color: { rgb: 'FF0000' }, name: 'Tahoma', sz: 11 } }
+      cell.s = { ...cell.s, font: { bold: true, color: { rgb: 'FF0000' }, name: 'Tahoma', sz: 12 } }
     }
     if (rowIndex >= 3 && columnIndex >= 3) cell.z = '#,##0.00'
   }))
   const workbook = XLSX.utils.book_new()
   XLSX.utils.book_append_sheet(workbook, worksheet, 'ค่าใช้จ่ายตามฝ่าย')
-  const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' })
+  const excelBuffer = writeReportWorkbook(workbook, { bookType: 'xlsx', type: 'array' })
   saveAs(new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), fileName)
 }
 
@@ -290,7 +324,7 @@ export async function exportDivisionCostToExcelWithChart(groups, fileName, perio
   summary.columns = [{ width: 10 }, { width: 20 }, { width: 34 }, { width: 22 }, { width: 22 }]
   summary.mergeCells('A1:E1')
   summary.getCell('A1').value = `รายงานค่าใช้จ่ายตามฝ่ายและแผนก ${periodLabel}`
-  summary.getCell('A1').font = { bold: true, size: 14 }
+  summary.getCell('A1').font = { bold: true, size: 16 }
   summary.getCell('A1').alignment = { horizontal: 'center' }
   summary.addRow([])
   const header = summary.addRow(['ลำดับ', 'ฝ่าย', 'แผนก', 'จำนวนเงิน/แผนก', 'จำนวนเงิน/ฝ่าย'])
@@ -324,7 +358,7 @@ export async function exportDivisionCostToExcelWithChart(groups, fileName, perio
   sheet.columns = [{ width: 32 }, { width: 18 }]
   sheet.mergeCells('A1:B1')
   sheet.getCell('A1').value = `กราฟค่าใช้จ่ายตามแผนก ${periodLabel}`
-  sheet.getCell('A1').font = { bold: true, size: 14 }
+  sheet.getCell('A1').font = { bold: true, size: 16 }
   sheet.getCell('A1').alignment = { horizontal: 'center' }
   sheet.addRow([])
   sheet.addRow(['แผนก', 'จำนวนเงิน/แผนก'])
