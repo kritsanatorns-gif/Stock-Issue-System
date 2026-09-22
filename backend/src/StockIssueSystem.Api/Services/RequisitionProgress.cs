@@ -58,7 +58,7 @@ public static class RequisitionProgress
 
         if (requisition.Details.Count > 0 && requisition.Details.All(detail => GetBacklogQty(detail) == 0))
         {
-            requisition.Status = requisition.Details.All(detail => GetDeniedQty(detail) > 0)
+            requisition.Status = requisition.Details.All(detail => GetFulfilledQty(detail) == 0)
                 ? RequisitionStatuses.Rejected
                 : RequisitionStatuses.Approved;
         }

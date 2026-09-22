@@ -79,6 +79,7 @@ public sealed class StockIssueController(AppDbContext dbContext, FifoCostService
     }
 
     [HttpPost]
+    [RequireStaffMenu(2)]
     public async Task<ActionResult<StockIssueDto>> CreateStockIssue(CreateStockIssueDto request)
     {
         var validationError = ValidateRequest(request);
@@ -165,6 +166,7 @@ public sealed class StockIssueController(AppDbContext dbContext, FifoCostService
     }
 
     [HttpPost("{headerId:int}/cancel")]
+    [RequireStaffMenu(5)]
     public async Task<ActionResult<StockIssueDto>> CancelStockIssue(int headerId, CancelStockDocumentDto request)
     {
         if (request.EmployeeId <= 0)

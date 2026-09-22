@@ -417,7 +417,7 @@ function ApprovalsPage() {
   }
 
   const handleDeny = async () => {
-    if (!selectedRow) {
+    if (!selectedRow || savingDenials || selectedRow.statusId === 8) {
       return
     }
 
@@ -550,7 +550,7 @@ function ApprovalsPage() {
   ]
 
   const handleDenyItem = async (item) => {
-    if (!selectedRow || savingDenials || item.backlogQty <= 0) return
+    if (!selectedRow || savingDenials || selectedRow.statusId === 8 || item.backlogQty <= 0) return
     const headerId = selectedRow.headerId
     const result = await Swal.fire({
       title: 'ยืนยันไม่ให้เบิกสินค้า',
@@ -574,12 +574,14 @@ function ApprovalsPage() {
       })
       setSelectedRow((previous) => previous?.headerId !== headerId ? previous : {
         ...previous,
-        statusId: saved?.statusId ?? previous.statusId,
+        statusId: Number(saved?.statusId ?? saved?.StatusId ?? previous.statusId),
+        status: saved?.status ?? saved?.Status ?? previous.status,
         items: previous.items.map((row) => row.detailId !== item.detailId ? row : {
           ...row,
-          deniedQty: row.deniedQty + row.backlogQty,
-          backlogQty: 0,
-          denyRemark: result.value?.trim() ?? '',
+          deniedQty: Number(saved?.deniedQty ?? saved?.DeniedQty ?? row.deniedQty + row.backlogQty),
+          backlogQty: Number(saved?.backlogQty ?? saved?.BacklogQty ?? 0),
+          denyRemark: saved?.denyRemark ?? saved?.DenyRemark ?? result.value?.trim() ?? '',
+          remark: saved?.remark ?? saved?.Remark ?? itemRemarks[item.detailId]?.trim() ?? '',
         }),
       })
       setFulfillmentDraft((previous) => ({ ...previous, [item.detailId]: 0 }))
@@ -608,7 +610,7 @@ function ApprovalsPage() {
       ) : (
         <Button
           color="error"
-          disabled={savingDenials || Number(row.backlogQty ?? 0) <= 0}
+          disabled={savingDenials || selectedRow?.statusId === 8 || Number(row.backlogQty ?? 0) <= 0}
           size="small"
           variant="outlined"
           onClick={() => handleDenyItem(row)}
@@ -925,7 +927,7 @@ function ApprovalsPage() {
           <Button disabled={savingDenials || selectedProgress.backlog === 0 || selectedRow?.statusId === 10} color="warning" startIcon={<XCircle size={18} />} variant="outlined" onClick={handleReject}>
             ยังไม่จ่าย
           </Button>
-          <Button disabled={savingDenials || selectedProgress.backlog === 0 || deniedSelection.length > 0} color="error" startIcon={<Ban size={18} />} variant="outlined" onClick={handleDeny}>
+          <Button disabled={savingDenials || selectedRow?.statusId === 8 || selectedProgress.backlog === 0 || deniedSelection.length > 0} color="error" startIcon={<Ban size={18} />} variant="outlined" onClick={handleDeny}>
             ไม่ให้เบิก
           </Button>
           <Button disabled={savingDenials} startIcon={<CheckCircle2 size={18} />} variant="contained" onClick={handleApprove}>

@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using StockIssueSystem.Api.Data;
 using StockIssueSystem.Api.Models;
 using StockIssueSystem.Api.Models.DTOs;
+using StockIssueSystem.Api.Services;
 
 namespace StockIssueSystem.Api.Controllers;
 
@@ -95,6 +96,7 @@ public sealed class EmployeeController(AppDbContext dbContext) : ControllerBase
     }
 
     [HttpPost]
+    [RequireStaffMenu(7)]
     public async Task<ActionResult<EmployeeDto>> CreateEmployee(CreateEmployeeDto request)
     {
         var validationError = ValidateEmployee(request.EmployeeId, request.EmployeeName, request.Username, request.Password);
@@ -136,6 +138,7 @@ public sealed class EmployeeController(AppDbContext dbContext) : ControllerBase
     }
 
     [HttpPut("{employeeId:int}")]
+    [RequireStaffMenu(7)]
     public async Task<ActionResult<EmployeeDto>> UpdateEmployee(int employeeId, UpdateEmployeeDto request)
     {
         var employee = await dbContext.Employees.FindAsync(employeeId);
