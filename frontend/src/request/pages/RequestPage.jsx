@@ -41,6 +41,7 @@ function normalizeProduct(row) {
     issueUnit,
     productId,
     productName: row.productName ?? row.ProductName ?? row.name ?? row.Name ?? productId,
+    status: String(row.status ?? row.Status ?? 'Active').trim(),
     stockQty: Number(row.stockQty ?? row.StockQty ?? 0),
   }
 }
@@ -103,7 +104,7 @@ const stockStatusOptions = [
   { label: 'ของหมด', value: 'out' },
 ]
 
-const MAX_ITEMS_PER_REQUEST = 25
+const MAX_ITEMS_PER_REQUEST = 15
 
 function printRequestSlipOld({ department, items, remark, requesterName, requestNo = 'รอเลขคำขอ' }) {
   const printedAt = formatDisplayDateTime(new Date())
@@ -313,7 +314,11 @@ function RequestPage() {
       try {
         const rows = await getProducts()
 
-        setProducts((rows ?? []).map(normalizeProduct))
+        setProducts(
+          (rows ?? [])
+            .filter((row) => String(row.status ?? row.Status ?? 'Active').trim().toLowerCase() === 'active')
+            .map(normalizeProduct),
+        )
       } catch {
         setLoadError('โหลดข้อมูลสินค้าไม่สำเร็จ กรุณาตรวจสอบว่า Backend API เปิดอยู่')
       }
@@ -866,4 +871,3 @@ function RequestPage() {
 }
 
 export default RequestPage
-

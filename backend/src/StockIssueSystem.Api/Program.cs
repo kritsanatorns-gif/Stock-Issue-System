@@ -149,6 +149,15 @@ static async Task EnsureVatSettings(WebApplication app)
             CREATE TABLE dbo.VatSetting (VatSettingId int NOT NULL PRIMARY KEY, VatRate decimal(5,2) NOT NULL, UpdatedAt datetime2 NOT NULL CONSTRAINT DF_VatSetting_UpdatedAt DEFAULT GETDATE());
         IF NOT EXISTS (SELECT 1 FROM dbo.VatSetting WHERE VatSettingId = 1)
             INSERT INTO dbo.VatSetting (VatSettingId, VatRate, UpdatedAt) VALUES (1, 7.00, GETDATE());
+        IF COL_LENGTH('dbo.VatSetting', 'EffectiveFrom') IS NULL
+            ALTER TABLE dbo.VatSetting ADD EffectiveFrom datetime2 NOT NULL CONSTRAINT DF_VatSetting_EffectiveFrom DEFAULT '19000101';
+        IF OBJECT_ID(N'dbo.Menu', N'U') IS NOT NULL
+        BEGIN
+            UPDATE dbo.Menu SET IsActive = 0 WHERE MenuCode = 'VAT_SETTINGS' OR MenuId = 13;
+            DELETE permission
+            FROM dbo.EmployeeMenuPermission permission
+            WHERE permission.MenuId IN (SELECT MenuId FROM dbo.Menu WHERE MenuCode = 'VAT_SETTINGS' OR MenuId = 13);
+        END
         """);
 }
 

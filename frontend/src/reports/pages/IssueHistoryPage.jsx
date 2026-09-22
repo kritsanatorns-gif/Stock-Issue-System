@@ -1,4 +1,4 @@
-import { addReportCanvas, clampReportTableCells, installReportPrinting, stampReportFooters } from '../../utils/reportPagination'
+import { addReportCanvas, clampReportTableCells, installReportPrinting } from '../../utils/reportPagination'
 ﻿import {
   Box,
   Button,
@@ -1378,17 +1378,13 @@ function ReportsPage() {
           scale: 2,
           useCORS: true,
         })
-        const imageData = canvas.toDataURL('image/png')
-        const imageHeight = (canvas.height * 194) / canvas.width
-
         if (pageIndex > 0) pdf.addPage()
-        pdf.addImage(imageData, 'PNG', 8, 8, 194, imageHeight)
+        addReportCanvas(pdf, canvas, { landscape: false })
       }
     } finally {
       pdfWindow.close()
     }
 
-    stampReportFooters(pdf)
     pdf.save(`stock-report-${dayjs().format('YYYYMMDD-HHmm')}.pdf`)
   }
 

@@ -21,6 +21,7 @@ public sealed class RequisitionsController(
     private const string RequisitionDocType = "REQUISITION";
     private const string IssueDocType = "ISSUE";
     private const string MainLocationId = "MAIN";
+    private const int MaxItemsPerRequisition = 15;
 
     [HttpGet]
     public async Task<IActionResult> GetRequisitions([FromQuery] string? status, [FromQuery] string? department)
@@ -218,12 +219,18 @@ public sealed class RequisitionsController(
             return BadRequest("Issued quantities are required.");
         }
 
-        var issueQuantities = BuildIssueQuantities(request.Items);
+        var deniedItems = request.Items.Where(item => item.Denied).ToList();
+        if (request.Items.GroupBy(item => item.DetailId).Any(group => group.Count() > 1)
+            || deniedItems.Any(item => item.Quantity != 0 || !requisition.Details.Any(detail => detail.DetailId == item.DetailId && RequisitionProgress.GetBacklogQty(detail) > 0)))
+        {
+            return BadRequest("Invalid or duplicated denied items.");
+        }
+        var issueQuantities = BuildIssueQuantities(request.Items.Where(item => !item.Denied).ToList());
         var itemRemarks = request.Items
             .GroupBy(item => item.DetailId)
             .ToDictionary(group => group.Key, group => group.Last().Remark?.Trim() ?? string.Empty);
 
-        if (issueQuantities.Count == 0 || issueQuantities.Values.Sum() <= 0)
+        if (deniedItems.Count == 0 && (issueQuantities.Count == 0 || issueQuantities.Values.Sum() <= 0))
         {
             return BadRequest("At least one issued quantity is required.");
         }
@@ -240,6 +247,23 @@ public sealed class RequisitionsController(
         if (stockError is not null)
         {
             return BadRequest(stockError);
+        }
+
+        foreach (var item in deniedItems)
+        {
+            var detail = requisition.Details.Single(detail => detail.DetailId == item.DetailId);
+            RequisitionProgress.RecordDenial(detail);
+            detail.DenyRemark = item.Remark?.Trim() ?? string.Empty;
+            detail.Remark = item.Remark?.Trim() ?? string.Empty;
+        }
+
+        if (issueQuantities.Values.Sum() <= 0)
+        {
+            RequisitionProgress.SyncStatus(requisition);
+            await dbContext.SaveChangesAsync();
+            await transaction.CommitAsync();
+            await PublishRequesterStatusChanged(requisition);
+            return Ok(new { requisition.HeaderId, Status = RequisitionStatuses.GetName(requisition.Status) });
         }
 
         var issueHeader = new StockHeader
@@ -441,6 +465,11 @@ public sealed class RequisitionsController(
         if (request.Items.Count == 0)
         {
             return "At least one item is required.";
+        }
+
+        if (request.Items.Count > MaxItemsPerRequisition)
+        {
+            return $"A requisition can contain at most {MaxItemsPerRequisition} items.";
         }
 
         if (request.IsUrgent && string.IsNullOrWhiteSpace(request.UrgentRemark))

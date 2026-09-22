@@ -348,11 +348,20 @@ body[data-color-mode="dark"] .inventory-workspace__receive-summary-image,
 body[data-color-mode="dark"] .inventory-workspace__receive-empty,
 body[data-color-mode="dark"] .inventory-workspace__upload-box,
 body[data-color-mode="dark"] .inventory-workspace__dialog-upload-box {
-  background: #0f172a;
-  border-color: #334155;
-  color: #94a3b8;
+  background: #0f172a !important;
+  border-color: #334155 !important;
+  color: #94a3b8 !important;
 }
 
 body[data-color-mode="dark"] .inventory-workspace__favorite-button.MuiIconButton-root {
   background: #1e293b;
+}
+
+body[data-color-mode="dark"] .inventory-workspace__issue-type-card {
+  background: #0f172a !important;
+  border-color: #475569 !important;
+}
+
+body[data-color-mode="dark"] .inventory-workspace__issue-type-title {
+  color: #e5e7eb !important;
 }

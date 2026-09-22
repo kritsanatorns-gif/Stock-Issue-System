@@ -21,7 +21,38 @@ export function clampReportTableCells(root) {
   documentRef.head.appendChild(style)
 }
 
-export function paginateReportCanvas(canvas, { landscape = false, margin = 5, repeatHeaderHeight = 260 } = {}) {
+function findSafeSliceHeight(canvas, sourceY, proposedHeight, scale) {
+  const targetY = sourceY + proposedHeight
+  if (targetY >= canvas.height) return proposedHeight
+
+  const context = canvas.getContext('2d', { willReadFrequently: true })
+  const searchDistance = Math.max(24, Math.round(scale * 18))
+  const minimumY = Math.max(sourceY + Math.round(scale * 24), targetY - searchDistance)
+  const requiredBlankRows = Math.max(2, Math.round(scale / 3))
+  const isBlankRow = (y) => {
+    const pixels = context.getImageData(0, y, canvas.width, 1).data
+    let ink = 0
+    for (let offset = 0; offset < pixels.length; offset += 16) {
+      if (pixels[offset] < 235 || pixels[offset + 1] < 235 || pixels[offset + 2] < 235) ink += 1
+    }
+    return ink <= Math.max(2, canvas.width / 800)
+  }
+
+  for (let y = targetY; y >= minimumY; y -= 1) {
+    let blank = true
+    for (let row = 0; row < requiredBlankRows; row += 1) {
+      if (!isBlankRow(y - row)) {
+        blank = false
+        break
+      }
+    }
+    if (blank) return y - sourceY
+  }
+
+  return proposedHeight
+}
+
+export function paginateReportCanvas(canvas, { landscape = false, margin = 5, repeatHeaderHeight = 280 } = {}) {
   const width = landscape ? 297 : 210
   const height = landscape ? 210 : 297
   let scale = canvas.width / (width - margin * 2)
@@ -38,7 +69,8 @@ export function paginateReportCanvas(canvas, { landscape = false, margin = 5, re
   while (sourceY < canvas.height || !slices.length) {
     const repeatHeader = slices.length > 0 && headerHeight > 0
     const availableSliceHeight = Math.max(1, contentHeight - (repeatHeader ? headerHeight : 0))
-    const sliceHeight = Math.min(availableSliceHeight, canvas.height - sourceY)
+    const proposedHeight = Math.min(availableSliceHeight, canvas.height - sourceY)
+    const sliceHeight = findSafeSliceHeight(canvas, sourceY, proposedHeight, scale)
     slices.push({ repeatHeader, sliceHeight, sourceY })
     sourceY += sliceHeight
   }

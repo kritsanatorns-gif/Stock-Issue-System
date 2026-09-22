@@ -27,6 +27,7 @@ public sealed class SupplierPurchaseItemDto
 
 public sealed class PurchaseTrendDto
 {
+    public int TotalQty { get; set; }
     public DateTime PeriodStart { get; set; }
     public decimal TotalVat { get; set; }
     public decimal TotalPurchase { get; set; }

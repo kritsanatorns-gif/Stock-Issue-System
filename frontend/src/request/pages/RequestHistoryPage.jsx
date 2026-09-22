@@ -1059,7 +1059,7 @@ function RequestHistoryPage() {
             defaultSortDirection="desc"
             prioritySortValue={(row) => {
               const statusId = Number(row.statusId)
-              const statusPriority = { 10: 4, 6: 3, 8: 2, 9: 1, 7: 0 }[statusId] ?? 0
+              const statusPriority = { 10: 4, 6: 3, 8: 2, 9: 0, 7: 0 }[statusId] ?? 0
               const urgentPriority = row.isUrgent && [10, 6, 8].includes(statusId) ? 5 : 0
               return urgentPriority + statusPriority
             }}

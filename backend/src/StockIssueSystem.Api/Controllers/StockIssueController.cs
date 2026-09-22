@@ -16,6 +16,7 @@ public sealed class StockIssueController(AppDbContext dbContext, FifoCostService
     private const string IssueDocType = "ISSUE";
     private const string RequisitionDocType = "REQUISITION";
     private const string MainLocationId = "MAIN";
+    private const int MaxItemsPerIssue = 15;
 
     private sealed record EmployeeReportInfo(string Name, string Department);
 
@@ -510,6 +511,11 @@ public sealed class StockIssueController(AppDbContext dbContext, FifoCostService
         if (request.Items.Count == 0)
         {
             return "At least one stock issue item is required.";
+        }
+
+        if (request.Items.Count > MaxItemsPerIssue)
+        {
+            return $"A stock issue can contain at most {MaxItemsPerIssue} items.";
         }
 
         if (request.Items.Any(item => string.IsNullOrWhiteSpace(item.Code)
