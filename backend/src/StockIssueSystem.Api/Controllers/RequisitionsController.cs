@@ -170,6 +170,7 @@ public sealed class RequisitionsController(
     }
 
     [HttpPost("{headerId:int}/accept")]
+    [RequireStaffMenu(10)]
     public async Task<IActionResult> AcceptRequisition(int headerId, ApproveRequisitionDto request)
     {
         if (!await dbContext.Employees.AnyAsync(employee => employee.EmployeeId == request.EmployeeId && employee.Status == 1))
@@ -191,6 +192,7 @@ public sealed class RequisitionsController(
     }
 
     [HttpPost("{headerId:int}/approve")]
+    [RequireStaffMenu(10)]
     public async Task<IActionResult> ApproveRequisition(int headerId, ApproveRequisitionDto request)
     {
         if (request.EmployeeId <= 0)
@@ -220,6 +222,8 @@ public sealed class RequisitionsController(
         }
 
         var deniedItems = request.Items.Where(item => item.Denied).ToList();
+        if (requisition.Status == RequisitionStatuses.Backlog && deniedItems.Count > 0)
+            return BadRequest("คำขอสถานะค้างไม่สามารถบันทึกไม่ให้เบิกได้");
         if (request.Items.GroupBy(item => item.DetailId).Any(group => group.Count() > 1)
             || deniedItems.Any(item => item.Quantity != 0 || !requisition.Details.Any(detail => detail.DetailId == item.DetailId && RequisitionProgress.GetBacklogQty(detail) > 0)))
         {
@@ -340,14 +344,17 @@ public sealed class RequisitionsController(
     }
 
     [HttpPost("{headerId:int}/reject")]
+    [RequireStaffMenu(10)]
     public async Task<IActionResult> RejectRequisition(int headerId, RejectRequisitionDto request)
     {
         return await KeepRequisitionBacklog(headerId, request);
     }
 
     [HttpPost("{headerId:int}/backlog")]
+    [RequireStaffMenu(10)]
     public async Task<IActionResult> KeepRequisitionBacklog(int headerId, RejectRequisitionDto request)
     {
+        await using var transaction = await dbContext.Database.BeginTransactionAsync(IsolationLevel.Serializable);
         if (request.EmployeeId <= 0)
         {
             return BadRequest("Employee ID is required.");
@@ -368,6 +375,7 @@ public sealed class RequisitionsController(
 
         requisition.Status = RequisitionStatuses.Backlog;
         await dbContext.SaveChangesAsync();
+        await transaction.CommitAsync();
         await PublishRequesterStatusChanged(requisition);
 
         return Ok(new
@@ -378,8 +386,10 @@ public sealed class RequisitionsController(
     }
 
     [HttpPost("{headerId:int}/deny")]
+    [RequireStaffMenu(10)]
     public async Task<IActionResult> DenyRequisition(int headerId, RejectRequisitionDto request)
     {
+        await using var transaction = await dbContext.Database.BeginTransactionAsync(IsolationLevel.Serializable);
         if (request.EmployeeId <= 0)
         {
             return BadRequest("Employee ID is required.");
@@ -394,7 +404,10 @@ public sealed class RequisitionsController(
             return NotFound("Requisition not found.");
         }
 
-        if (requisition.Status != RequisitionStatuses.AwaitingApproval && requisition.Status != RequisitionStatuses.Pending && requisition.Status != RequisitionStatuses.Backlog)
+        if (requisition.Status == RequisitionStatuses.Backlog)
+            return BadRequest("คำขอสถานะค้างไม่สามารถบันทึกไม่ให้เบิกได้");
+
+        if (requisition.Status != RequisitionStatuses.AwaitingApproval && requisition.Status != RequisitionStatuses.Pending)
         {
             return BadRequest("This request cannot be rejected in its current status.");
         }
@@ -404,8 +417,9 @@ public sealed class RequisitionsController(
             RequisitionProgress.RecordDenial(detail);
             detail.DenyRemark = request.Remark?.Trim() ?? string.Empty;
         }
-        requisition.Status = RequisitionStatuses.Rejected;
+        RequisitionProgress.SyncStatus(requisition);
         await dbContext.SaveChangesAsync();
+        await transaction.CommitAsync();
         await PublishRequesterStatusChanged(requisition);
 
         return Ok(new
@@ -416,17 +430,20 @@ public sealed class RequisitionsController(
     }
 
     [HttpPost("{headerId:int}/items/{detailId:int}/deny")]
+    [RequireStaffMenu(10)]
     public async Task<IActionResult> DenyRequisitionItem(int headerId, int detailId, RejectRequisitionDto request)
     {
+        await using var transaction = await dbContext.Database.BeginTransactionAsync(IsolationLevel.Serializable);
         if (request.EmployeeId <= 0) return BadRequest("Employee ID is required.");
 
         var requisition = await dbContext.StockHeaders
             .Include(header => header.Details)
             .FirstOrDefaultAsync(header => header.HeaderId == headerId && header.DocType == RequisitionDocType);
         if (requisition is null) return NotFound("Requisition not found.");
+        if (requisition.Status == RequisitionStatuses.Backlog)
+            return BadRequest("คำขอสถานะค้างไม่สามารถบันทึกไม่ให้เบิกได้");
         if (requisition.Status != RequisitionStatuses.AwaitingApproval
-            && requisition.Status != RequisitionStatuses.Pending
-            && requisition.Status != RequisitionStatuses.Backlog)
+            && requisition.Status != RequisitionStatuses.Pending)
             return BadRequest("This request cannot be changed in its current status.");
 
         var detail = requisition.Details.FirstOrDefault(item => item.DetailId == detailId);
@@ -439,6 +456,7 @@ public sealed class RequisitionsController(
         detail.DenyRemark = request.Remark?.Trim() ?? string.Empty;
         RequisitionProgress.SyncStatus(requisition);
         await dbContext.SaveChangesAsync();
+        await transaction.CommitAsync();
         await PublishRequesterStatusChanged(requisition);
 
         return Ok(new
@@ -446,6 +464,10 @@ public sealed class RequisitionsController(
             requisition.HeaderId,
             DetailId = detail.DetailId,
             DeniedQty = RequisitionProgress.GetDeniedQty(detail),
+            BacklogQty = RequisitionProgress.GetBacklogQty(detail),
+            detail.DenyRemark,
+            detail.Remark,
+            StatusId = requisition.Status,
             Status = RequisitionStatuses.GetName(requisition.Status),
         });
     }
@@ -462,7 +484,7 @@ public sealed class RequisitionsController(
             return "Department is required.";
         }
 
-        if (request.Items.Count == 0)
+        if (request.Items is null || request.Items.Count == 0)
         {
             return "At least one item is required.";
         }
@@ -480,7 +502,12 @@ public sealed class RequisitionsController(
         // ผู้ขอเบิกตรวจสอบจากฐานข้อมูล HR ตั้งแต่หน้า Login แล้ว
         // จึงไม่บังคับให้มีรายการพนักงานซ้ำอยู่ในตาราง Employee ของระบบสต๊อก
 
-        var products = await GetProducts(request.Items);
+        if (request.Items.Any(item => item is null || string.IsNullOrWhiteSpace(item.Code)
+            || item.Quantity <= 0 || item.Quantity > int.MaxValue
+            || item.Quantity != Math.Truncate(item.Quantity)))
+        {
+            return "Product code and positive whole-number quantity within the supported range are required.";
+        }
 
         var duplicateProduct = request.Items
             .GroupBy(item => item.Code?.Trim(), StringComparer.OrdinalIgnoreCase)
@@ -491,13 +518,10 @@ public sealed class RequisitionsController(
             return $"Product {duplicateProduct.Key} is duplicated in this requisition.";
         }
 
+        var products = await GetProducts(request.Items);
+
         foreach (var item in request.Items)
         {
-            if (string.IsNullOrWhiteSpace(item.Code) || item.Quantity <= 0 || item.Quantity != Math.Truncate(item.Quantity))
-            {
-                return "Product code and positive whole-number quantity are required.";
-            }
-
             if (!products.TryGetValue(item.Code.Trim(), out var product))
             {
                 return $"Product {item.Code} does not exist.";

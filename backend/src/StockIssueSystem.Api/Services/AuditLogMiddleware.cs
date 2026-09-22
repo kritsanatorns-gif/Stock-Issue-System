@@ -22,7 +22,7 @@ public sealed class AuditLogMiddleware(RequestDelegate next, IServiceScopeFactor
 
         try
         {
-            var employeeId = GetEmployeeId(context.Request.Headers.Authorization);
+            var employeeId = context.RequestServices.GetRequiredService<StaffSession>().Read(context.Request.Headers.Authorization);
             await using var scope = scopeFactory.CreateAsyncScope();
             var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
             var employeeName = employeeId.HasValue

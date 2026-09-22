@@ -19,7 +19,7 @@ import { installReportPrinting } from '../../utils/reportPagination'
   Typography,
 } from '@mui/material'
 import { Camera, CheckCircle2, PackageCheck, Search, Send, Trash2 } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Navigate } from 'react-router-dom'
 import Swal from 'sweetalert2'
 import { createRequisition, getProducts, getRequisitions } from '../../api/api'
@@ -295,6 +295,8 @@ function RequestPage() {
   const expiresAt = useRequestAuthStore((state) => state.expiresAt)
   const [products, setProducts] = useState([])
   const [selectedItems, setSelectedItems] = useState([])
+  const submittingRef = useRef(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
   const [requestType, setRequestType] = useState('')
   const isUrgent = requestType === 'urgent'
   const [urgentRemark, setUrgentRemark] = useState('')
@@ -410,6 +412,7 @@ function RequestPage() {
   )
 
   const handleSubmit = async () => {
+    if (submittingRef.current) return
     if (selectedItems.length === 0) {
       Swal.fire('ยังไม่มีสินค้า', 'กรุณาเลือกสินค้าอย่างน้อย 1 รายการ', 'warning')
       return
@@ -433,6 +436,9 @@ function RequestPage() {
       return
     }
 
+    submittingRef.current = true
+    setIsSubmitting(true)
+    try {
     const result = await Swal.fire({
       cancelButtonText: 'ยกเลิก',
       confirmButtonText: 'ส่งคำขอ',
@@ -497,6 +503,10 @@ function RequestPage() {
       }
     } catch (error) {
       Swal.fire('ไม่สำเร็จ', error?.response?.data ?? 'ส่งคำขอเบิกไม่สำเร็จ', 'error')
+    }
+    } finally {
+      submittingRef.current = false
+      setIsSubmitting(false)
     }
   }
 
@@ -852,7 +862,7 @@ function RequestPage() {
                 ) : null}
               </Stack>
               <Button
-                disabled={selectedItems.length === 0 || hasInvalidRequestQuantity}
+                disabled={isSubmitting || selectedItems.length === 0 || hasInvalidRequestQuantity}
                 fullWidth
                 size="large"
                 startIcon={<Send size={18} />}

@@ -3,14 +3,16 @@ using Microsoft.EntityFrameworkCore;
 using StockIssueSystem.Api.Data;
 using StockIssueSystem.Api.Models;
 using StockIssueSystem.Api.Models.DTOs;
+using StockIssueSystem.Api.Services;
 
 namespace StockIssueSystem.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-public sealed class AuthController(AppDbContext dbContext) : ControllerBase
+public sealed class AuthController(AppDbContext dbContext, StaffSession staffSession) : ControllerBase
 {
     [HttpGet("users")]
+    [RequireStaffMenu(7)]
     public async Task<ActionResult<IReadOnlyList<LoginUserDto>>> GetUsers()
     {
         var permissionNames = await GetPermissionNames();
@@ -23,6 +25,7 @@ public sealed class AuthController(AppDbContext dbContext) : ControllerBase
     }
 
     [HttpPost("users")]
+    [RequireStaffMenu(7)]
     public async Task<ActionResult<LoginUserDto>> CreateUser(CreateLoginUserDto request)
     {
         if (string.IsNullOrWhiteSpace(request.EmployeeCode)
@@ -89,7 +92,7 @@ public sealed class AuthController(AppDbContext dbContext) : ControllerBase
 
         return Ok(new LoginResponseDto
         {
-            Token = $"dev-token-{user.EmployeeId}",
+            Token = staffSession.Issue(user.EmployeeId),
             Employee = employee,
             Roles = [employee.Role],
         });
