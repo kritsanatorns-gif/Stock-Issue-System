@@ -394,6 +394,11 @@ export async function getPurchaseTrend(params = {}) {
   return response.data
 }
 
+export async function getStockStatusTrend(params = {}) {
+  const response = await api.get('/reports/stock-status-trend', { params })
+  return response.data
+}
+
 export async function getSupplierPurchaseItems(supplierId, params = {}) {
   const response = await api.get(`/reports/purchases-by-supplier/${supplierId}/items`, { params })
 

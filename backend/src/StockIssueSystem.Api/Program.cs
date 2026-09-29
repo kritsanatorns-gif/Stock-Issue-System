@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.DataProtection;
 using StockIssueSystem.Api.Data;
 using StockIssueSystem.Api.Hubs;
 using StockIssueSystem.Api.Models;
@@ -12,7 +13,21 @@ builder.Logging.AddConsole();
 builder.Logging.AddDebug();
 
 builder.Services.AddControllers();
-builder.Services.AddDataProtection();
+var dataProtectionKeys = new DirectoryInfo(Path.Combine(builder.Environment.ContentRootPath, "App_Data", "DataProtectionKeys"));
+var dataProtection = builder.Services.AddDataProtection()
+    .SetApplicationName("StockIssueSystem.Api");
+try
+{
+    dataProtectionKeys.Create();
+    dataProtection.PersistKeysToFileSystem(dataProtectionKeys);
+}
+catch (Exception error) when (error is UnauthorizedAccessException or IOException)
+{
+    // IIS application pools are often granted read-only access to the deployed
+    // site. The API must still start; session tokens will be renewed after an
+    // application restart until a writable key directory is configured.
+    Console.Error.WriteLine($"Data-protection key persistence is unavailable: {error.Message}");
+}
 builder.Services.AddSingleton<StaffSession>();
 builder.Services.AddSignalR();
 builder.Services.AddEndpointsApiExplorer();
@@ -984,13 +999,13 @@ static async Task EnsureSupplierWorkflow(WebApplication app)
         BEGIN
             SET IDENTITY_INSERT dbo.Menu ON;
             INSERT INTO dbo.Menu (MenuId, MenuCode, MenuName, MenuPath, SortOrder, IsActive)
-            VALUES (11, 'SUPPLIERS', N'จัดการผู้ขาย', '/suppliers', 11, 1);
+            VALUES (11, 'SUPPLIERS', N'จัดการซัพพลาย', '/suppliers', 11, 1);
             SET IDENTITY_INSERT dbo.Menu OFF;
         END
         ELSE
         BEGIN
             UPDATE dbo.Menu
-            SET MenuCode = 'SUPPLIERS', MenuName = N'จัดการผู้ขาย', MenuPath = '/suppliers', SortOrder = 11, IsActive = 1
+            SET MenuCode = 'SUPPLIERS', MenuName = N'จัดการซัพพลาย', MenuPath = '/suppliers', SortOrder = 11, IsActive = 1
             WHERE MenuId = 11 OR MenuCode = 'SUPPLIERS';
         END
 

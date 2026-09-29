@@ -175,7 +175,7 @@ const importTemplateHeaders = [
   'อัตราแปลง',
   'บาร์โค้ด',
   'หมวดหมู่',
-  'ผู้ขาย',
+  'ซัพพลาย',
   'ของแถม (หน่วยเบิก)',
   'Min Stock',
   'ราคาซื้อรวม',
@@ -210,7 +210,7 @@ const importColumnAliases = {
   บาร์โค้ด: 'barcode',
   ราคาซื้อ: 'unitCost',
   ราคาซื้อรวม: 'unitCost',
-  ผู้ขาย: 'supplierName',
+  ซัพพลาย: 'supplierName',
   รับเข้าเป็น: 'receiveUnit',
   รหัสสินค้า: 'productId',
   หน่วยรับเข้า: 'receiveUnit',
@@ -507,7 +507,7 @@ function ProductsPage() {
           remainingCostValue: Number(lot.remainingCostValue ?? lot.RemainingCostValue ?? 0),
           remainingQty: Number(lot.remainingQty ?? lot.RemainingQty ?? 0),
           supplierId: lot.supplierId ?? lot.SupplierId ?? null,
-          supplierName: lot.supplierName ?? lot.SupplierName ?? 'ไม่ระบุผู้ขาย',
+          supplierName: lot.supplierName ?? lot.SupplierName ?? 'ไม่ระบุซัพพลาย',
           unitCost: Number(lot.unitCost ?? lot.UnitCost ?? 0),
         })),
         averageUnitCost: Number(data.averageUnitCost ?? data.AverageUnitCost ?? 0),
@@ -521,7 +521,7 @@ function ProductsPage() {
           ),
           latestUnitCost: Number(summary.latestUnitCost ?? summary.LatestUnitCost ?? 0),
           supplierId: summary.supplierId ?? summary.SupplierId ?? null,
-          supplierName: summary.supplierName ?? summary.SupplierName ?? 'ไม่ระบุผู้ขาย',
+          supplierName: summary.supplierName ?? summary.SupplierName ?? 'ไม่ระบุซัพพลาย',
           totalLots: Number(summary.totalLots ?? summary.TotalLots ?? 0),
           totalRemainingCostValue: Number(
             summary.totalRemainingCostValue ?? summary.TotalRemainingCostValue ?? 0,
@@ -727,7 +727,7 @@ function ProductsPage() {
       }
 
       if (!row.supplierName) {
-        errors.push('กรุณากรอกผู้ขาย')
+        errors.push('กรุณากรอกซัพพลาย')
       }
 
       if (row.conversionQty <= 0) {
@@ -1138,7 +1138,7 @@ function ProductsPage() {
       ['มูลค่าต้นทุนรวม', Number(costLotsData.totalRemainingCostValue ?? 0)],
     ])
     const supplierSheet = XLSX.utils.json_to_sheet((costLotsData.supplierSummaries ?? []).map((row) => ({
-      ผู้ขาย: row.supplierName || '-',
+      ซัพพลาย: row.supplierName || '-',
       จำนวนล็อต: Number(row.totalLots ?? 0),
       จำนวนคงเหลือ: Number(row.totalRemainingQty ?? 0),
       'ต้นทุนเฉลี่ย/หน่วย': Number(row.averageUnitCost ?? 0),
@@ -1148,14 +1148,14 @@ function ProductsPage() {
     })))
     const lotSheet = XLSX.utils.json_to_sheet((costLotsData.lots ?? []).map((row) => ({
       วันที่รับเข้า: row.receiveDateText || '-',
-      ผู้ขาย: row.supplierName || '-',
+      ซัพพลาย: row.supplierName || '-',
       จำนวนเริ่มต้น: Number(row.originalQty ?? 0),
       จำนวนคงเหลือ: Number(row.remainingQty ?? 0),
       'ต้นทุน/หน่วย': Number(row.unitCost ?? 0),
       มูลค่าต้นทุนรวม: Number(row.remainingCostValue ?? 0),
     })))
     XLSX.utils.book_append_sheet(workbook, summarySheet, 'สรุป FIFO')
-    XLSX.utils.book_append_sheet(workbook, supplierSheet, 'แยกตามผู้ขาย')
+    XLSX.utils.book_append_sheet(workbook, supplierSheet, 'แยกตามซัพพลาย')
     XLSX.utils.book_append_sheet(workbook, lotSheet, 'ล็อต FIFO')
     XLSX.writeFile(workbook, `fifo-cost-${costLotsData.productId || 'product'}-${dayjs().format('YYYYMMDD-HHmm')}.xlsx`)
   }
@@ -1168,7 +1168,7 @@ function ProductsPage() {
     const lotRows = (costLotsData.lots ?? []).map((row, index) => `<tr><td>${index + 1}</td><td>${escapeHtml(row.receiveDateText || '-')}</td><td>${escapeHtml(row.supplierName || '-')}</td><td>${Number(row.originalQty ?? 0).toLocaleString('th-TH')}</td><td>${Number(row.remainingQty ?? 0).toLocaleString('th-TH')}</td><td>${money(row.unitCost)}</td><td>${money(row.remainingCostValue)}</td></tr>`).join('') || '<tr><td colspan="7">ไม่มีข้อมูล</td></tr>'
     const reportWindow = window.open('', '_blank', 'width=1100,height=800')
     if (!reportWindow) return
-    reportWindow.document.write(`<!doctype html><html lang="th"><head><meta charset="utf-8"/><title>รายละเอียดต้นทุน FIFO</title><style>@page{size:A4 landscape;margin:10mm}body{font-family:Tahoma,Arial,sans-serif;color:#111827;font-size:12px}h1{text-align:center;margin:0}h2{font-size:15px;margin:20px 0 8px}.meta{text-align:center;margin:7px 0 18px}table{width:100%;border-collapse:collapse}th,td{border:1px solid #111;padding:6px;text-align:center}th{background:#fffec8}.cards{display:flex;gap:8px;margin:14px 0}.card{border:1px solid #94a3b8;padding:8px;flex:1}.card b{display:block;font-size:18px;margin-top:4px}</style></head><body><h1>รายละเอียดต้นทุน FIFO</h1><div class="meta">สินค้า: ${escapeHtml(costLotsData.productName || '-')} | รหัสสินค้า: ${escapeHtml(costLotsData.productId || '-')} | หน่วยเบิก: ${escapeHtml(costLotsData.issueUnit || '-')}</div><div class="cards"><div class="card">จำนวนล็อตที่เหลือ<b>${Number(costLotsData.totalLots ?? 0).toLocaleString('th-TH')}</b></div><div class="card">จำนวนคงเหลือ<b>${Number(costLotsData.totalRemainingQty ?? 0).toLocaleString('th-TH')}</b></div><div class="card">ต้นทุนเฉลี่ยรวม/หน่วย<b>${money(costLotsData.averageUnitCost)}</b></div><div class="card">มูลค่าต้นทุนรวม<b>${money(costLotsData.totalRemainingCostValue)}</b></div></div><h2>สรุปต้นทุนแยกตามผู้ขาย</h2><table><thead><tr><th>ลำดับ</th><th>ผู้ขาย</th><th>จำนวนล็อต</th><th>จำนวนคงเหลือ</th><th>ต้นทุนเฉลี่ย/หน่วย</th><th>มูลค่าต้นทุนรวม</th></tr></thead><tbody>${supplierRows}</tbody></table><h2>รายละเอียดล็อต FIFO</h2><table><thead><tr><th>ลำดับ</th><th>วันที่รับเข้า</th><th>ผู้ขาย</th><th>จำนวนเริ่มต้น</th><th>จำนวนคงเหลือ</th><th>ต้นทุน/หน่วย</th><th>มูลค่าต้นทุนรวม</th></tr></thead><tbody>${lotRows}</tbody></table>${autoPrint ? '<script>window.onload=()=>window.print()</script>' : ''}</body></html>`)
+    reportWindow.document.write(`<!doctype html><html lang="th"><head><meta charset="utf-8"/><title>รายละเอียดต้นทุน FIFO</title><style>@page{size:A4 landscape;margin:10mm}body{font-family:Tahoma,Arial,sans-serif;color:#111827;font-size:12px}h1{text-align:center;margin:0}h2{font-size:15px;margin:20px 0 8px}.meta{text-align:center;margin:7px 0 18px}table{width:100%;border-collapse:collapse}th,td{border:1px solid #111;padding:6px;text-align:center}th{background:#fffec8}.cards{display:flex;gap:8px;margin:14px 0}.card{border:1px solid #94a3b8;padding:8px;flex:1}.card b{display:block;font-size:18px;margin-top:4px}</style></head><body><h1>รายละเอียดต้นทุน FIFO</h1><div class="meta">สินค้า: ${escapeHtml(costLotsData.productName || '-')} | รหัสสินค้า: ${escapeHtml(costLotsData.productId || '-')} | หน่วยเบิก: ${escapeHtml(costLotsData.issueUnit || '-')}</div><div class="cards"><div class="card">จำนวนล็อตที่เหลือ<b>${Number(costLotsData.totalLots ?? 0).toLocaleString('th-TH')}</b></div><div class="card">จำนวนคงเหลือ<b>${Number(costLotsData.totalRemainingQty ?? 0).toLocaleString('th-TH')}</b></div><div class="card">ต้นทุนเฉลี่ยรวม/หน่วย<b>${money(costLotsData.averageUnitCost)}</b></div><div class="card">มูลค่าต้นทุนรวม<b>${money(costLotsData.totalRemainingCostValue)}</b></div></div><h2>สรุปต้นทุนแยกตามซัพพลาย</h2><table><thead><tr><th>ลำดับ</th><th>ซัพพลาย</th><th>จำนวนล็อต</th><th>จำนวนคงเหลือ</th><th>ต้นทุนเฉลี่ย/หน่วย</th><th>มูลค่าต้นทุนรวม</th></tr></thead><tbody>${supplierRows}</tbody></table><h2>รายละเอียดล็อต FIFO</h2><table><thead><tr><th>ลำดับ</th><th>วันที่รับเข้า</th><th>ซัพพลาย</th><th>จำนวนเริ่มต้น</th><th>จำนวนคงเหลือ</th><th>ต้นทุน/หน่วย</th><th>มูลค่าต้นทุนรวม</th></tr></thead><tbody>${lotRows}</tbody></table>${autoPrint ? '<script>window.onload=()=>window.print()</script>' : ''}</body></html>`)
     installReportPrinting(reportWindow)
     reportWindow.document.close()
     return reportWindow
@@ -1332,7 +1332,7 @@ function ProductsPage() {
         <DialogContent>
           <Stack spacing={2} sx={{ pt: 1 }}>
             <Alert severity="info">
-              รองรับแค็ตตาล็อกที่มีหลายชีตและหัวตารางซ้ำ โดยใช้รหัสสินค้า ชื่อสินค้า ยอดสต๊อก หน่วยการจ่าย และบาร์โค้ดตามไฟล์ต้นฉบับ ส่วนผู้ขายจะตั้งเป็น “นำเข้าจากแค็ตตาล็อก”, ราคาซื้อรวมเป็น 0 และจุดแจ้งเตือนเป็น 10 หน่วย หากไฟล์ไม่ได้ระบุไว้
+              รองรับแค็ตตาล็อกที่มีหลายชีตและหัวตารางซ้ำ โดยใช้รหัสสินค้า ชื่อสินค้า ยอดสต๊อก หน่วยการจ่าย และบาร์โค้ดตามไฟล์ต้นฉบับ ส่วนซัพพลายจะตั้งเป็น “นำเข้าจากแค็ตตาล็อก”, ราคาซื้อรวมเป็น 0 และจุดแจ้งเตือนเป็น 10 หน่วย หากไฟล์ไม่ได้ระบุไว้
             </Alert>
 
             <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
@@ -1377,7 +1377,7 @@ function ProductsPage() {
                 { key: 'productId', label: 'รหัสสินค้า', width: 150, align: 'center' },
                 { key: 'barcode', label: 'Barcode', width: 170, align: 'center' },
                 { key: 'productName', label: 'ชื่อสินค้า', width: 240, align: 'center' },
-                { key: 'supplierName', label: 'ผู้ขาย', width: 180, align: 'center' },
+                { key: 'supplierName', label: 'ซัพพลาย', width: 180, align: 'center' },
                 { key: 'categoryName', label: 'หมวดหมู่', width: 140, align: 'center' },
                 { key: 'receiveUnit', label: 'รับเข้าเป็น', width: 120, align: 'center' },
                 { key: 'issueUnit', label: 'เบิกออกเป็น', width: 120, align: 'center' },
@@ -2049,11 +2049,11 @@ function ProductsPage() {
             </Grid>
 
             <Typography sx={{ color: '#0f172a', fontSize: 15, fontWeight: 800 }}>
-              สรุปต้นทุนแยกตามผู้ขาย
+              สรุปต้นทุนแยกตามซัพพลาย
             </Typography>
             <AppTable
               columns={[
-                { key: 'supplierName', label: 'ผู้ขาย', width: 220, align: 'center' },
+                { key: 'supplierName', label: 'ซัพพลาย', width: 220, align: 'center' },
                 { key: 'totalLots', label: 'จำนวนล็อต', width: 110, align: 'center' },
                 { key: 'totalRemainingQty', label: 'จำนวนคงเหลือ', width: 130, align: 'center' },
                 {
@@ -2097,7 +2097,7 @@ function ProductsPage() {
               defaultSortDirection="desc"
               isLoading={isCostLotsLoading}
               maxHeight="260px"
-              noDataText="ไม่มีข้อมูลต้นทุนแยกตามผู้ขาย"
+              noDataText="ไม่มีข้อมูลต้นทุนแยกตามซัพพลาย"
               rowKey={(row) => row.supplierId ?? row.supplierName}
               rows={costLotsData?.supplierSummaries ?? []}
               showGlobalSearch={false}
@@ -2116,7 +2116,7 @@ function ProductsPage() {
                   value: (row) => row.receiveDateText,
                   sortValue: (row) => Number(row.costLotId ?? row.detailId ?? row.headerId ?? 0),
                 },
-                { key: 'supplierName', label: 'ผู้ขาย', width: 190, align: 'center' },
+                { key: 'supplierName', label: 'ซัพพลาย', width: 190, align: 'center' },
                 { key: 'originalQty', label: 'จำนวนเริ่มต้น', width: 130, align: 'center' },
                 { key: 'remainingQty', label: 'จำนวนคงเหลือ', width: 130, align: 'center' },
                 {

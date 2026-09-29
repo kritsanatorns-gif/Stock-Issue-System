@@ -345,6 +345,7 @@ function RequestLoginPage() {
             flexDirection: 'column',
             justifyContent: 'flex-start',
             minHeight: 850,
+            minWidth: 0,
             p: 5,
             position: 'relative',
           }}
@@ -355,7 +356,7 @@ function RequestLoginPage() {
             src="/tlp-logo.png"
             sx={{ filter: 'brightness(0) invert(1)', height: 'auto', opacity: 0.92, position: 'absolute', right: 38, top: 36, width: 86, zIndex: 1 }}
           />
-          <Stack direction="row" spacing={2} sx={{ position: 'relative', zIndex: 1 }}>
+          <Stack direction="row" spacing={2} sx={{ position: 'relative', pr: '100px', minWidth: 0, overflowWrap: 'anywhere', zIndex: 1 }}>
             <Box sx={{ alignItems: 'center', bgcolor: 'rgba(53,94,172,.85)', borderRadius: 1.5, color: '#fff', display: 'flex', fontSize: 17, fontWeight: 900, height: 58, justifyContent: 'center', width: 58 }}>User</Box>
             <Box>
               <Typography sx={{ color: '#fff', fontSize: 21, fontWeight: 900 }}>ระบบจัดการคลังสำนักงาน</Typography>
@@ -365,14 +366,14 @@ function RequestLoginPage() {
           <Box sx={{ marginTop: 14, position: 'relative', zIndex: 1 }}>
             <Typography sx={{ color: '#fff', fontSize: 27, fontWeight: 900 }}>เบิกสินค้าได้ง่าย</Typography>
             <Typography sx={{ color: '#b8c7e8', fontSize: 15, lineHeight: 1.7, mt: 1 }}>ค้นหาสินค้า ส่งคำขอเบิก และติดตามสถานะคำขอได้ในที่เดียว</Typography>
-            <Stack direction="row" spacing={2.5} sx={{ mt: 4 }}>
+            <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 180px), 1fr))', gap: 2.5, mt: 4 }}>
               {[['ค้นหาสินค้า', 'ดูรายการสินค้าและจำนวนคงเหลือ', <PackageCheck size={21} />], ['ส่งคำขอเบิก', 'เลือกสินค้าและระบุจำนวนที่ต้องการ', <ClipboardCheck size={21} />], ['ติดตามสถานะ', 'ตรวจสอบคำขอว่าอยู่ระหว่างรอจัดของหรือดำเนินการแล้ว', <ShieldCheck size={21} />]].map(([title, text, icon]) => (
-                <Stack key={title} direction="row" spacing={1}>
-                  <Box sx={{ alignItems: 'center', bgcolor: 'rgba(69,122,211,.5)', borderRadius: 1.5, color: '#bdddff', display: 'flex', height: 46, justifyContent: 'center', width: 46 }}>{icon}</Box>
-                  <Box><Typography sx={{ color: '#fff', fontSize: 12, fontWeight: 800, whiteSpace: 'nowrap' }}>{title}</Typography><Typography sx={{ color: '#b8c7e8', fontSize: 10, whiteSpace: 'nowrap' }}>{text}</Typography></Box>
+                <Stack key={title} direction="row" spacing={1} sx={{ minWidth: 0 }}>
+                  <Box sx={{ alignItems: 'center', bgcolor: 'rgba(69,122,211,.5)', borderRadius: 1.5, color: '#bdddff', display: 'flex', flexShrink: 0, height: 46, justifyContent: 'center', width: 46 }}>{icon}</Box>
+                  <Box sx={{ minWidth: 0, overflowWrap: 'anywhere' }}><Typography sx={{ color: '#fff', fontSize: 12, fontWeight: 800 }}>{title}</Typography><Typography sx={{ color: '#b8c7e8', fontSize: 10, lineHeight: 1.7 }}>{text}</Typography></Box>
                 </Stack>
               ))}
-            </Stack>
+            </Box>
           </Box>
         </Box>
 
@@ -383,6 +384,7 @@ function RequestLoginPage() {
           sx={{
             alignItems: 'center',
             background: '#fffdf8',
+            minWidth: 0,
             display: 'flex',
             justifyContent: 'center',
             p: { xs: 3, md: 9 },

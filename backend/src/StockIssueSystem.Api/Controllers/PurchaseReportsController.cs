@@ -10,6 +10,67 @@ namespace StockIssueSystem.Api.Controllers;
 [Route("api/reports")]
 public sealed class PurchaseReportsController(AppDbContext dbContext) : ControllerBase
 {
+    [HttpGet("stock-status-trend")]
+    public async Task<IActionResult> GetStockStatusTrend([FromQuery] int year)
+    {
+        var months = Enumerable.Range(1, 12)
+            .Select(month => new DateTime(year, month, 1).AddMonths(1))
+            .ToList();
+        var firstCutoff = months[0];
+
+        var products = await (
+            from product in dbContext.Products.AsNoTracking()
+            join balance in dbContext.StockBalances.AsNoTracking().Where(row => row.LocationId == "MAIN")
+                on product.ProductId equals balance.ProductId into balances
+            from balance in balances.DefaultIfEmpty()
+            select new { product.ProductId, product.MinQty, product.CreatedDate, CurrentQty = balance == null ? 0 : balance.Qty }
+        ).ToListAsync();
+        var movements = await (
+            from detail in dbContext.StockDetails.AsNoTracking()
+            join header in dbContext.StockHeaders.AsNoTracking() on detail.HeaderId equals header.HeaderId
+            where header.TransactionDate >= firstCutoff
+                && header.Status != StockHeaderStatuses.Cancelled
+                && (header.DocType == "RECEIVE" || header.DocType == "ISSUE")
+            select new { detail.ProductId, detail.Qty, header.DocType, header.TransactionDate }
+        ).ToListAsync();
+
+        return Ok(months.Select(cutoff =>
+        {
+            // A future month has no closing balance yet. Keep the month on the
+            // chart axis, but return zero values so it renders without bars.
+            if (cutoff.AddMonths(-1) > DateTime.Today)
+            {
+                return new
+                {
+                    periodStart = cutoff.AddMonths(-1),
+                    productCount = 0,
+                    available = 0,
+                    low = 0,
+                    outOfStock = 0,
+                };
+            }
+            var future = movements.Where(row => row.TransactionDate >= cutoff)
+                .GroupBy(row => row.ProductId)
+                .ToDictionary(
+                    group => group.Key,
+                    group => group.Sum(row => row.DocType == "ISSUE" ? row.Qty : -row.Qty));
+            var productsAtPeriodEnd = products.Where(product => product.CreatedDate < cutoff).ToList();
+            var statusCounts = productsAtPeriodEnd.Select(product =>
+            {
+                var qty = product.CurrentQty + (future.TryGetValue(product.ProductId, out var delta) ? delta : 0);
+                return qty <= 0 ? "out" : product.MinQty > 0 && qty <= product.MinQty ? "low" : "available";
+            }).GroupBy(status => status).ToDictionary(group => group.Key, group => group.Count());
+            return new
+            {
+                periodStart = cutoff.AddMonths(-1),
+                productCount = productsAtPeriodEnd.Count,
+                available = statusCounts.GetValueOrDefault("available"),
+                low = statusCounts.GetValueOrDefault("low"),
+                outOfStock = statusCounts.GetValueOrDefault("out"),
+            };
+        }));
+    }
+
     [HttpGet("purchases-by-product")]
     public async Task<IActionResult> GetPurchasesByProduct(
         [FromQuery] DateTime? startDate,
@@ -64,7 +125,7 @@ public sealed class PurchaseReportsController(AppDbContext dbContext) : Controll
         return Ok(lots.GroupBy(lot => new { lot.SupplierId, lot.SupplierName }).Select(group => new PurchaseBySupplierDto
         {
             SupplierId = group.Key.SupplierId,
-            SupplierName = string.IsNullOrWhiteSpace(group.Key.SupplierName) ? "ไม่ระบุผู้ขาย" : group.Key.SupplierName,
+            SupplierName = string.IsNullOrWhiteSpace(group.Key.SupplierName) ? "ไม่ระบุซัพพลาย" : group.Key.SupplierName,
             DocumentCount = group.Select(lot => lot.ReceiveHeaderId).Distinct().Count(),
             ItemCount = group.Count(),
             TotalQty = group.Sum(lot => lot.OriginalQty),

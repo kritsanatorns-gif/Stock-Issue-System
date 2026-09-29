@@ -929,10 +929,23 @@ function RequestHistoryPage() {
     {
       key: 'status',
       label: 'สถานะ',
-      width: 140,
+      width: 220,
+      minWidth: 220,
       value: (row) => getRequestStatusMeta(row).label,
       render: (row) => {
         const statusStyle = requestStatusStyle(row)
+        const hasBacklogAndPartial = Number(row.statusId) === 8 && isPartiallyAllowedRequisition(row)
+
+        if (hasBacklogAndPartial) {
+          return (
+            <Box sx={{ display: 'flex', justifyContent: 'center', width: '100%' }}>
+              <Stack alignItems="center" direction="row" spacing={0.5}>
+                <Chip label="ค้าง" size="small" sx={{ bgcolor: '#f97316', color: '#fff', fontWeight: 800 }} />
+                <Chip label="เบิกได้บางส่วน" size="small" sx={{ bgcolor: '#0e7490', color: '#fff', fontWeight: 800 }} />
+              </Stack>
+            </Box>
+          )
+        }
 
         return (
           <Chip
@@ -942,7 +955,7 @@ function RequestHistoryPage() {
               backgroundColor: statusStyle.backgroundColor,
               height: 'auto',
               maxWidth: '100%',
-              '& .MuiChip-label': { whiteSpace: 'normal', py: 0.5 },
+              '& .MuiChip-label': { whiteSpace: 'nowrap', py: 0.5 },
               color: statusStyle.color,
               fontWeight: 800,
             }}

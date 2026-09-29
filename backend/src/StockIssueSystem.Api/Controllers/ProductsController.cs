@@ -327,7 +327,7 @@ public sealed class ProductsController(AppDbContext dbContext) : ControllerBase
             {
                 lot.SupplierId,
                 SupplierName = string.IsNullOrWhiteSpace(lot.SupplierName)
-                    ? "ไม่ระบุผู้ขาย"
+                    ? "ไม่ระบุซัพพลาย"
                     : lot.SupplierName,
             })
             .Select(group =>

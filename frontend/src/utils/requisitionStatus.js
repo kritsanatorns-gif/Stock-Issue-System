@@ -15,9 +15,7 @@ export function getRequisitionStatusLabel(row) {
   if (!partial) return label
   const backlog = (row.items ?? row.Items ?? []).reduce((sum, item) =>
     sum + getRequisitionItemQuantities(item, statusId).backlogQty, 0)
-  if (backlog > 0) {
-    return `${statusId === 10 ? 'รออนุมัติ' : 'ค้าง'} · มีรายการไม่ให้เบิก`
-  }
+  if (backlog > 0) return 'ค้าง · เบิกได้บางส่วน'
   return 'เบิกได้บางส่วน'
 }
 

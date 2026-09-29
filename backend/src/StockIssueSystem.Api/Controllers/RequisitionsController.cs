@@ -160,6 +160,13 @@ public sealed class RequisitionsController(
             Department = header.Department,
             Division = header.Division,
         });
+        await notificationHub.Clients.Group(NotificationHub.DepartmentGroup(header.Division)).SendAsync("DepartmentRequisitionCreated", new
+        {
+            header.HeaderId,
+            RequestNo = header.RequestNo,
+            EmployeeId = request.EmployeeId,
+            EmployeeName = header.RequesterName,
+        });
 
         return CreatedAtAction(nameof(GetRequisition), new { headerId = header.HeaderId }, new
         {
@@ -698,6 +705,16 @@ public sealed class RequisitionsController(
             {
                 requisition.HeaderId,
                 RequestNo = requisition.RequestNo,
+                StatusId = requisition.Status,
+            });
+        await notificationHub.Clients
+            .Group(NotificationHub.DepartmentGroup(requisition.Division))
+            .SendAsync("DepartmentRequisitionStatusChanged", new
+            {
+                requisition.HeaderId,
+                RequestNo = requisition.RequestNo,
+                EmployeeId = employeeId,
+                EmployeeName = requisition.RequesterName,
                 StatusId = requisition.Status,
             });
     }

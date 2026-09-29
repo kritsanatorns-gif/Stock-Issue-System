@@ -159,6 +159,7 @@ function ApprovalsPage() {
     documents: rows.length,
     items: rows.reduce((sum, row) => sum + row.totalItems, 0),
     pending: rows.filter((row) => row.statusId === 6).length,
+    awaitingApproval: rows.filter((row) => row.statusId === 10).length,
     qty: rows.reduce((sum, row) => sum + row.totalQty, 0),
     urgent: rows.filter((row) => row.isUrgent).length,
   }), [rows])
@@ -533,7 +534,16 @@ function ApprovalsPage() {
       width: 240,
       minWidth: 240,
       value: (row) => getRequisitionStatusLabel(row),
-      render: (row) => <Chip color={isPartiallyAllowedRequisition(row) ? 'info' : getStatusColor(row.statusId)} label={getRequisitionStatusLabel(row)} size="small" sx={{ height: 'auto', '& .MuiChip-label': { whiteSpace: 'nowrap', py: 0.5 } }} />,
+      render: (row) => (Number(row.statusId) === 8 && isPartiallyAllowedRequisition(row)
+        ? (
+          <Box sx={{ display: 'flex', justifyContent: 'center', width: '100%' }}>
+            <Stack alignItems="center" direction="row" spacing={0.5}>
+              <Chip label="ค้าง" size="small" sx={{ bgcolor: '#f97316', color: '#fff', fontWeight: 800 }} />
+              <Chip label="เบิกได้บางส่วน" size="small" sx={{ bgcolor: '#0e7490', color: '#fff', fontWeight: 800 }} />
+            </Stack>
+          </Box>
+        )
+        : <Chip color={isPartiallyAllowedRequisition(row) ? 'info' : getStatusColor(row.statusId)} label={getRequisitionStatusLabel(row)} size="small" sx={{ height: 'auto', '& .MuiChip-label': { whiteSpace: 'nowrap', py: 0.5 } }} />),
     },
     {
       key: 'actions',
@@ -767,15 +777,23 @@ function ApprovalsPage() {
       </Card>
 
       <Grid container spacing={2} sx={{ alignItems: 'stretch', mb: 2 }}>
-        <Grid size={{ xs: 12, md: 3 }}>
+        <Grid size={{ xs: 12, md: 2.4 }}>
           <Card className="approvals-page__summary-card" sx={{ border: '1px solid #bfdbfe', background: 'linear-gradient(135deg, #eff6ff 0%, #ffffff 100%)', height: '100%' }}>
             <CardContent>
-              <Typography sx={{ color: '#475569', fontSize: 13, fontWeight: 800 }}>รายการรออนุมัติ/รอจัด/ค้าง</Typography>
+              <Typography sx={{ color: '#475569', fontSize: 13, fontWeight: 800 }}>ทั้งหมด</Typography>
               <Typography sx={{ fontSize: 28, fontWeight: 900 }}>{summary.documents}</Typography>
             </CardContent>
           </Card>
         </Grid>
-        <Grid size={{ xs: 12, md: 3 }}>
+        <Grid size={{ xs: 12, md: 2.4 }}>
+          <Card className="approvals-page__summary-card" sx={{ border: '1px solid #ddd6fe', background: 'linear-gradient(135deg, #f5f3ff 0%, #ffffff 100%)', height: '100%' }}>
+            <CardContent>
+              <Typography sx={{ color: '#475569', fontSize: 13, fontWeight: 800 }}>รออนุมัติ</Typography>
+              <Typography sx={{ fontSize: 28, fontWeight: 900 }}>{summary.awaitingApproval}</Typography>
+            </CardContent>
+          </Card>
+        </Grid>
+        <Grid size={{ xs: 12, md: 2.4 }}>
           <Card className="approvals-page__summary-card" sx={{ border: '1px solid #bbf7d0', background: 'linear-gradient(135deg, #f0fdf4 0%, #ffffff 100%)', height: '100%' }}>
             <CardContent>
               <Typography sx={{ color: '#475569', fontSize: 13, fontWeight: 800 }}>รอจัดของ</Typography>
@@ -783,7 +801,7 @@ function ApprovalsPage() {
             </CardContent>
           </Card>
         </Grid>
-        <Grid size={{ xs: 12, md: 3 }}>
+        <Grid size={{ xs: 12, md: 2.4 }}>
           <Card className="approvals-page__summary-card" sx={{ border: '1px solid #fed7aa', background: 'linear-gradient(135deg, #fff7ed 0%, #ffffff 100%)', height: '100%' }}>
             <CardContent>
               <Typography sx={{ color: '#475569', fontSize: 13, fontWeight: 800 }}>งานค้าง</Typography>
@@ -791,7 +809,7 @@ function ApprovalsPage() {
             </CardContent>
           </Card>
         </Grid>
-        <Grid size={{ xs: 12, md: 3 }}>
+        <Grid size={{ xs: 12, md: 2.4 }}>
           <Card className="approvals-page__summary-card" sx={{ border: '1px solid #fecaca', background: 'linear-gradient(135deg, #fef2f2 0%, #ffffff 100%)', height: '100%' }}>
             <CardContent>
               <Typography sx={{ color: '#475569', fontSize: 13, fontWeight: 800 }}>เบิกด่วน</Typography>

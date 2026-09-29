@@ -87,8 +87,13 @@ function RequestLayout() {
 
   const checkRequestStatuses = useCallback(async () => {
     try {
-      const requests = (await getRequisitions()).filter(matchesCurrentRequester)
-      setNotCompletedRequestCount(requests.filter((request) => isRequestActionable(Number(request.statusId ?? request.StatusId ?? 0))).length)
+      const departmentRequests = await getRequisitions({ department })
+      const requests = departmentRequests.filter(matchesCurrentRequester)
+      // The history menu is shared by everyone in the department, so its badge
+      // must include every department request that still needs action.
+      setNotCompletedRequestCount(
+        departmentRequests.filter((request) => isRequestActionable(Number(request.statusId ?? request.StatusId ?? 0))).length,
+      )
       const previousStatuses = JSON.parse(localStorage.getItem(statusStorageKey) || '{}')
       const storedNotifications = JSON.parse(localStorage.getItem(notificationStorageKey) || '[]')
       const nextStatuses = {}
@@ -98,6 +103,9 @@ function RequestLayout() {
           .map((request) => String(request.headerId ?? request.HeaderId ?? '')),
       )
       const nextNotifications = storedNotifications.filter((item) => {
+        // These entries concern a colleague's requisition; do not remove them
+        // when this user's own requisitions are refreshed.
+        if (String(item.id ?? '').startsWith('department-')) return true
         const headerId = String(item.id ?? '').split('-')[0]
         return item.statusId === 8 && actionableHeaderIds.has(headerId)
       })
@@ -122,13 +130,39 @@ function RequestLayout() {
         }
       })
 
+      // Sync currently open requests in this department as a fallback for a
+      // missed live SignalR message (for example, while the page was loading).
+      departmentRequests
+        .filter((request) => !matchesCurrentRequester(request))
+        .forEach((request) => {
+          const headerId = String(request.headerId ?? request.HeaderId ?? '')
+          const statusId = Number(request.statusId ?? request.StatusId ?? 0)
+          if (!headerId || (statusId !== 10 && statusId !== 8)) return
+
+          const requester = request.employeeName ?? request.EmployeeName ?? 'สมาชิกในแผนก'
+          const notificationId = statusId === 10
+            ? `department-new-${headerId}`
+            : `department-status-${headerId}-${statusId}`
+          if (nextNotifications.some((item) => item.id === notificationId)) return
+
+          nextNotifications.unshift({
+            id: notificationId,
+            label: statusId === 10
+              ? `คำขอใหม่จาก ${requester}`
+              : `${requester}: ${getNotificationMeta(statusId).label}`,
+            read: false,
+            requestNo: request.requestNo ?? request.RequestNo ?? `คำขอ #${headerId}`,
+            statusId,
+          })
+        })
+
       localStorage.setItem(statusStorageKey, JSON.stringify(nextStatuses))
       localStorage.setItem(notificationStorageKey, JSON.stringify(nextNotifications.slice(0, 30)))
       setNotifications(nextNotifications.slice(0, 30))
     } catch {
       // Keep the request page usable even if the periodic status check fails.
     }
-  }, [matchesCurrentRequester, notificationStorageKey, statusStorageKey])
+  }, [department, matchesCurrentRequester, notificationStorageKey, statusStorageKey])
 
   useEffect(() => {
     if (!isSessionActive) {
@@ -157,11 +191,53 @@ function RequestLayout() {
       connectNotificationHub({
         groupMethod: 'JoinRequesterNotifications',
         groupArguments: [employeeId],
+        additionalGroupInvocations: [{
+          method: 'JoinDepartmentNotifications',
+          arguments: [department],
+        }],
         onConnectionStateChange: (isConnected) => {
           if (isConnected) stopFallbackStatusCheck()
           else startFallbackStatusCheck()
         },
         handlers: {
+          DepartmentRequisitionCreated: (request) => {
+            if (!active || Number(request.employeeId ?? request.EmployeeId) === employeeId) return
+            const headerId = String(request.headerId ?? request.HeaderId ?? '')
+            if (!headerId) return
+            const notificationId = `department-new-${headerId}`
+            setNotifications((current) => {
+              if (current.some((item) => item.id === notificationId)) return current
+              const nextNotifications = [{
+                id: notificationId,
+                label: `คำขอใหม่จาก ${request.employeeName ?? request.EmployeeName ?? 'สมาชิกในแผนก'}`,
+                read: false,
+                requestNo: request.requestNo ?? request.RequestNo ?? `คำขอ #${headerId}`,
+                statusId: 10,
+              }, ...current].slice(0, 30)
+              localStorage.setItem(notificationStorageKey, JSON.stringify(nextNotifications))
+              return nextNotifications
+            })
+          },
+          DepartmentRequisitionStatusChanged: (request) => {
+            if (!active || Number(request.employeeId ?? request.EmployeeId) === employeeId) return
+            const statusId = Number(request.statusId ?? request.StatusId ?? 0)
+            const meta = getNotificationMeta(statusId)
+            const headerId = String(request.headerId ?? request.HeaderId ?? '')
+            if (!meta || !headerId) return
+            const notificationId = `department-status-${headerId}-${statusId}`
+            setNotifications((current) => {
+              if (current.some((item) => item.id === notificationId)) return current
+              const nextNotifications = [{
+                id: notificationId,
+                label: `${request.employeeName ?? request.EmployeeName ?? 'สมาชิกในแผนก'}: ${meta.label}`,
+                read: false,
+                requestNo: request.requestNo ?? request.RequestNo ?? `คำขอ #${headerId}`,
+                statusId,
+              }, ...current].slice(0, 30)
+              localStorage.setItem(notificationStorageKey, JSON.stringify(nextNotifications))
+              return nextNotifications
+            })
+          },
           RequisitionStatusChanged: (request) => {
             if (!active) return
 
@@ -221,7 +297,7 @@ function RequestLayout() {
       stopFallbackStatusCheck()
       connection?.stop()
     }
-  }, [checkRequestStatuses, employeeId, isSessionActive, notificationStorageKey, statusStorageKey])
+  }, [checkRequestStatuses, department, employeeId, isSessionActive, notificationStorageKey, statusStorageKey])
 
   if (!isSessionActive) {
     return <Navigate to="/request-login" replace />

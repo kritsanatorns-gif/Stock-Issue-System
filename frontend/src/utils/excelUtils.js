@@ -130,32 +130,34 @@ export function exportPurchaseSummaryToExcel(rows, fileName, periodLabel) {
 // รายงานนี้ต้องรักษาการจัดกลุ่มฝ่ายเหมือนตารางบนหน้าจอ จึงสร้าง sheet แบบ AOA
 // เพื่อ merge ช่องของฝ่ายและยอดรวมฝ่ายได้จริง.
 export function exportProductIssueByCategoryToExcel(groups, fileName, periodLabel, title = 'รายงานสินค้าที่เบิก แยกตามหมวดหมู่', vatRate = 0) {
-  const headers = ['ลำดับ', 'รายการสินค้า / รหัส', 'จำนวนเบิก', 'หน่วย', 'ต้นทุน FIFO/หน่วย', 'ยอดเบิก']
+  const headers = ['ลำดับ', 'วันที่เบิก', 'เลขที่เอกสาร', 'รายการสินค้า / รหัส', 'จำนวนเบิก', 'หน่วย', 'ต้นทุน FIFO/หน่วย', 'ยอดเบิก']
   const rows = [[`${title} ประจำเดือน ${periodLabel}`], [], headers]
   const merges = [{ s: { r: 0, c: 0 }, e: { r: 0, c: headers.length - 1 } }]
 
   groups.forEach((group) => {
     const categoryRow = rows.length
-    rows.push([`หมวด : ${group.category}`, '', '', '', '', ''])
+    rows.push([`หมวด : ${group.category}`, '', '', '', '', '', '', ''])
     merges.push({ s: { r: categoryRow, c: 0 }, e: { r: categoryRow, c: headers.length - 1 } })
     group.products.forEach((product, index) => {
       const qty = Number(product.totalQty ?? 0)
       const total = Number(product.totalCost ?? 0)
-      rows.push([index + 1, `${product.productName} / ${product.productCode}`, qty, product.unit || '-', qty ? total / qty : 0, total])
+      rows.push([index + 1, product.createdAt || '-', product.documentNo || '-', `${product.productName} / ${product.productCode}`, qty, product.unit || '-', qty ? total / qty : 0, total])
     })
     const subtotal = group.products.reduce((sum, product) => sum + Number(product.totalCost ?? 0), 0)
-    const vatAmount = Math.round(subtotal * Number(vatRate || 0)) / 100
-    rows.push(['', 'รวมหมวด', group.products.reduce((sum, product) => sum + Number(product.totalQty ?? 0), 0), '', '', subtotal])
-    rows.push(['', `VAT ${vatRate}%`, '', '', '', vatAmount])
-    rows.push(['', `รวมหมวด (รวม VAT ${vatRate}%)`, '', '', '', Math.round((subtotal + vatAmount) * 100) / 100])
-    rows.push(['', '', '', '', '', ''])
+    rows.push(['', '', '', 'รวมหมวด', group.products.reduce((sum, product) => sum + Number(product.totalQty ?? 0), 0), '', '', subtotal])
+    if (vatRate !== null && vatRate !== undefined) {
+      const vatAmount = Math.round(subtotal * Number(vatRate || 0)) / 100
+      rows.push(['', `VAT ${vatRate}%`, '', '', '', vatAmount])
+      rows.push(['', `รวมหมวด (รวม VAT ${vatRate}%)`, '', '', '', Math.round((subtotal + vatAmount) * 100) / 100])
+    }
+    rows.push(['', '', '', '', '', '', '', ''])
   })
 
-  if (!groups.length) rows.push(['ไม่พบรายการเบิกในช่วงเวลาที่เลือก', '', '', '', '', ''])
+  if (!groups.length) rows.push(['ไม่พบรายการเบิกในช่วงเวลาที่เลือก', '', '', '', '', '', '', ''])
 
   const worksheet = XLSX.utils.aoa_to_sheet(rows)
   worksheet['!merges'] = merges
-  worksheet['!cols'] = [{ wch: 8 }, { wch: 58 }, { wch: 14 }, { wch: 12 }, { wch: 20 }, { wch: 20 }]
+  worksheet['!cols'] = [{ wch: 8 }, { wch: 14 }, { wch: 18 }, { wch: 48 }, { wch: 14 }, { wch: 12 }, { wch: 20 }, { wch: 20 }]
   rows.forEach((row, rowIndex) => row.forEach((_, columnIndex) => {
     const cell = worksheet[XLSX.utils.encode_cell({ r: rowIndex, c: columnIndex })]
     if (!cell) return
@@ -178,42 +180,56 @@ export function exportProductIssueByCategoryToExcel(groups, fileName, periodLabe
   saveAs(new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), fileName)
 }
 
-export function exportDepartmentIssueToExcel(groups, fileName, periodLabel, vatRate = 0, title = 'รายงานสรุปแยกตามลูกค้า (แผนก)', groupLabel = 'แผนก') {
-  const headers = ['ลำดับ', 'รายการสินค้า / รหัส', 'จำนวนเบิก', 'หน่วย', 'ต้นทุน FIFO/หน่วย', 'ยอดเบิก']
+export function exportDepartmentIssueToExcel(groups, fileName, periodLabel, vatRate = 0, title = 'รายงานสรุปแยกตามลูกค้า (แผนก)', groupLabel = 'แผนก', showDocumentDetails = false) {
+  const includeVat = vatRate !== null && vatRate !== undefined
+  const isPurchaseReport = groupLabel === 'ซัพพลาย' || title.includes('ยอดซื้อ')
+  const quantityLabel = isPurchaseReport ? 'จำนวนซื้อ' : 'จำนวนเบิก'
+  const unitCostLabel = isPurchaseReport ? 'ราคาซื้อ/หน่วย' : 'ต้นทุน FIFO/หน่วย'
+  const amountLabel = isPurchaseReport ? 'ยอดซื้อ' : 'ยอดเบิก'
+  const headers = showDocumentDetails ? ['ลำดับ', 'วันที่เบิก', 'เลขที่เอกสาร', 'รายการสินค้า / รหัส', quantityLabel, 'หน่วย', unitCostLabel, ...(includeVat ? ['VAT/หน่วย', 'VAT'] : []), amountLabel] : ['ลำดับ', 'รายการสินค้า / รหัส', quantityLabel, 'หน่วย', unitCostLabel, ...(includeVat ? ['VAT/หน่วย', 'VAT'] : []), amountLabel]
   const rows = [[`${title} ประจำเดือน ${periodLabel}`], [], headers]
   const merges = [{ s: { r: 0, c: 0 }, e: { r: 0, c: headers.length - 1 } }]
+  const summaryRow = (label, quantity = '', amount = '') => {
+    const row = Array(headers.length).fill('')
+    row[showDocumentDetails ? 3 : 1] = label
+    row[showDocumentDetails ? 4 : 2] = quantity
+    row[headers.length - 1] = amount
+    return row
+  }
 
   groups.forEach((group) => {
     const departmentRow = rows.length
-    rows.push([`${groupLabel} : ${group.department}`, '', '', '', '', ''])
+    rows.push([`${groupLabel} : ${group.department}`, ...Array(headers.length - 1).fill('')])
     merges.push({ s: { r: departmentRow, c: 0 }, e: { r: departmentRow, c: headers.length - 1 } })
     group.products.forEach((product, index) => {
       const qty = Number(product.totalQty ?? 0)
       const total = Number(product.totalCost ?? 0)
-      rows.push([index + 1, `${product.productName} / ${product.productCode}`, qty, product.unit || '-', qty ? total / qty : 0, total])
+      const row = showDocumentDetails ? [index + 1, product.createdAt || '-', product.documentNo || '-', `${product.productName} / ${product.productCode}`, qty, product.unit || '-', qty ? total / qty : 0, total] : [index + 1, `${product.productName} / ${product.productCode}`, qty, product.unit || '-', qty ? total / qty : 0, total]
+      if (includeVat) { const vat = Number(product.totalVat ?? 0); row.splice(-1, 0, qty ? vat / qty : 0, vat) }
+      rows.push(row)
     })
     const subtotal = group.products.reduce((sum, product) => sum + Number(product.totalCost ?? 0), 0)
-    rows.push(['', 'รวมแผนก', group.products.reduce((sum, product) => sum + Number(product.totalQty ?? 0), 0), '', '', subtotal])
-    if (vatRate !== null && vatRate !== undefined) {
-      const vatAmount = Math.round(subtotal * Number(vatRate || 0)) / 100
+    rows.push(summaryRow('รวมแผนก', group.products.reduce((sum, product) => sum + Number(product.totalQty ?? 0), 0), subtotal))
+    if (includeVat) {
+      const vatAmount = group.products.reduce((sum, product) => sum + Number(product.totalVat ?? 0), 0)
       const totalWithVat = Math.round((subtotal + vatAmount) * 100) / 100
-      rows.push(['', `VAT ${vatRate}%`, '', '', '', vatAmount])
-      rows.push(['', `รวมแผนก (รวม VAT ${vatRate}%)`, '', '', '', totalWithVat])
+      rows.push(summaryRow('VAT (รวมจากสินค้า)', '', vatAmount))
+      rows.push(summaryRow('รวมแผนก (รวม VAT)', '', totalWithVat))
     }
-    rows.push(['', '', '', '', '', ''])
+    rows.push(Array(headers.length).fill(''))
   })
 
-  if (!groups.length) rows.push(['ไม่พบรายการเบิกในช่วงเวลาที่เลือก', '', '', '', '', ''])
+  if (!groups.length) rows.push(['ไม่พบรายการเบิกในช่วงเวลาที่เลือก', ...Array(headers.length - 1).fill('')])
 
   const worksheet = XLSX.utils.aoa_to_sheet(rows)
   worksheet['!merges'] = merges
-  worksheet['!cols'] = [{ wch: 8 }, { wch: 58 }, { wch: 14 }, { wch: 12 }, { wch: 20 }, { wch: 20 }]
+  worksheet['!cols'] = showDocumentDetails ? [{ wch: 8 }, { wch: 14 }, { wch: 18 }, { wch: 48 }, { wch: 14 }, { wch: 12 }, { wch: 20 }, ...(includeVat ? [{ wch: 18 }, { wch: 18 }] : []), { wch: 20 }] : [{ wch: 8 }, { wch: 48 }, { wch: 14 }, { wch: 12 }, { wch: 20 }, ...(includeVat ? [{ wch: 18 }, { wch: 18 }] : []), { wch: 20 }]
   rows.forEach((row, rowIndex) => row.forEach((_, columnIndex) => {
     const cell = worksheet[XLSX.utils.encode_cell({ r: rowIndex, c: columnIndex })]
     if (!cell) return
     const isTitle = rowIndex === 0
     const isDepartment = rowIndex > 2 && String(row[0] ?? '').startsWith(`${groupLabel} :`)
-    const isDepartmentTotal = rowIndex > 2 && /^(รวมแผนก|VAT )/.test(String(row[1] ?? ''))
+    const isDepartmentTotal = rowIndex > 2 && row.some((value) => /^(รวมแผนก|VAT )/.test(String(value ?? '')))
     cell.s = {
       alignment: { horizontal: columnIndex >= 2 ? 'right' : 'left', vertical: 'center' },
       font: { name: 'Tahoma', sz: isTitle ? 14 : 11, bold: isTitle || isDepartment, color: isDepartment ? { rgb: '1D4ED8' } : undefined },
@@ -239,10 +255,12 @@ export function exportDepartmentCostSummaryToExcel(rows, fileName, periodLabel, 
     ...rows.map((row, index) => [index + 1, row.label || '-', Number(row.totalQty ?? 0), Number(row.totalCost ?? 0), Number(row.totalCost ?? 0)]),
   ]
   const total = rows.reduce((sum, row) => sum + Number(row.totalCost ?? 0), 0)
-  const vatAmount = Math.round(total * Number(vatRate || 0)) / 100
   data.push(['', `รวมทั้งสิ้น ${rows.length} แผนก`, '', total, total])
-  data.push(['', `VAT ${vatRate}%`, '', '', vatAmount])
-  data.push(['', `รวมทั้งสิ้น (รวม VAT ${vatRate}%)`, '', '', Math.round((total + vatAmount) * 100) / 100])
+  if (vatRate !== null && vatRate !== undefined) {
+    const vatAmount = Math.round(total * Number(vatRate || 0)) / 100
+    data.push(['', `VAT ${vatRate}%`, '', '', vatAmount])
+    data.push(['', `รวมทั้งสิ้น (รวม VAT ${vatRate}%)`, '', '', Math.round((total + vatAmount) * 100) / 100])
+  }
   const worksheet = XLSX.utils.aoa_to_sheet(data)
   worksheet['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: headers.length - 1 } }]
   worksheet['!cols'] = [{ wch: 9 }, { wch: 36 }, { wch: 16 }, { wch: 20 }, { wch: 20 }]

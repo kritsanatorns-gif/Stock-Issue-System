@@ -107,6 +107,153 @@ export function addReportCanvas(pdf, canvas, options = {}) {
   })
 }
 
+// Paginate grouped reports using measured DOM rows, repeating the active group's
+// complete heading instead of copying a fixed-height fragment of the first page.
+export async function addGroupedReportPages(pdf, container, html2canvas, groupSelector) {
+  await document.fonts.ready
+  const groups = [...container.querySelectorAll(groupSelector)]
+  if (!groups.length) {
+    const canvas = await html2canvas(container, { backgroundColor: '#fff', scale: 2, useCORS: true })
+    addReportCanvas(pdf, canvas, { repeatHeaderHeight: 0 })
+    return
+  }
+  const template = container.cloneNode(true)
+  template.querySelectorAll(groupSelector).forEach((group) => group.remove())
+  const page = template.cloneNode(true)
+  container.after(page)
+  const pageWidth = pdf.internal.pageSize.getWidth()
+  const pageHeight = pdf.internal.pageSize.getHeight()
+  const maxHeight = container.getBoundingClientRect().width * (pageHeight - 10) / (pageWidth - 10)
+  let pageCount = 0
+  let hasRows = false
+  const capture = async () => {
+    const canvas = await html2canvas(page, { backgroundColor: '#fff', scale: 2, useCORS: true })
+    if (pageCount++) pdf.addPage()
+    const width = Math.min(pageWidth - 10, (pageHeight - 10) * canvas.width / canvas.height)
+    pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 5, 5, width, canvas.height * width / canvas.width)
+  }
+  try {
+    for (const source of groups) {
+      const rows = [...source.children].filter((node) => node.matches('.item, .line, .total, .subtotal'))
+      const makeGroup = () => {
+        const group = source.cloneNode(true)
+        group.querySelectorAll('.item, .line, .total, .subtotal').forEach((node) => node.remove())
+        page.appendChild(group)
+        return group
+      }
+      let group = makeGroup()
+      // Keep the final item and its totals together when possible.
+      const lastItem = rows.findLastIndex((node) => node.matches('.item, .line'))
+      const chunks = rows.slice(0, Math.max(0, lastItem)).map((row) => [row])
+      chunks.push(rows.slice(Math.max(0, lastItem)))
+      for (const chunk of chunks) {
+        const nodes = chunk.map((row) => row.cloneNode(true))
+        nodes.forEach((node) => group.appendChild(node))
+        if (page.getBoundingClientRect().height > maxHeight && hasRows) {
+          nodes.forEach((node) => node.remove())
+          if (!group.querySelector('.item, .line, .total, .subtotal')) group.remove()
+          await capture()
+          page.replaceChildren(...[...template.childNodes].map((node) => node.cloneNode(true)))
+          hasRows = false
+          group = makeGroup()
+          nodes.forEach((node) => group.appendChild(node))
+        }
+        hasRows = true
+      }
+    }
+    if (hasRows) await capture()
+    stampReportFooters(pdf)
+  } finally {
+    page.remove()
+  }
+}
+
+export async function addReportDocumentPages(pdf, container, html2canvas) {
+  const grouped = container.querySelector('.product, .supplier, .category, .department')
+  if (grouped && grouped.tagName === 'SECTION') {
+    return addGroupedReportPages(pdf, container, html2canvas, 'section.product, section.supplier, section.category, section.department')
+  }
+  const table = container.querySelector('table')
+  if (!table) {
+    const group = document.createElement('section')
+    group.className = 'report-page-group'
+    const rows = [...container.children].filter((node) => node.matches('.line, .total, .subtotal'))
+    container.appendChild(group)
+    rows.forEach((row) => group.appendChild(row))
+    return addGroupedReportPages(pdf, container, html2canvas, '.report-page-group')
+  }
+  await document.fonts.ready
+  // Preserve the widths measured with the full dataset on every page.
+  const widths = [...table.querySelectorAll('thead tr:first-child th')].map((cell) => cell.getBoundingClientRect().width)
+  const chunks = []
+  let pending = []
+  let spanRemaining = 0
+  for (const row of table.querySelectorAll('tbody > tr')) {
+    pending.push(row)
+    spanRemaining = Math.max(spanRemaining, ...[...row.cells].map((cell) => cell.rowSpan), 1) - 1
+    if (spanRemaining === 0 && !row.matches('.report-pdf__group')) {
+      chunks.push(pending)
+      pending = []
+    }
+  }
+  if (pending.length) chunks.push(pending)
+  const footers = [...table.querySelectorAll('tfoot > tr')]
+  if (footers.length) {
+    if (chunks.length) chunks[chunks.length - 1].push(...footers)
+    else chunks.push(footers)
+  }
+  const template = container.cloneNode(true)
+  template.querySelectorAll('tbody, tfoot').forEach((body) => body.replaceChildren())
+  const page = template.cloneNode(true)
+  container.after(page)
+  const maxHeight = container.getBoundingClientRect().width * 275 / 200
+  let count = 0
+  let hasRows = false
+  let activeCategory = null
+  const configure = () => {
+    const pageTable = page.querySelector('table')
+    pageTable.style.tableLayout = 'fixed'
+    if (widths.length) {
+      const cols = document.createElement('colgroup')
+      widths.forEach((width) => {
+        const col = document.createElement('col')
+        col.style.width = `${width}px`
+        cols.appendChild(col)
+      })
+      pageTable.prepend(cols)
+    }
+  }
+  const capture = async () => {
+    const canvas = await html2canvas(page, { backgroundColor: '#fff', scale: 2, useCORS: true })
+    if (count++) pdf.addPage()
+    const width = Math.min(200, 275 * canvas.width / canvas.height)
+    pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 5, 5, width, canvas.height * width / canvas.width)
+  }
+  try {
+    configure()
+    for (const chunk of chunks) {
+      const nodes = chunk.map((row) => row.cloneNode(true))
+      const append = () => nodes.forEach((node, index) => page.querySelector(chunk[index].parentElement.tagName === 'TFOOT' ? 'tfoot' : 'tbody').appendChild(node))
+      append()
+      if (page.getBoundingClientRect().height > maxHeight && (hasRows || page.querySelector('.stock-category-charts'))) {
+        nodes.forEach((node) => node.remove())
+        await capture()
+        page.replaceChildren(...[...template.childNodes].map((node) => node.cloneNode(true)))
+        page.querySelectorAll('.stock-category-charts').forEach((node) => node.remove())
+        configure()
+        if (activeCategory && !chunk[0].matches('.report-pdf__group')) page.querySelector('tbody').appendChild(activeCategory.cloneNode(true))
+        append()
+      }
+      if (chunk[0].matches('.report-pdf__group')) activeCategory = chunk[0]
+      hasRows = true
+    }
+    await capture()
+    stampReportFooters(pdf)
+  } finally {
+    page.remove()
+  }
+}
+
 export function stampReportFooters(pdf) {
   const count = pdf.getNumberOfPages()
   for (let index = 1; index <= count; index += 1) {

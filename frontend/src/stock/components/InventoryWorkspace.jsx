@@ -1,4 +1,4 @@
-﻿import {
+import {
   Alert,
   Box,
   Button,
@@ -1468,7 +1468,7 @@ function InventoryWorkspace({ mode }) {
     const normalizedName = normalizePlainName(supplierName)
 
     if (!normalizedName) {
-      toast.error('กรุณาระบุชื่อผู้ขาย')
+      toast.error('กรุณาระบุชื่อซัพพลาย')
       return
     }
 
@@ -1488,9 +1488,9 @@ function InventoryWorkspace({ mode }) {
       setSupplierShortName('')
       setSupplierAddress('')
       setIsSupplierDialogOpen(false)
-      toast.success('เพิ่มผู้ขายสำเร็จ')
+      toast.success('เพิ่มซัพพลายสำเร็จ')
     } catch (error) {
-      toast.error(error?.response?.data ?? 'เพิ่มผู้ขายไม่สำเร็จ')
+      toast.error(error?.response?.data ?? 'เพิ่มซัพพลายไม่สำเร็จ')
     } finally {
       setIsSavingSupplier(false)
     }
@@ -1498,13 +1498,13 @@ function InventoryWorkspace({ mode }) {
 
   const handleSupplierStatusChange = async (supplier) => {
     const nextStatus = Number(supplier.supplierStatus ?? 1) === 1 ? 0 : 1
-    const actionLabel = nextStatus === 0 ? 'ยกเลิกผู้ขาย' : 'เปิดใช้งานผู้ขาย'
+    const actionLabel = nextStatus === 0 ? 'ยกเลิกซัพพลาย' : 'เปิดใช้งานซัพพลาย'
 
     const result = await Swal.fire({
       title: actionLabel,
       text: nextStatus === 0
-        ? `ผู้ขาย “${supplier.supplierName}” จะไม่ปรากฏในรายการเลือกตอนรับสินค้าใหม่ แต่ประวัติเดิมจะยังอยู่`
-        : `ต้องการเปิดใช้งานผู้ขาย “${supplier.supplierName}” อีกครั้งหรือไม่`,
+        ? `ซัพพลาย “${supplier.supplierName}” จะไม่ปรากฏในรายการเลือกตอนรับสินค้าใหม่ แต่ประวัติเดิมจะยังอยู่`
+        : `ต้องการเปิดใช้งานซัพพลาย “${supplier.supplierName}” อีกครั้งหรือไม่`,
       icon: 'warning',
       showCancelButton: true,
       confirmButtonText: 'ยืนยัน',
@@ -1518,9 +1518,9 @@ function InventoryWorkspace({ mode }) {
     try {
       await updateSupplierStatus(supplier.supplierId, nextStatus)
       await loadSuppliers()
-      toast.success(nextStatus === 0 ? 'ยกเลิกผู้ขายแล้ว' : 'เปิดใช้งานผู้ขายแล้ว')
+      toast.success(nextStatus === 0 ? 'ยกเลิกซัพพลายแล้ว' : 'เปิดใช้งานซัพพลายแล้ว')
     } catch (error) {
-      toast.error(error?.response?.data ?? 'บันทึกสถานะผู้ขายไม่สำเร็จ')
+      toast.error(error?.response?.data ?? 'บันทึกสถานะซัพพลายไม่สำเร็จ')
     } finally {
       setUpdatingSupplierId(null)
     }
@@ -1537,7 +1537,7 @@ function InventoryWorkspace({ mode }) {
   const handleUpdateSupplier = async () => {
     const normalizedName = normalizePlainName(editingSupplierName)
     if (!editingSupplier || !normalizedName) {
-      toast.error('กรุณาระบุชื่อผู้ขาย')
+      toast.error('กรุณาระบุชื่อซัพพลาย')
       return
     }
 
@@ -1552,9 +1552,9 @@ function InventoryWorkspace({ mode }) {
       })
       await loadSuppliers()
       setEditingSupplier(null)
-      toast.success('แก้ไขผู้ขายสำเร็จ')
+      toast.success('แก้ไขซัพพลายสำเร็จ')
     } catch (error) {
-      toast.error(error?.response?.data ?? 'แก้ไขผู้ขายไม่สำเร็จ')
+      toast.error(error?.response?.data ?? 'แก้ไขซัพพลายไม่สำเร็จ')
     } finally {
       setIsSavingSupplier(false)
     }
@@ -1721,14 +1721,14 @@ function InventoryWorkspace({ mode }) {
                       <TextField
                         fullWidth
                         select
-                        label="ผู้ขาย"
+                        label="ซัพพลาย"
                         size="small"
                         value={supplierFilter}
                         onChange={(event) => { setSupplierFilter(event.target.value); setSupplierSearchText('') }}
                       >
                         <MenuItem value="">ทั้งหมด</MenuItem>
                         <MenuItem disableRipple sx={{ cursor: 'default', py: 0.75 }} onKeyDown={(event) => event.stopPropagation()}>
-                          <TextField autoFocus fullWidth placeholder="ค้นหาผู้ขาย" size="small" value={supplierSearchText} onChange={(event) => setSupplierSearchText(event.target.value)} onClick={(event) => event.stopPropagation()} />
+                          <TextField autoFocus fullWidth placeholder="ค้นหาซัพพลาย" size="small" value={supplierSearchText} onChange={(event) => setSupplierSearchText(event.target.value)} onClick={(event) => event.stopPropagation()} />
                         </MenuItem>
                         {suppliers.filter((supplier) => `${supplier.accountId ?? ''} ${supplier.supplierName ?? ''}`.toLowerCase().includes(supplierSearchText.trim().toLowerCase())).map((supplier) => (
                           <MenuItem key={supplier.supplierId} value={String(supplier.supplierId)}>
@@ -1937,15 +1937,15 @@ function InventoryWorkspace({ mode }) {
                           fullWidth
                           required
                           select
-                          label="ผู้ขายของรายการนำเข้า"
+                          label="ซัพพลายของรายการนำเข้า"
                           size="small"
                           value={receiveSupplierId}
                           onChange={(event) => { setReceiveSupplierId(event.target.value); setSupplierSearchText('') }}
                           helperText="เลือกครั้งเดียว ใช้กับสินค้าทุกรายการในชุดนี้"
                         >
-                          <MenuItem value="">เลือกผู้ขาย</MenuItem>
+                          <MenuItem value="">เลือกซัพพลาย</MenuItem>
                           <MenuItem disableRipple disableTouchRipple sx={{ cursor: 'default', py: 0.75 }} onKeyDown={(event) => event.stopPropagation()}>
-                            <TextField autoFocus fullWidth placeholder="ค้นหารหัสหรือชื่อผู้ขาย" size="small" value={supplierSearchText} onChange={(event) => setSupplierSearchText(event.target.value)} onClick={(event) => event.stopPropagation()} />
+                            <TextField autoFocus fullWidth placeholder="ค้นหารหัสหรือชื่อซัพพลาย" size="small" value={supplierSearchText} onChange={(event) => setSupplierSearchText(event.target.value)} onClick={(event) => event.stopPropagation()} />
                           </MenuItem>
                           {suppliers.filter((supplier) => `${supplier.accountId ?? ''} ${supplier.supplierName ?? ''}`.toLowerCase().includes(supplierSearchText.trim().toLowerCase())).map((supplier) => (
                             <MenuItem key={supplier.supplierId} value={String(supplier.supplierId)}>
@@ -3028,14 +3028,14 @@ function InventoryWorkspace({ mode }) {
       maxWidth="sm"
       onClose={() => !isSavingSupplier && setIsSupplierDialogOpen(false)}
     >
-      <DialogTitle>เพิ่มผู้ขาย</DialogTitle>
+      <DialogTitle>เพิ่มซัพพลาย</DialogTitle>
       <DialogContent>
         <Stack spacing={1.5} sx={{ pt: 1 }}>
-          <TextField autoFocus fullWidth label="รหัสผู้ขาย" value={supplierAccountId} onChange={(event) => setSupplierAccountId(event.target.value)} />
+          <TextField autoFocus fullWidth label="รหัสซัพพลาย" value={supplierAccountId} onChange={(event) => setSupplierAccountId(event.target.value)} />
           <TextField fullWidth label="ชื่อย่อ" value={supplierShortName} onChange={(event) => setSupplierShortName(event.target.value)} />
           <TextField
             fullWidth
-            label="ชื่อผู้ขาย"
+            label="ชื่อซัพพลาย"
             required
             value={supplierName}
             onChange={(event) => setSupplierName(event.target.value)}
@@ -3052,7 +3052,7 @@ function InventoryWorkspace({ mode }) {
           disabled={isSavingSupplier}
           onClick={() => setIsSupplierManagementOpen(true)}
         >
-          จัดการผู้ขาย / ยกเลิกผู้ขาย
+          จัดการซัพพลาย / ยกเลิกซัพพลาย
         </Button>
       </DialogContent>
       <DialogActions sx={{ px: 3, pb: 2 }}>
@@ -3061,10 +3061,10 @@ function InventoryWorkspace({ mode }) {
       </DialogActions>
     </Dialog>
     <Dialog open={isSupplierManagementOpen} fullWidth maxWidth="sm" onClose={() => !updatingSupplierId && setIsSupplierManagementOpen(false)}>
-      <DialogTitle>จัดการผู้ขาย</DialogTitle>
+      <DialogTitle>จัดการซัพพลาย</DialogTitle>
       <DialogContent dividers>
         <Alert severity="info" sx={{ mb: 2 }}>
-          ยกเลิกผู้ขายเพื่อไม่ให้เลือกในรายการรับเข้าใหม่ ประวัติการรับเข้าและต้นทุนเดิมจะยังคงอยู่
+          ยกเลิกซัพพลายเพื่อไม่ให้เลือกในรายการรับเข้าใหม่ ประวัติการรับเข้าและต้นทุนเดิมจะยังคงอยู่
         </Alert>
         <AppTable
           columns={[
@@ -3132,7 +3132,7 @@ function InventoryWorkspace({ mode }) {
                       size="small"
                       variant="outlined"
                     >
-                      {active ? 'ยกเลิกผู้ขาย' : 'เปิดใช้งาน'}
+                      {active ? 'ยกเลิกซัพพลาย' : 'เปิดใช้งาน'}
                     </Button>
                   </Stack>
 
@@ -3144,11 +3144,11 @@ function InventoryWorkspace({ mode }) {
           defaultSortField="supplierName"
           fitToWidth
           maxHeight={360}
-          noDataText="ยังไม่มีผู้ขาย"
+          noDataText="ยังไม่มีซัพพลาย"
           rows={allSuppliers}
           rowKey="supplierId"
           showGlobalSearch
-          globalSearchPlaceholder="ค้นหาผู้ขาย"
+          globalSearchPlaceholder="ค้นหาซัพพลาย"
         />
       </DialogContent>
       <DialogActions sx={{ px: 3, pb: 2 }}>
@@ -3156,12 +3156,12 @@ function InventoryWorkspace({ mode }) {
       </DialogActions>
     </Dialog>
     <Dialog open={Boolean(editingSupplier)} fullWidth maxWidth="sm" onClose={() => !isSavingSupplier && setEditingSupplier(null)}>
-      <DialogTitle>แก้ไขผู้ขาย</DialogTitle>
+      <DialogTitle>แก้ไขซัพพลาย</DialogTitle>
       <DialogContent>
         <Stack spacing={1.5} sx={{ pt: 1 }}>
-          <TextField autoFocus fullWidth label="รหัสผู้ขาย" value={editingSupplierAccountId} onChange={(event) => setEditingSupplierAccountId(event.target.value)} />
+          <TextField autoFocus fullWidth label="รหัสซัพพลาย" value={editingSupplierAccountId} onChange={(event) => setEditingSupplierAccountId(event.target.value)} />
           <TextField fullWidth label="ชื่อย่อ" value={editingSupplierShortName} onChange={(event) => setEditingSupplierShortName(event.target.value)} />
-          <TextField fullWidth label="ชื่อผู้ขาย" required value={editingSupplierName} onChange={(event) => setEditingSupplierName(event.target.value)} />
+          <TextField fullWidth label="ชื่อซัพพลาย" required value={editingSupplierName} onChange={(event) => setEditingSupplierName(event.target.value)} />
           <TextField fullWidth label="ที่อยู่" multiline minRows={2} value={editingSupplierAddress} onChange={(event) => setEditingSupplierAddress(event.target.value)} />
         </Stack>
       </DialogContent>

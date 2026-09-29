@@ -1,4 +1,4 @@
-﻿import {
+import {
   Alert,
   Box,
   Button,
@@ -21,7 +21,8 @@
 import dayjs from 'dayjs'
 import { AlertTriangle, Building2, ChevronDown, ChevronRight, Clock, Download, FileText, Package, ShoppingCart } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
-import { getPurchasesByProduct, getPurchasesBySupplier, getPurchaseTrend, getRequisitions, getStockIssues, getSupplierPurchaseItems, getVatSetting, updateVatSetting } from '../../api/api'
+import StockStatusChart from '../components/StockCategoryChart'
+import { getProducts, getPurchasesByProduct, getPurchasesBySupplier, getPurchaseTrend, getRequisitions, getStockIssues, getStockStatusTrend, getSupplierPurchaseItems, getVatSetting, updateVatSetting } from '../../api/api'
 import AppTable from '../../components/common/AppTable'
 import { getDateSortValue, getElapsedDuration, getIdSortValue, toThailandDate } from '../../utils/dateUtils'
 import { exportDepartmentCostSummaryToExcel, exportDepartmentIssueToExcel, exportDivisionCostToExcel, exportProductIssueByCategoryToExcel, exportProductPurchaseIssueToExcel, exportPurchaseSummaryToExcel, exportRowsToExcel } from '../../utils/excelUtils'
@@ -45,17 +46,23 @@ const reportGroups = [
     label: 'รายงานวิเคราะห์การขาย (เบิก)',
     categories: [
       { label: 'สรุปยอดขาย', items: [{ label: 'แยกตามลูกค้า', value: 'issue' }, { label: 'แยกตามหมวดสินค้า', value: 'product' }] },
-      { label: 'ประวัติการขาย', items: [{ label: 'แยกตามลูกค้า', value: 'department-history' }, { label: 'แยกตามสินค้า', value: 'product-history' }] },
-      { label: 'จัดลำดับยอดขาย', items: [{ label: 'ตามมูลค่า', value: 'issue-rank-value' }, { label: 'ตามปริมาณ', value: 'issue-rank-qty' }, { label: 'ตามลูกค้า / มูลค่า', value: 'issue-customer-rank-value' }, { label: 'ตามลูกค้า / ปริมาณ', value: 'issue-customer-rank-qty' }] },
+      // Temporarily hide sales history from the report menu.
+      { label: 'จัดลำดับยอดขาย', items: [{ label: 'ตามมูลค่า', value: 'issue-rank-value' }, { label: 'ตามหน่วย', value: 'issue-rank-qty' }, { label: 'ตามลูกค้า / มูลค่า', value: 'issue-customer-rank-value' }, { label: 'ตามลูกค้า / หน่วย', value: 'issue-customer-rank-qty' }] },
       { label: 'ค่าใช้จ่าย', items: [{ label: 'รายงานค่าใช้จ่ายรวม', value: 'division-cost' }] },
     ],
   },
   {
     label: 'รายงานวิเคราะห์การซื้อ (รับเข้า)',
     categories: [
-      { label: 'สรุปยอดซื้อ', items: [{ label: 'แยกตามผู้จำหน่าย', value: 'purchase' }, { label: 'แยกตามหมวดสินค้า', value: 'purchase-category' }] },
-      { label: 'ประวัติการซื้อ', items: [{ label: 'แยกตามผู้จำหน่าย', value: 'purchase-history' }, { label: 'แยกตามสินค้า', value: 'purchase-product-history' }] },
-      { label: 'จัดลำดับยอดซื้อ', items: [{ label: 'ตามมูลค่า', value: 'purchase-rank-value' }, { label: 'ตามปริมาณ', value: 'purchase-rank-qty' }, { label: 'จากบิลผู้จำหน่าย', value: 'purchase-rank-invoice' }] },
+      { label: 'สรุปยอดซื้อ', items: [{ label: 'แยกตามซัพพลาย', value: 'purchase' }, { label: 'แยกตามหมวดสินค้า', value: 'purchase-category' }] },
+      { label: 'ประวัติการซื้อ', items: [{ label: 'แยกตามซัพพลาย', value: 'purchase-history' }, { label: 'แยกตามสินค้า', value: 'purchase-product-history' }] },
+      { label: 'จัดลำดับยอดซื้อ', items: [{ label: 'ตามมูลค่า', value: 'purchase-rank-value' }, { label: 'ตามหน่วย', value: 'purchase-rank-qty' }, { label: 'จากบิลซัพพลาย', value: 'purchase-rank-invoice' }] },
+    ],
+  },
+  {
+    label: 'รายงานสต๊อก',
+    categories: [
+      { label: 'สถานะสต๊อก', items: [{ label: 'สินค้าคงเหลือปัจจุบัน', value: 'stock' }] },
     ],
   },
 ]
@@ -90,7 +97,7 @@ const backlogExportColumns = [
 ]
 
 const purchaseExportColumns = [
-  { header: 'ผู้ขาย', value: (row) => row.supplierName },
+  { header: 'ซัพพลาย', value: (row) => row.supplierName },
   { header: 'ข้อมูล', value: (row) => row.documentCount },
   { header: 'จำนวนรายการสินค้า', value: (row) => row.itemCount },
   { header: 'ข้อมูล', value: (row) => row.totalQty },
@@ -98,7 +105,7 @@ const purchaseExportColumns = [
 ]
 
 const purchaseHistoryExportColumns = [
-  { header: 'ผู้ขาย', value: (row) => row.supplierName },
+  { header: 'ซัพพลาย', value: (row) => row.supplierName },
   { header: 'วันที่รับเข้า', value: (row) => formatReportDate(row.receivedAt) },
   { header: 'เลขที่ Invoice', value: (row) => row.poInvoiceNo || '-' },
   { header: 'รหัสสินค้า', value: (row) => row.productCode },
@@ -107,7 +114,18 @@ const purchaseHistoryExportColumns = [
   { header: 'หน่วย', value: (row) => row.unit || '-' },
   { header: 'ต้นทุน/หน่วย', value: (row) => row.unitCost },
   { header: 'ราคา VAT/หน่วย', value: (row) => row.vatUnitCost },
+  { header: 'VAT', value: (row) => row.totalVat },
   { header: 'ยอดซื้อรวม', value: (row) => row.totalPurchase },
+]
+
+const stockReportColumns = [
+  { key: 'productCode', label: 'รหัสสินค้า', width: 180 },
+  { key: 'productName', label: 'ชื่อสินค้า', minWidth: 260 },
+  { key: 'category', label: 'หมวดหมู่', width: 180 },
+  { key: 'stockQty', label: 'คงเหลือ', width: 130, align: 'right', render: (row) => Number(row.stockQty ?? 0).toLocaleString('th-TH') },
+  { key: 'minQty', label: 'จุดสั่งซื้อขั้นต่ำ', width: 150, align: 'right', render: (row) => Number(row.minQty ?? 0).toLocaleString('th-TH') },
+  { key: 'unit', label: 'หน่วย', width: 110 },
+  { key: 'status', label: 'สถานะ', width: 150, align: 'center', render: (row) => <Chip color={row.statusColor} label={row.status} size="small" sx={{ fontWeight: 800 }} /> },
 ]
 
 const productRankingExportColumns = [
@@ -155,7 +173,7 @@ const departmentCostSummaryColumns = [
 ]
 
 const purchaseColumns = [
-  { key: 'supplierName', label: 'ผู้ขาย', minWidth: 260 },
+  { key: 'supplierName', label: 'ซัพพลาย', minWidth: 260 },
   { key: 'documentCount', label: 'เอกสารรับเข้า', width: 160, align: 'center' },
   { key: 'itemCount', label: 'รายการสินค้า', width: 160, align: 'center' },
   { key: 'totalQty', label: 'จำนวนรับเข้ารวม', width: 180, align: 'center' },
@@ -191,6 +209,13 @@ const supplierPurchaseDetailColumns = [
     width: 150,
     align: 'right',
     render: (row) => Number(row.vatUnitCost ?? 0).toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+  },
+  {
+    key: 'totalVat',
+    label: 'VAT',
+    width: 130,
+    align: 'right',
+    render: (row) => Number(row.totalVat ?? 0).toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
   },
   {
     key: 'totalPurchase',
@@ -587,8 +612,8 @@ function buildDepartmentIssueGroups(rows) {
   rows.forEach((row) => {
     const department = String(row.department ?? '').trim() || 'ข้อมูล'
     const products = departments.get(department) ?? new Map()
-    const key = `${row.productCode}|${row.productName}`
-    const product = products.get(key) ?? { productCode: row.productCode, productName: row.productName || row.productCode, totalCost: 0, totalQty: 0, unit: row.unit ?? '' }
+    const key = `${row.createdAt}|${row.documentNo}|${row.productCode}|${row.productName}`
+    const product = products.get(key) ?? { createdAt: row.createdAt, documentNo: row.documentNo, productCode: row.productCode, productName: row.productName || row.productCode, totalCost: 0, totalQty: 0, unit: row.unit ?? '' }
 
     product.totalQty += Number(row.quantity ?? 0)
     product.totalCost += Number(row.totalCost ?? 0)
@@ -600,7 +625,7 @@ function buildDepartmentIssueGroups(rows) {
   return [...departments.entries()]
     .map(([department, products]) => ({
       department,
-      products: [...products.values()].sort((first, second) => first.productName.localeCompare(second.productName, 'th') || first.productCode.localeCompare(second.productCode, 'th')),
+      products: [...products.values()].sort((first, second) => String(first.createdAt).localeCompare(String(second.createdAt)) || first.productName.localeCompare(second.productName, 'th') || first.productCode.localeCompare(second.productCode, 'th')),
     }))
     .sort((first, second) => first.department.localeCompare(second.department, 'th'))
 }
@@ -649,8 +674,8 @@ function buildProductCategoryGroups(rows) {
   rows.forEach((row) => {
     const category = String(row.category ?? '').trim() || 'ข้อมูล'
     const products = categories.get(category) ?? new Map()
-    const key = `${row.productCode}|${row.productName}`
-    const product = products.get(key) ?? { productCode: row.productCode, productName: row.productName || row.productCode, totalCost: 0, totalQty: 0, unit: row.unit ?? '' }
+    const key = `${row.createdAt}|${row.documentNo}|${row.productCode}|${row.productName}`
+    const product = products.get(key) ?? { createdAt: row.createdAt, documentNo: row.documentNo, productCode: row.productCode, productName: row.productName || row.productCode, totalCost: 0, totalQty: 0, unit: row.unit ?? '' }
 
     product.totalQty += Number(row.quantity ?? 0)
     product.totalCost += Number(row.totalCost ?? 0)
@@ -662,7 +687,7 @@ function buildProductCategoryGroups(rows) {
   return [...categories.entries()]
     .map(([category, products]) => ({
       category,
-      products: [...products.values()].sort((first, second) => first.productName.localeCompare(second.productName, 'th') || first.productCode.localeCompare(second.productCode, 'th')),
+      products: [...products.values()].sort((first, second) => String(first.createdAt).localeCompare(String(second.createdAt)) || first.productName.localeCompare(second.productName, 'th')),
     }))
     .sort((first, second) => first.category.localeCompare(second.category, 'th'))
 }
@@ -804,10 +829,12 @@ function StatCard({ color, helper, icon: Icon, label, value }) {
 }
 
 function DonutChart({ action, legendValueLabel = 'ข้อมูล', roundValues = false, rows, subtitle, title, totalLabel = 'ข้อมูล' }) {
-  const topRows = [...rows]
+  const otherRows = rows.filter((row) => String(row.label ?? '').replace(/\s/g, '') === 'อื่นๆ')
+  const topRows = rows
+    .filter((row) => String(row.label ?? '').replace(/\s/g, '') !== 'อื่นๆ')
     .sort((first, second) => Number(second.totalQty ?? 0) - Number(first.totalQty ?? 0))
     .slice(0, 5)
-  const chartRows = topRows
+  const chartRows = [...topRows, ...otherRows]
   const totalQty = chartRows.reduce((total, row) => total + Number(row.totalQty ?? 0), 0)
   let currentPercent = 0
   const gradient = totalQty
@@ -1176,6 +1203,8 @@ function ReportsPage() {
   const [purchaseReports, setPurchaseReports] = useState([])
   const [purchaseProductReports, setPurchaseProductReports] = useState([])
   const [purchaseTrendReports, setPurchaseTrendReports] = useState([])
+  const [stockProducts, setStockProducts] = useState([])
+  const [stockStatusTrend, setStockStatusTrend] = useState([])
   const [isPdfLoading, setIsPdfLoading] = useState(false)
   const [expandedDepartment, setExpandedDepartment] = useState('')
   const [expandedDivision, setExpandedDivision] = useState('')
@@ -1221,12 +1250,14 @@ function ReportsPage() {
       setLoadError('')
 
       try {
-        const [issueData, requisitionData, purchaseData, purchaseProductData, purchaseTrendData] = await Promise.all([
+        const [issueData, requisitionData, purchaseData, purchaseProductData, purchaseTrendData, stockData, stockStatusTrendData] = await Promise.all([
           getStockIssues(yearlyDateRange),
           getRequisitions(),
           getPurchasesBySupplier(dateRange),
           getPurchasesByProduct(dateRange),
           getPurchaseTrend({ ...yearlyDateRange, period: reportPeriod }),
+          getProducts(),
+          getStockStatusTrend({ year: selectedYear }),
         ])
 
         // Older API versions return amounts but omit monthly quantities.
@@ -1251,6 +1282,8 @@ function ReportsPage() {
           setPurchaseReports(purchaseData ?? [])
           setPurchaseProductReports(purchaseProductData ?? [])
           setPurchaseTrendReports(completePurchaseTrend)
+          setStockProducts(stockData ?? [])
+          setStockStatusTrend(stockStatusTrendData ?? [])
           setSupplierPurchaseItems({})
           setExpandedSupplier('')
         }
@@ -1261,6 +1294,8 @@ function ReportsPage() {
           setPurchaseReports([])
           setPurchaseProductReports([])
           setPurchaseTrendReports([])
+          setStockProducts([])
+          setStockStatusTrend([])
           setLoadError('โหลดข้อมูลรายงานไม่สำเร็จ กรุณาตรวจสอบว่า Backend API เปิดอยู่')
         }
       } finally {
@@ -1466,15 +1501,23 @@ function ReportsPage() {
     }
   }
 
+  const getPurchaseItemVat = (item) => {
+    const storedVat = Number(item.totalVat ?? 0)
+    if (storedVat !== 0) return storedVat
+    const purchaseTotal = Number(item.totalPurchase ?? 0)
+    return Math.round(purchaseTotal * Number(vatRate || 0)) / 100
+  }
+
   const loadSupplierPurchaseGroups = async () => {
     const groups = await Promise.all(purchaseRows.map(async (supplier) => {
       const items = supplierPurchaseItems[supplier.supplierId] ?? await getSupplierPurchaseItems(supplier.supplierId, dateRange)
       const products = new Map()
       ;(items ?? []).forEach((item) => {
         const key = `${item.productCode}|${item.productName}`
-        const product = products.get(key) ?? { productCode: item.productCode, productName: item.productName, totalCost: 0, totalQty: 0, unit: item.unit || '' }
+        const product = products.get(key) ?? { productCode: item.productCode, productName: item.productName, totalCost: 0, totalQty: 0, totalVat: 0, unit: item.unit || '' }
         product.totalQty += Number(item.quantity ?? 0)
         product.totalCost += Number(item.totalPurchase ?? 0)
+        product.totalVat += getPurchaseItemVat(item)
         products.set(key, product)
       })
       return { department: supplier.supplierName, products: [...products.values()] }
@@ -1496,8 +1539,9 @@ function ReportsPage() {
         ...item,
         supplierName: supplier.supplierName,
         totalPurchase: Number(item.totalPurchase ?? 0),
+        totalVat: getPurchaseItemVat(item),
         unitCost: Number(item.unitCost ?? 0),
-        vatUnitCost: Number(item.unitCost ?? 0) * Number(vatRate || 0) / 100,
+        vatUnitCost: Number(item.quantity ?? 0) ? getPurchaseItemVat(item) / Number(item.quantity ?? 0) : 0,
         })),
       }
     }))
@@ -1521,30 +1565,73 @@ function ReportsPage() {
   const rankingSubtitle = 'จำนวนสินค้าที่ถูกเบิก แยกตามแผนก'
   const periodLabel = `${shortMonthNames[selectedMonth - 1]} ${selectedYear}`
   const purchaseDetailRows = useMemo(
-    () => purchaseRows.flatMap((supplier) => (supplierPurchaseItems[supplier.supplierId] ?? []).map((item) => ({
-      ...item,
-      supplierName: supplier.supplierName,
-      totalPurchase: Number(item.totalPurchase ?? 0),
-    }))),
-    [purchaseRows, supplierPurchaseItems],
+    () => purchaseRows.flatMap((supplier) => (supplierPurchaseItems[supplier.supplierId] ?? []).map((item) => {
+      const totalPurchase = Number(item.totalPurchase ?? 0)
+      const storedVat = Number(item.totalVat ?? 0)
+      return {
+        ...item,
+        supplierName: supplier.supplierName,
+        totalPurchase,
+        totalVat: storedVat || Math.round(totalPurchase * Number(vatRate || 0)) / 100,
+      }
+    })),
+    [purchaseRows, supplierPurchaseItems, vatRate],
   )
+  const stockRows = useMemo(() => stockProducts.map((product) => {
+    const stockQty = Number(product.stockQty ?? product.StockQty ?? 0)
+    const minQty = Number(product.minQty ?? product.MinQty ?? 0)
+    const status = stockQty <= 0
+      ? { label: 'หมด', color: 'error' }
+      : minQty > 0 && stockQty <= minQty
+        ? { label: 'ใกล้หมด', color: 'warning' }
+        : { label: 'พร้อมเบิก', color: 'success' }
+    return {
+      category: product.category ?? product.Category ?? 'ไม่ระบุหมวดหมู่',
+      minQty,
+      productCode: product.code ?? product.Code ?? product.productId ?? product.ProductId ?? '-',
+      productName: product.productName ?? product.ProductName ?? product.name ?? product.Name ?? '-',
+      status: status.label,
+      statusColor: status.color,
+      stockQty,
+      unit: product.issueUnit ?? product.IssueUnit ?? product.unit ?? product.Unit ?? '-',
+    }
+  }).sort((left, right) => left.stockQty - right.stockQty || left.productName.localeCompare(right.productName, 'th')), [stockProducts])
+  const [stockStatusFilter, setStockStatusFilter] = useState('')
+  const stockSummary = useMemo(() => ({
+    available: stockRows.filter((row) => row.status === 'พร้อมเบิก').length,
+    low: stockRows.filter((row) => row.status === 'ใกล้หมด').length,
+    out: stockRows.filter((row) => row.status === 'หมด').length,
+    totalQty: stockRows.reduce((sum, row) => sum + row.stockQty, 0),
+  }), [stockRows])
   const analysisReport = useMemo(() => {
     const withRank = (rows) => rows.map((row, index) => ({ ...row, rank: index + 1 }))
-    const productPurchaseRows = purchaseProductReports.map((row) => ({
-      label: row.productName,
-      productCode: row.productCode,
-      totalCost: Number(row.purchaseAmount ?? 0),
-      totalQty: Number(row.purchaseQty ?? 0),
-      unit: row.unit || '-',
-    }))
+    const productPurchaseRows = purchaseProductReports.map((row) => {
+      const totalCost = Number(row.purchaseAmount ?? 0)
+      const storedVat = Number(row.totalVat ?? 0)
+      return {
+        label: row.productName,
+        productCode: row.productCode,
+        category: row.category || 'ไม่ระบุหมวดสินค้า',
+        totalCost,
+        totalVat: storedVat || Math.round(totalCost * Number(vatRate || 0)) / 100,
+        totalQty: Number(row.purchaseQty ?? 0),
+        unit: row.unit || '-',
+      }
+    })
     const customerRows = departmentRows.map((row) => ({ label: row.label, totalCost: Number(row.totalCost ?? 0), totalQty: Number(row.totalQty ?? 0), documentCount: Number(row.documentCount ?? 0) }))
     const issueProductRows = productRows.map((row) => ({ label: row.label, productCode: row.productCode, totalCost: Number(row.totalCost ?? 0), totalQty: Number(row.totalQty ?? 0), documentCount: Number(row.documentCount ?? 0) }))
     const baseColumns = [
       { key: 'rank', label: 'อันดับ', width: 80, align: 'center' },
       { key: 'label', label: 'รายการ', minWidth: 260 },
-      { key: 'totalQty', label: 'ปริมาณ', width: 140, align: 'center' },
+      { key: 'totalQty', label: 'หน่วย', width: 140, align: 'center' },
       { key: 'totalCost', label: 'มูลค่า', width: 170, align: 'right', render: (row) => Number(row.totalCost ?? 0).toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) },
     ]
+    const vatUnitColumn = { key: 'vatUnit', label: 'VAT/หน่วย', width: 130, align: 'right', render: (row) => (Number(row.totalQty ?? 0) ? Number(row.totalVat ?? 0) / Number(row.totalQty ?? 0) : 0).toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }
+    const vatColumn = { key: 'totalVat', label: 'VAT', width: 140, align: 'right', render: (row) => Number(row.totalVat ?? 0).toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }
+    const purchaseColumns = [...baseColumns.slice(0, 3), vatUnitColumn, vatColumn, baseColumns[3]]
+    if (reportMode === 'stock') {
+      return { title: 'รายงานสินค้าคงเหลือปัจจุบัน', subtitle: 'ยอดคงเหลือ ณ เวลาที่เปิดรายงาน', columns: stockReportColumns, rows: stockRows, stock: true }
+    }
     if (reportMode === 'purchase-product-history') {
       const groups = new Map()
       purchaseDetailRows.forEach((row) => {
@@ -1555,32 +1642,33 @@ function ReportsPage() {
         group.rows.push(row)
         groups.set(key, group)
       })
-      return { title: 'ประวัติการซื้อแยกตามสินค้า', subtitle: `กดสินค้าเพื่อดูวันที่รับเข้า ผู้จำหน่าย และเลขที่ Invoice ${periodLabel}`, columns: [{ key: 'productCode', label: 'รหัสสินค้า', width: 180 }, ...baseColumns.slice(1), { key: 'unit', label: 'หน่วย', width: 100 }], rows: [...groups.values()], history: true }
+      return { title: 'ประวัติการซื้อแยกตามสินค้า', subtitle: `กดสินค้าเพื่อดูวันที่รับเข้า ซัพพลาย และเลขที่ Invoice ${periodLabel}`, columns: [{ key: 'productCode', label: 'รหัสสินค้า', width: 180 }, ...baseColumns.slice(1), { key: 'unit', label: 'หน่วย', width: 100 }], rows: [...groups.values()], history: true }
     }
     if (reportMode === 'purchase-category') {
       const categories = new Map()
-      purchaseProductReports.forEach((row) => {
-        const category = row.category || 'ไม่ระบุหมวดสินค้า'
-        const group = categories.get(category) ?? { label: category, totalQty: 0, totalCost: 0 }
-        group.totalQty += Number(row.purchaseQty ?? 0)
-        group.totalCost += Number(row.purchaseAmount ?? 0)
+      productPurchaseRows.forEach((row) => {
+        const category = row.category
+        const group = categories.get(category) ?? { label: category, totalQty: 0, totalCost: 0, totalVat: 0 }
+        group.totalQty += row.totalQty
+        group.totalCost += row.totalCost
+        group.totalVat += row.totalVat
         categories.set(category, group)
       })
-      return { title: 'รายงานสรุปยอดซื้อแยกตามหมวดสินค้า', subtitle: periodLabel, columns: [{ key: 'label', label: 'หมวดสินค้า', minWidth: 260 }, ...baseColumns.slice(2)], rows: [...categories.values()] }
+      return { title: 'รายงานสรุปยอดซื้อแยกตามหมวดสินค้า', subtitle: periodLabel, columns: [{ key: 'label', label: 'หมวดสินค้า', minWidth: 260 }, ...purchaseColumns.slice(2)], rows: [...categories.values()] }
     }
-    if (reportMode === 'purchase-rank-value') return { title: 'จัดลำดับยอดซื้อตามมูลค่า', subtitle: periodLabel, columns: baseColumns, rows: withRank([...productPurchaseRows].sort((a, b) => b.totalCost - a.totalCost)) }
-    if (reportMode === 'purchase-rank-qty') return { title: 'จัดลำดับยอดซื้อตามปริมาณ', subtitle: periodLabel, columns: baseColumns, rows: withRank([...productPurchaseRows].sort((a, b) => b.totalQty - a.totalQty)) }
+    if (reportMode === 'purchase-rank-value') return { title: 'จัดลำดับยอดซื้อตามมูลค่า', subtitle: periodLabel, columns: purchaseColumns, rows: withRank([...productPurchaseRows].sort((a, b) => b.totalCost - a.totalCost)) }
+    if (reportMode === 'purchase-rank-qty') return { title: 'จัดลำดับยอดซื้อตามหน่วย', subtitle: periodLabel, columns: purchaseColumns, rows: withRank([...productPurchaseRows].sort((a, b) => b.totalQty - a.totalQty)) }
     if (reportMode === 'purchase-rank-invoice') {
       const invoices = new Map()
-      purchaseDetailRows.forEach((row) => { const key = `${row.supplierName}|${row.poInvoiceNo || '-'}`; const item = invoices.get(key) ?? { label: `${row.supplierName} / ${row.poInvoiceNo || '-'}`, totalQty: 0, totalCost: 0 }; item.totalQty += Number(row.quantity ?? 0); item.totalCost += Number(row.totalPurchase ?? 0); invoices.set(key, item) })
-      return { title: 'จัดลำดับยอดซื้อจากบิลผู้จำหน่าย', subtitle: periodLabel, columns: baseColumns, rows: withRank([...invoices.values()].sort((a, b) => b.totalCost - a.totalCost)) }
+      purchaseDetailRows.forEach((row) => { const key = `${row.supplierName}|${row.poInvoiceNo || '-'}`; const item = invoices.get(key) ?? { label: `${row.supplierName} / ${row.poInvoiceNo || '-'}`, totalQty: 0, totalCost: 0, totalVat: 0 }; const totalCost = Number(row.totalPurchase ?? 0); const storedVat = Number(row.totalVat ?? 0); item.totalQty += Number(row.quantity ?? 0); item.totalCost += totalCost; item.totalVat += storedVat || Math.round(totalCost * Number(vatRate || 0)) / 100; invoices.set(key, item) })
+      return { title: 'จัดลำดับยอดซื้อจากบิลซัพพลาย', subtitle: periodLabel, columns: purchaseColumns, rows: withRank([...invoices.values()].sort((a, b) => b.totalCost - a.totalCost)) }
     }
     if (reportMode === 'issue-rank-value') return { title: 'จัดลำดับยอดขายตามมูลค่า', subtitle: `มูลค่าต้นทุนสินค้าที่เบิก ${periodLabel}`, columns: baseColumns, rows: withRank([...issueProductRows].sort((a, b) => b.totalCost - a.totalCost)) }
-    if (reportMode === 'issue-rank-qty') return { title: 'จัดลำดับยอดขายตามปริมาณ', subtitle: periodLabel, columns: baseColumns, rows: withRank([...issueProductRows].sort((a, b) => b.totalQty - a.totalQty)) }
+    if (reportMode === 'issue-rank-qty') return { title: 'จัดลำดับยอดขายตามหน่วย', subtitle: periodLabel, columns: baseColumns, rows: withRank([...issueProductRows].sort((a, b) => b.totalQty - a.totalQty)) }
     if (reportMode === 'issue-customer-rank-value') return { title: 'จัดลำดับยอดขายตามลูกค้า / มูลค่า', subtitle: periodLabel, columns: baseColumns, rows: withRank([...customerRows].sort((a, b) => b.totalCost - a.totalCost)) }
-    if (reportMode === 'issue-customer-rank-qty') return { title: 'จัดลำดับยอดขายตามลูกค้า / ปริมาณ', subtitle: periodLabel, columns: baseColumns, rows: withRank([...customerRows].sort((a, b) => b.totalQty - a.totalQty)) }
+    if (reportMode === 'issue-customer-rank-qty') return { title: 'จัดลำดับยอดขายตามลูกค้า / หน่วย', subtitle: periodLabel, columns: baseColumns, rows: withRank([...customerRows].sort((a, b) => b.totalQty - a.totalQty)) }
     return null
-  }, [departmentRows, periodLabel, productRows, purchaseDetailRows, purchaseProductReports, reportMode])
+  }, [departmentRows, periodLabel, productRows, purchaseDetailRows, purchaseProductReports, reportMode, stockRows, vatRate])
 
   const totalQty = filteredRows.reduce((total, row) => total + row.quantity, 0)
   const analysisByQuantity = reportMode.endsWith('-qty')
@@ -1709,7 +1797,9 @@ function ReportsPage() {
   const reportSubtotal = Math.round((analysisReport
     ? analysisReport.rows.reduce((sum, row) => sum + Number(row.totalCost ?? 0), 0)
     : reportMode.startsWith('purchase') ? totalPurchase : totalIssueCost) * 100) / 100
-  const reportVatAmount = Math.round(reportSubtotal * Number(vatRate || 0)) / 100
+  const reportVatAmount = reportMode.startsWith('purchase')
+    ? (() => { const storedVat = purchaseRows.reduce((sum, row) => sum + Number(row.totalVat ?? 0), 0); return storedVat !== 0 ? storedVat : Math.round(reportSubtotal * Number(vatRate || 0)) / 100 })()
+    : Math.round(reportSubtotal * Number(vatRate || 0)) / 100
   const reportGrandTotal = Math.round((reportSubtotal + reportVatAmount) * 100) / 100
   const vatSummaryLines = [
     `มูลค่าก่อน VAT: ${money(reportSubtotal)} บาท`,
@@ -1718,7 +1808,7 @@ function ReportsPage() {
   ]
   const vatExportPeriod = `${periodLabel}\n${vatSummaryLines.join('\n')}`
   const purchaseSummaryItems = [
-    { color: '#60a5fa', helper: purchasePeriodLabel, icon: Building2, label: 'จำนวนผู้ขาย', value: purchaseRows.length.toLocaleString('th-TH') },
+    { color: '#60a5fa', helper: purchasePeriodLabel, icon: Building2, label: 'จำนวนซัพพลาย', value: purchaseRows.length.toLocaleString('th-TH') },
     { color: '#a78bfa', helper: 'เอกสารรับเข้าที่บันทึกแล้ว', icon: FileText, label: 'จำนวนเอกสารรับเข้า', value: purchaseDocumentCount.toLocaleString('th-TH') },
     { color: '#fbbf24', helper: `จำนวนรับเข้ารวม ${purchaseQty.toLocaleString('th-TH')} หน่วย`, icon: Package, label: 'จำนวนรายการสินค้า', value: purchaseItemCount.toLocaleString('th-TH') },
     { color: '#fb7185', helper: topSupplier ? `สูงสุด: ${topSupplier.supplierName}` : 'ยังไม่มีข้อมูล', icon: ShoppingCart, label: 'ยอดซื้อรวม', value: `${totalPurchase.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} บาท` },
@@ -1726,12 +1816,12 @@ function ReportsPage() {
 
   const handleExport = async () => {
     if (vatLoadedMonth !== dateRange.startDate || isVatSaving) return
-    const periodLabel = vatExportPeriod
+    const periodLabel = reportMode.startsWith('purchase') || analysisIsPurchase ? vatExportPeriod : `${shortMonthNames[selectedMonth - 1]} ${selectedYear}`
     const purchasePeriodLabel = vatExportPeriod
     if (analysisReport) {
-      const columns = analysisReport.history ? purchaseHistoryExportColumns : analysisReport.columns.map((column) => ({ header: column.label, value: (row) => row[column.key] ?? '' }))
+      const columns = analysisReport.history ? purchaseHistoryExportColumns : analysisReport.columns.map((column) => ({ header: column.label, value: (row) => column.key === 'vatUnit' ? (Number(row.totalQty ?? 0) ? Number(row.totalVat ?? 0) / Number(row.totalQty ?? 0) : 0) : row[column.key] ?? '' }))
       const rows = analysisReport.history ? analysisReport.rows.flatMap((group) => group.rows) : analysisReport.rows
-      await exportRowsToExcel(rows, columns, makeReportFileName(analysisReport.title.replaceAll('/', '-'), 'xlsx'), { reportContext: { period: periodLabel, title: analysisReport.title } })
+      await exportRowsToExcel(rows, columns, makeReportFileName(analysisReport.title.replaceAll('/', '-'), 'xlsx'), { reportContext: { period: analysisReport.stock ? 'ยอดคงเหลือ ณ เวลาส่งออกรายงาน' : periodLabel, title: analysisReport.title } })
       return
     }
     if (reportMode === 'backlog') {
@@ -1745,18 +1835,18 @@ function ReportsPage() {
 
     if (reportMode === 'purchase') {
       const groups = await loadSupplierPurchaseGroups()
-      exportDepartmentIssueToExcel(groups, makeReportFileName('รายงานยอดซื้อแยกตามผู้ขาย', 'xlsx'), purchasePeriodLabel, vatRate, 'ข้อมูล', 'ข้อมูล')
+      exportDepartmentIssueToExcel(groups, makeReportFileName('รายงานยอดซื้อแยกตามซัพพลาย', 'xlsx'), purchasePeriodLabel, vatRate, 'ข้อมูล', 'ข้อมูล')
       return
     }
 
     if (reportMode === 'purchase-history') {
       const rows = await loadSupplierPurchaseHistoryRows()
-      exportRowsToExcel(rows, purchaseHistoryExportColumns, makeReportFileName('ประวัติยอดซื้อแยกตามผู้ขาย', 'xlsx'), { reportContext: { title: 'ประวัติยอดซื้อแยกตามผู้ขาย', period: periodLabel } })
+      exportRowsToExcel(rows, purchaseHistoryExportColumns, makeReportFileName('ประวัติยอดซื้อแยกตามซัพพลาย', 'xlsx'), { reportContext: { title: 'ประวัติยอดซื้อแยกตามซัพพลาย', period: periodLabel } })
       return
     }
 
     if (reportMode === 'product') {
-      exportProductIssueByCategoryToExcel(productCategoryGroups, makeReportFileName('รายงานสินค้าแยกตามหมวดหมู่', 'xlsx'), periodLabel, 'รายงานสินค้าแยกตามหมวดหมู่', vatRate)
+      exportProductIssueByCategoryToExcel(productCategoryGroups, makeReportFileName('รายงานสินค้าแยกตามหมวดหมู่', 'xlsx'), periodLabel, 'รายงานสินค้าแยกตามหมวดหมู่', null)
       return
     }
 
@@ -1785,7 +1875,7 @@ function ReportsPage() {
     }
 
     if (reportMode === 'division-cost') {
-      exportDepartmentCostSummaryToExcel(departmentRows, makeReportFileName('รายงานค่าใช้จ่ายรวม', 'xlsx'), periodLabel, vatRate)
+      exportDepartmentCostSummaryToExcel(departmentRows, makeReportFileName('รายงานค่าใช้จ่ายรวม', 'xlsx'), periodLabel, null)
       return
     }
 
@@ -1794,7 +1884,10 @@ function ReportsPage() {
         departmentIssueGroups,
         makeReportFileName('รายงานสรุปแยกตามลูกค้า (แผนก)', 'xlsx'),
         periodLabel,
-        vatRate,
+        null,
+        undefined,
+        undefined,
+        true,
       )
       return
     }
@@ -1808,28 +1901,30 @@ function ReportsPage() {
 
   const handlePdfExport = async () => {
     if (vatLoadedMonth !== dateRange.startDate || isVatSaving) return
-    const periodLabel = vatExportPeriod
+    const periodLabel = reportMode.startsWith('purchase') || analysisIsPurchase ? vatExportPeriod : `${shortMonthNames[selectedMonth - 1]} ${selectedYear}`
     const purchasePeriodLabel = vatExportPeriod
     if (analysisReport) {
       setIsPdfLoading(true)
       try {
         if (analysisReport.history) {
-          await exportPurchaseHistoryBySupplierToPdf({ fileName: makeReportFileName(analysisReport.title, 'pdf'), groups: analysisReport.rows.map((group) => ({ supplierName: `${group.productCode} ${group.label}`, rows: group.rows })), periodLabel, title: analysisReport.title, vatRate })
+          await exportPurchaseHistoryBySupplierToPdf({ fileName: makeReportFileName(analysisReport.title, 'pdf'), groups: analysisReport.rows.map((group) => ({ supplierName: `${group.productCode} ${group.label}`, rows: group.rows })), periodLabel, title: analysisReport.title, vatRate: analysisIsPurchase ? vatRate : null })
         } else {
-          const formatValue = (value, key) => typeof value === 'number' ? value.toLocaleString('th-TH', { minimumFractionDigits: key === 'totalCost' ? 2 : 0, maximumFractionDigits: key === 'totalCost' ? 2 : 3 }) : value ?? ''
+          const formatValue = (value, key) => typeof value === 'number' ? value.toLocaleString('th-TH', { minimumFractionDigits: ['totalCost', 'totalVat', 'vatUnit'].includes(key) ? 2 : 0, maximumFractionDigits: ['totalCost', 'totalVat', 'vatUnit'].includes(key) ? 2 : 3 }) : value ?? ''
           await exportTableToPdf({
             fileName: makeReportFileName(analysisReport.title.replaceAll('/', '-'), 'pdf'),
             title: analysisReport.title,
-            periodLabel: `ประจำเดือน ${periodLabel}`,
+            periodLabel: analysisReport.stock ? 'ยอดคงเหลือ ณ เวลาส่งออกรายงาน' : `ประจำเดือน ${periodLabel}`,
             rows: analysisReport.rows,
+            groupBy: analysisReport.stock ? (row) => row.category : null,
             summaryStyle: true,
-            vatRate,
-            totalAmount: reportSubtotal,
+            vatRate: analysisReport.stock || !analysisIsPurchase ? null : vatRate,
+            totalAmount: analysisReport.stock || !analysisIsPurchase ? undefined : reportSubtotal,
+            vatAmount: analysisReport.stock || !analysisIsPurchase ? undefined : analysisReport.rows.reduce((sum, row) => sum + Number(row.totalVat ?? 0), 0),
             columns: analysisReport.columns.map((column) => ({
               header: column.label,
-              align: ['rank', 'label'].includes(column.key) ? 'left' : ['totalQty', 'totalCost'].includes(column.key) ? 'right' : 'center',
-              value: (row) => formatValue(row[column.key], column.key),
-              totalValue: ['totalQty', 'totalCost'].includes(column.key) ? (rows) => formatValue(rows.reduce((sum, row) => sum + Number(row[column.key] ?? 0), 0), column.key) : undefined,
+              align: analysisReport.stock && column.key === 'productName' ? 'left' : ['rank', 'label'].includes(column.key) ? 'left' : ['totalQty', 'totalCost', 'totalVat', 'vatUnit'].includes(column.key) ? 'right' : 'center',
+              value: (row) => column.key === 'vatUnit' ? formatValue(Number(row.totalQty ?? 0) ? Number(row.totalVat ?? 0) / Number(row.totalQty ?? 0) : 0, column.key) : formatValue(row[column.key], column.key),
+              totalValue: ['totalQty', 'totalCost', 'totalVat'].includes(column.key) ? (rows) => formatValue(rows.reduce((sum, row) => sum + Number(row[column.key] ?? 0), 0), column.key) : undefined,
             })),
           })
         }
@@ -1844,7 +1939,7 @@ function ReportsPage() {
       setIsPdfLoading(true)
       try {
         const groups = await loadSupplierPurchaseGroups()
-        await exportDepartmentIssueToPdf({ fileName: makeReportFileName('รายงานยอดซื้อแยกตามผู้ขาย', 'pdf'), groups, periodLabel: purchasePeriodLabel, vatRate, title: 'รายงานยอดซื้อแยกตามผู้ขาย', groupLabel: 'ผู้ขาย' })
+        await exportDepartmentIssueToPdf({ fileName: makeReportFileName('รายงานยอดซื้อแยกตามซัพพลาย', 'pdf'), groups, periodLabel: purchasePeriodLabel, vatRate, title: 'รายงานยอดซื้อแยกตามซัพพลาย', groupLabel: 'ซัพพลาย' })
       } finally {
         setIsPdfLoading(false)
       }
@@ -1854,10 +1949,10 @@ function ReportsPage() {
       try {
         const groups = await loadSupplierPurchaseHistoryGroups()
         await exportPurchaseHistoryBySupplierToPdf({
-          fileName: makeReportFileName('ประวัติยอดซื้อแยกตามผู้ขาย', 'pdf'),
+          fileName: makeReportFileName('ประวัติยอดซื้อแยกตามซัพพลาย', 'pdf'),
           groups,
           periodLabel: purchasePeriodLabel,
-          title: 'ประวัติยอดซื้อแยกตามผู้ขาย',
+          title: 'ประวัติยอดซื้อแยกตามซัพพลาย',
           vatRate,
         })
       } finally {
@@ -1867,7 +1962,7 @@ function ReportsPage() {
     } else if (reportMode === 'product') {
       setIsPdfLoading(true)
       try {
-        await exportProductIssueByCategoryToPdf({ fileName: makeReportFileName('รายงานสินค้าแยกตามหมวดหมู่', 'pdf'), groups: productCategoryGroups, periodLabel, vatRate })
+        await exportProductIssueByCategoryToPdf({ fileName: makeReportFileName('รายงานสินค้าแยกตามหมวดหมู่', 'pdf'), groups: productCategoryGroups, periodLabel, vatRate: null })
       } finally {
         setIsPdfLoading(false)
       }
@@ -1879,7 +1974,7 @@ function ReportsPage() {
           fileName: makeReportFileName('ประวัติการเบิกแยกตามสินค้า', 'pdf'),
           groups: productHistoryGroups,
           periodLabel,
-          vatRate,
+          vatRate: null,
         })
       } finally {
         setIsPdfLoading(false)
@@ -1893,7 +1988,7 @@ function ReportsPage() {
           groups: departmentHistoryGroups.map((department) => ({ productCode: '', productName: `ลูกค้า (แผนก): ${department.department}`, rows: department.rows })),
           periodLabel,
           title: 'ประวัติการเบิกแยกตามลูกค้า (แผนก)',
-          vatRate,
+          vatRate: null,
         })
       } finally {
         setIsPdfLoading(false)
@@ -1906,7 +2001,7 @@ function ReportsPage() {
     } else if (reportMode === 'division-cost') {
       setIsPdfLoading(true)
       try {
-        await exportDepartmentCostSummaryToPdf({ fileName: makeReportFileName('รายงานค่าใช้จ่ายรวม', 'pdf'), periodLabel, rows: departmentRows, vatRate })
+        await exportDepartmentCostSummaryToPdf({ fileName: makeReportFileName('รายงานค่าใช้จ่ายรวม', 'pdf'), periodLabel, rows: departmentRows, vatRate: null })
       } finally {
         setIsPdfLoading(false)
       }
@@ -1918,7 +2013,8 @@ function ReportsPage() {
           fileName: makeReportFileName('รายงานสรุปแยกตามลูกค้า (แผนก)', 'pdf'),
           groups: departmentIssueGroups,
           periodLabel,
-          vatRate,
+          vatRate: null,
+          showDocumentDetails: true,
         })
       } finally {
         setIsPdfLoading(false)
@@ -1934,8 +2030,8 @@ function ReportsPage() {
         periodLabel: `ข้อมูล: ${periodLabel}`,
         rows,
         title,
-        vatRate,
-        totalAmount: reportSubtotal,
+        vatRate: null,
+        totalAmount: undefined,
       })
     } finally {
       setIsPdfLoading(false)
@@ -2248,7 +2344,7 @@ function ReportsPage() {
                 roundValues
                 rows={purchaseChartRows}
                 subtitle={`สัดส่วนยอดซื้อจากรายการรับเข้า ${purchasePeriodLabel}`}
-                title="สัดส่วนยอดซื้อแต่ละผู้ขาย"
+                title="สัดส่วนยอดซื้อแต่ละซัพพลาย"
                 totalLabel="ยอดซื้อรวม (บาท)"
               />
             </Grid>
@@ -2270,7 +2366,7 @@ function ReportsPage() {
                 <Stack alignItems="center" direction="row" justifyContent="space-between" spacing={2}>
                   <Box>
                     <Typography sx={{ color: '#111827', fontSize: 16, fontWeight: 900 }}>
-                      ยอดซื้อแยกตามผู้ขาย
+                      ยอดซื้อแยกตามซัพพลาย
                     </Typography>
                     <Typography sx={{ color: '#64748b', fontSize: 13, mt: 0.25 }}>
                       รวมจากรายการรับเข้าที่บันทึกต้นทุนจริง {purchasePeriodLabel}
@@ -2290,16 +2386,16 @@ function ReportsPage() {
                   renderExpandedRow={(supplier) => (
                     <Box>
                       <Typography sx={{ fontSize: 15, fontWeight: 900, mb: 1.25 }}>
-                        รายการที่รับเข้าจากผู้ขาย {supplier.supplierName}
+                        รายการที่รับเข้าจากซัพพลาย {supplier.supplierName}
                       </Typography>
                       <AppTable
                         columns={supplierPurchaseDetailColumns}
                         defaultSortField="receivedAt"
                         defaultSortDirection="desc"
                         maxHeight={360}
-                        noDataText="ไม่พบรายการรับเข้าจากผู้ขายรายนี้"
+                        noDataText="ไม่พบรายการรับเข้าจากซัพพลายรายนี้"
                         rowKey={(row) => `${row.receiveHeaderId}-${row.productCode}-${row.receivedAt}`}
-                        rows={(supplierPurchaseItems[supplier.supplierId] ?? []).map((row) => ({ ...row, totalPurchase: Number(row.totalPurchase ?? 0), unitCost: Number(row.unitCost ?? 0), vatUnitCost: Number(row.unitCost ?? 0) * Number(vatRate || 0) / 100 }))}
+                        rows={(supplierPurchaseItems[supplier.supplierId] ?? []).map((row) => { const totalVat = getPurchaseItemVat(row); return { ...row, totalVat, totalPurchase: Number(row.totalPurchase ?? 0), unitCost: Number(row.unitCost ?? 0), vatUnitCost: Number(row.quantity ?? 0) ? totalVat / Number(row.quantity ?? 0) : 0 } })}
                         showColumnFilters={false}
                       />
                     </Box>
@@ -2318,10 +2414,10 @@ function ReportsPage() {
             <Stack spacing={2}>
               <Box>
                 <Typography sx={{ color: '#111827', fontSize: 16, fontWeight: 900 }}>
-                  ประวัติยอดซื้อแยกตามผู้ขาย
+                  ประวัติยอดซื้อแยกตามซัพพลาย
                 </Typography>
                 <Typography sx={{ color: '#64748b', fontSize: 13, mt: 0.25 }}>
-                  กดผู้ขายเพื่อดูวันที่รับเข้า เลขที่ Invoice และสินค้าที่ซื้อในเดือน {purchasePeriodLabel}
+                  กดซัพพลายเพื่อดูวันที่รับเข้า เลขที่ Invoice และสินค้าที่ซื้อในเดือน {purchasePeriodLabel}
                 </Typography>
               </Box>
               <AppTable
@@ -2337,16 +2433,16 @@ function ReportsPage() {
                 renderExpandedRow={(supplier) => (
                   <Box>
                     <Typography sx={{ fontSize: 15, fontWeight: 900, mb: 1.25 }}>
-                        รายการที่รับเข้าจากผู้ขาย {supplier.supplierName}
+                        รายการที่รับเข้าจากซัพพลาย {supplier.supplierName}
                     </Typography>
                     <AppTable
                       columns={supplierPurchaseDetailColumns}
                       defaultSortField="receivedAt"
                       defaultSortDirection="desc"
                       maxHeight={360}
-                      noDataText="ไม่พบประวัติรับเข้าจากผู้ขายรายนี้"
+                      noDataText="ไม่พบประวัติรับเข้าจากซัพพลายรายนี้"
                       rowKey={(row) => `${row.receiveHeaderId}-${row.productCode}-${row.receivedAt}`}
-                      rows={(supplierPurchaseItems[supplier.supplierId] ?? []).map((row) => ({ ...row, totalPurchase: Number(row.totalPurchase ?? 0), unitCost: Number(row.unitCost ?? 0), vatUnitCost: Number(row.unitCost ?? 0) * Number(vatRate || 0) / 100 }))}
+                      rows={(supplierPurchaseItems[supplier.supplierId] ?? []).map((row) => { const totalVat = getPurchaseItemVat(row); return { ...row, totalVat, totalPurchase: Number(row.totalPurchase ?? 0), unitCost: Number(row.unitCost ?? 0), vatUnitCost: Number(row.quantity ?? 0) ? totalVat / Number(row.quantity ?? 0) : 0 } })}
                       showColumnFilters={false}
                     />
                   </Box>
@@ -2542,6 +2638,30 @@ function ReportsPage() {
           </DialogActions>
         </Dialog>
         </>
+      ) : reportMode === 'stock' ? (
+        <>
+          <Grid container spacing={2}>
+            {[
+              { color: '#60a5fa', helper: 'สินค้าทุกรายการ', icon: Package, label: 'จำนวนสินค้า', value: stockRows.length.toLocaleString('th-TH') },
+              { color: '#22c55e', helper: 'จำนวนรายการพร้อมเบิก', icon: Package, label: 'พร้อมเบิก', value: stockSummary.available.toLocaleString('th-TH') },
+              { color: '#f59e0b', helper: 'ถึงจุดสั่งซื้อขั้นต่ำ', icon: AlertTriangle, label: 'ใกล้หมด', value: stockSummary.low.toLocaleString('th-TH') },
+              { color: '#ef4444', helper: 'จำนวนรายการที่ไม่มีคงเหลือ', icon: AlertTriangle, label: 'สินค้าหมด', value: stockSummary.out.toLocaleString('th-TH') },
+            ].map((item) => <Grid key={item.label} size={{ xs: 12, sm: 6, lg: 3 }}><StatCard {...item} /></Grid>)}
+          </Grid>
+          <Card elevation={0} sx={{ bgcolor: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 2 }}>
+            <CardContent sx={{ p: 2.5 }}>
+              <Stack spacing={2}>
+                <Box>
+                  <Typography sx={{ color: '#111827', fontSize: 16, fontWeight: 900 }}>รายงานสินค้าคงเหลือปัจจุบัน</Typography>
+                  <Typography sx={{ color: '#64748b', fontSize: 13, mt: 0.25 }}>เรียงสินค้าที่คงเหลือน้อยก่อน เพื่อใช้ติดตามรายการใกล้หมดและสินค้าหมด</Typography>
+                </Box>
+                <StockStatusChart rows={stockRows} trendRows={stockStatusTrend} selectedStatus={stockStatusFilter} onSelectStatus={setStockStatusFilter} />
+                {stockStatusFilter && <Box><Chip label={`สถานะ: ${stockStatusFilter}`} onDelete={() => setStockStatusFilter('')} color="primary" variant="outlined" /><Typography sx={{ fontSize: 12, color: '#64748b', mt: 1 }}>กรองเฉพาะตารางนี้ การส่งออกรายงานยังรวมทุกสถานะ</Typography></Box>}
+                <AppTable columns={stockReportColumns} defaultSortDirection="asc" defaultSortField="stockQty" isLoading={isLoading} maxHeight={560} noDataText="ไม่พบข้อมูลสินค้า" rowKey={(row) => row.productCode} rows={stockStatusFilter ? stockRows.filter((row) => row.status === stockStatusFilter) : stockRows} showGlobalSearch />
+              </Stack>
+            </CardContent>
+          </Card>
+        </>
       ) : analysisReport ? (
         <>
         {!analysisReport.history ? (
@@ -2549,21 +2669,21 @@ function ReportsPage() {
             <Grid container spacing={2}>
               {[
                 { label: 'จำนวนรายการ', value: analysisReport.rows.length.toLocaleString('th-TH'), color: '#60a5fa', icon: Package },
-                { label: 'ปริมาณรวม', value: analysisReport.rows.reduce((sum, row) => sum + Number(row.totalQty ?? 0), 0).toLocaleString('th-TH'), color: '#a78bfa', icon: ShoppingCart },
+                { label: 'หน่วยรวม', value: analysisReport.rows.reduce((sum, row) => sum + Number(row.totalQty ?? 0), 0).toLocaleString('th-TH'), color: '#a78bfa', icon: ShoppingCart },
                 { label: 'มูลค่ารวม', value: `${analysisReport.rows.reduce((sum, row) => sum + Number(row.totalCost ?? 0), 0).toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} บาท`, color: '#14b8a6', icon: FileText },
               ].map((item) => <Grid key={item.label} size={{ xs: 12, md: 4 }}><StatCard {...item} helper={periodLabel} /></Grid>)}
             </Grid>
             <Grid container spacing={2}>
               <Grid size={{ xs: 12, lg: 4 }}>
-                <DonutChart rows={analysisDonutRows} title={analysisByQuantity ? 'สัดส่วนตามปริมาณ' : 'สัดส่วนตามมูลค่า'} subtitle={periodLabel} legendValueLabel={analysisByQuantity ? '' : 'บาท'} totalLabel={analysisByQuantity ? 'ปริมาณรวม' : 'มูลค่ารวม (บาท)'} roundValues />
+                <DonutChart rows={analysisDonutRows} title={analysisByQuantity ? 'สัดส่วนตามหน่วย' : 'สัดส่วนตามมูลค่า'} subtitle={periodLabel} legendValueLabel={analysisByQuantity ? '' : 'บาท'} totalLabel={analysisByQuantity ? 'หน่วยรวม' : 'มูลค่ารวม (บาท)'} roundValues />
               </Grid>
               <Grid size={{ xs: 12, lg: 8 }}>
                 <TimeTrendBarChart
                   rows={analysisMonthlyRows}
                   periodMode="monthly"
-                  title={analysisIsPurchase ? (analysisByQuantity ? 'แนวโน้มปริมาณซื้อรายเดือน' : 'แนวโน้มยอดซื้อรายเดือน') : (analysisByQuantity ? 'แนวโน้มปริมาณเบิกรายเดือน' : 'แนวโน้มมูลค่าเบิกรายเดือน')}
+                  title={analysisIsPurchase ? (analysisByQuantity ? 'แนวโน้มหน่วยซื้อรายเดือน' : 'แนวโน้มยอดซื้อรายเดือน') : (analysisByQuantity ? 'แนวโน้มหน่วยเบิกรายเดือน' : 'แนวโน้มมูลค่าเบิกรายเดือน')}
                   subtitle={`ดู${analysisIsPurchase ? 'ยอดซื้อ' : 'ยอดเบิก'}แยกตามเดือนในปี ${selectedYear}`}
-                  valueLabel={analysisByQuantity ? 'ปริมาณ' : 'มูลค่า (บาท)'}
+                  valueLabel={analysisByQuantity ? 'หน่วย' : 'มูลค่า (บาท)'}
                   valueUnit={analysisByQuantity ? 'จำนวน' : 'บาท'}
                 />
               </Grid>
@@ -2586,7 +2706,7 @@ function ReportsPage() {
                 isRowExpanded={(row) => expandedAnalysisRow === row.key}
                 onToggleRow={(row) => setExpandedAnalysisRow((current) => current === row.key ? '' : row.key)}
                 renderExpandedRow={(row) => (
-                  <AppTable columns={[{ key: 'supplierName', label: 'ผู้จำหน่าย', width: 200 }, ...supplierPurchaseDetailColumns]} rows={row.rows ?? []} rowKey={(item, index) => `${item.receiveHeaderId}-${item.productCode}-${index}`} defaultSortField="receivedAt" defaultSortDirection="desc" showColumnFilters={false} maxHeight={360} />
+                  <AppTable columns={[{ key: 'supplierName', label: 'ซัพพลาย', width: 200 }, ...supplierPurchaseDetailColumns]} rows={row.rows ?? []} rowKey={(item, index) => `${item.receiveHeaderId}-${item.productCode}-${index}`} defaultSortField="receivedAt" defaultSortDirection="desc" showColumnFilters={false} maxHeight={360} />
                 )}
                 isLoading={isLoading}
                 maxHeight={560}

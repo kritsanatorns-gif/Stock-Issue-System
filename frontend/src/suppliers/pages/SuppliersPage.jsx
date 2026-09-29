@@ -115,7 +115,7 @@ function SuppliersPage() {
     const normalizedName = name.toLocaleLowerCase()
     const normalizedShortName = shortName.toLocaleLowerCase()
     if (supplierRows.some((supplier) => !isSameSupplier(supplier) && String(supplier.accountName || supplier.supplierName || '').trim().toLocaleLowerCase() === normalizedName)) {
-      toast.error('ชื่อผู้ขายนี้มีในระบบแล้ว')
+      toast.error('ชื่อซัพพลายนี้มีในระบบแล้ว')
       return
     }
     if (shortName && supplierRows.some((supplier) => !isSameSupplier(supplier) && String(supplier.shortName || '').trim().toLocaleLowerCase() === normalizedShortName)) {
@@ -125,7 +125,7 @@ function SuppliersPage() {
 
     const confirmation = await Swal.fire({
       title: editingSupplier ? 'ยืนยันการแก้ไข' : 'ยืนยันการบันทึก',
-      text: `${editingSupplier ? 'ต้องการแก้ไขข้อมูล' : 'ต้องการบันทึก'}ผู้ขาย ${name} ใช่หรือไม่`,
+      text: `${editingSupplier ? 'ต้องการแก้ไขข้อมูล' : 'ต้องการบันทึก'}ซัพพลาย ${name} ใช่หรือไม่`,
       icon: 'question',
       showCancelButton: true,
       confirmButtonText: editingSupplier ? 'แก้ไข' : 'บันทึก',
@@ -173,7 +173,7 @@ function SuppliersPage() {
       await loadSupplierRows()
       await Swal.fire({
         title: 'สำเร็จ',
-        text: editingSupplier ? 'แก้ไขผู้ขายสำเร็จ' : 'บันทึกผู้ขายสำเร็จ',
+        text: editingSupplier ? 'แก้ไขซัพพลายสำเร็จ' : 'บันทึกซัพพลายสำเร็จ',
         icon: 'success',
         confirmButtonText: 'ตกลง',
         customClass: { container: 'stock-swal-container' },
@@ -182,7 +182,7 @@ function SuppliersPage() {
     } catch (error) {
       await Swal.fire({
         title: 'ไม่สำเร็จ',
-        text: error?.response?.data ?? 'บันทึกข้อมูลผู้ขายไม่สำเร็จ',
+        text: error?.response?.data ?? 'บันทึกข้อมูลซัพพลายไม่สำเร็จ',
         icon: 'error',
         confirmButtonText: 'ตกลง',
         customClass: { container: 'stock-swal-container' },
@@ -267,7 +267,7 @@ function SuppliersPage() {
     },
     {
       key: 'accountName',
-      label: 'ชื่อผู้ขาย',
+      label: 'ชื่อซัพพลาย',
       minWidth: 240,
       value: (row) => row.accountName || row.supplierName || '-',
     },
@@ -316,8 +316,8 @@ function SuppliersPage() {
       <Grid container alignItems="center" spacing={1.5} sx={{ width: '100%' }}>
         <Grid size={{ xs: 12, sm: 'grow' }}>
           <Box>
-          <Typography sx={{ fontSize: 24, fontWeight: 900 }}>จัดการผู้ขาย</Typography>
-          <Typography color="text.secondary">ดูยอดซื้อและรายการสินค้าที่ซื้อจากผู้ขายแต่ละราย</Typography>
+          <Typography sx={{ fontSize: 24, fontWeight: 900 }}>จัดการซัพพลาย</Typography>
+          <Typography color="text.secondary">ดูยอดซื้อและรายการสินค้าที่ซื้อจากซัพพลายแต่ละราย</Typography>
           </Box>
         </Grid>
       </Grid>
@@ -348,7 +348,7 @@ function SuppliersPage() {
             onChange={handleEndDateChange}
           />
           <Button startIcon={<Plus size={18} />} variant="contained" onClick={() => { setEditingSupplier(null); setSupplierForm(''); setSupplierAccountId(''); setSupplierShortName(''); setSupplierAddress(''); setSupplierStatus(1); setIsManageOpen(true) }}>
-            เพิ่มผู้ขาย
+            เพิ่มซัพพลาย
           </Button>
         </Stack>
       </Box>
@@ -360,7 +360,7 @@ function SuppliersPage() {
             rows={supplierDisplayRows}
             rowKey="supplierId"
             isLoading={isLoading}
-            noDataText="ยังไม่มีข้อมูลการซื้อจากผู้ขาย"
+            noDataText="ยังไม่มีข้อมูลการซื้อจากซัพพลาย"
             showGlobalSearch
             expandable
             isRowExpanded={(row) => expandedSupplierId === row.supplierId}
@@ -376,7 +376,7 @@ function SuppliersPage() {
                   rowKey={(row) => `${row.receiveHeaderId}-${row.productCode}-${row.receivedAt}`}
                   isLoading={isLoadingItems && expandedSupplierId === supplier.supplierId}
                   maxHeight={360}
-                  noDataText="ไม่พบรายการซื้อของผู้ขายนี้"
+                  noDataText="ไม่พบรายการซื้อของซัพพลายนี้"
                   showColumnFilters={false}
                 />
               </Box>
@@ -386,18 +386,18 @@ function SuppliersPage() {
       </Card>
 
       <Dialog fullWidth maxWidth="sm" open={isManageOpen} onClose={() => !isSavingSupplier && setIsManageOpen(false)}>
-        <DialogTitle>{editingSupplier ? 'แก้ไขผู้ขาย' : 'เพิ่มผู้ขาย'}</DialogTitle>
+        <DialogTitle>{editingSupplier ? 'แก้ไขซัพพลาย' : 'เพิ่มซัพพลาย'}</DialogTitle>
         <DialogContent>
           <Stack spacing={2.25} sx={{ pt: 1 }}>
             <Grid container spacing={2}>
               <Grid size={{ xs: 12, sm: 6 }}>
-                <TextField autoFocus fullWidth label="รหัสผู้ขาย" value={supplierAccountId} onChange={(event) => setSupplierAccountId(event.target.value)} />
+                <TextField autoFocus fullWidth label="รหัสซัพพลาย" value={supplierAccountId} onChange={(event) => setSupplierAccountId(event.target.value)} />
               </Grid>
               <Grid size={{ xs: 12, sm: 6 }}>
                 <TextField fullWidth label="ชื่อย่อ" value={supplierShortName} onChange={(event) => setSupplierShortName(event.target.value)} />
               </Grid>
               <Grid size={12}>
-                <TextField fullWidth required label="ชื่อผู้ขาย" value={supplierForm} onChange={(event) => setSupplierForm(event.target.value)} />
+                <TextField fullWidth required label="ชื่อซัพพลาย" value={supplierForm} onChange={(event) => setSupplierForm(event.target.value)} />
               </Grid>
               <Grid size={12}>
                 <TextField fullWidth label="ที่อยู่" multiline minRows={3} value={supplierAddress} onChange={(event) => setSupplierAddress(event.target.value)} />
@@ -422,10 +422,10 @@ function SuppliersPage() {
         </DialogActions>
       </Dialog>
       <Dialog fullWidth maxWidth="sm" open={Boolean(detailSupplier)} onClose={() => setDetailSupplier(null)}>
-        <DialogTitle>รายละเอียดผู้ขาย</DialogTitle>
+        <DialogTitle>รายละเอียดซัพพลาย</DialogTitle>
         <DialogContent><Stack spacing={1.25} sx={{ pt: 1 }}>
-          <Typography><b>รหัสผู้ขาย:</b> {detailSupplier?.accountId || '-'}</Typography>
-          <Typography><b>ชื่อผู้ขาย:</b> {detailSupplier?.accountName || detailSupplier?.supplierName || '-'}</Typography>
+          <Typography><b>รหัสซัพพลาย:</b> {detailSupplier?.accountId || '-'}</Typography>
+          <Typography><b>ชื่อซัพพลาย:</b> {detailSupplier?.accountName || detailSupplier?.supplierName || '-'}</Typography>
           <Typography><b>ที่อยู่:</b> {detailSupplier?.address || '-'}</Typography>
           <Typography><b>เครดิต:</b> {detailSupplier?.creditDays || 0} วัน</Typography>
           <Typography><b>โทรศัพท์:</b> {detailSupplier?.phone || '-'}</Typography>
