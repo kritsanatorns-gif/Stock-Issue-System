@@ -290,6 +290,9 @@ function buildDocumentRows(reports) {
       documentTypeLabel: report.documentTypeLabel ?? 'เบิกสินค้า',
       employeeDepartment: report.employeeDepartment || 'HR',
       employeeName: report.employeeName,
+      unitName: (report.documentType ?? 'ISSUE') === 'ISSUE'
+        ? getTextValue(report.unitName, report.UnitName, '-')
+        : '-',
       requestDepartment: (report.documentType ?? 'ISSUE') === 'ISSUE'
         ? cleanReportDepartment(report.department)
         : '-',
@@ -411,6 +414,8 @@ function buildRequestSlipRowFromReport(report, requisitions) {
     requestNo: getTextValue(relatedRequisition?.requestNo, report.requestNo, report.RequestNo, report.documentNo),
     status: report.status,
     statusId: getNumberValue(report.statusId, report.StatusId),
+    unitRef: getTextValue(relatedRequisition?.unitRef, relatedRequisition?.UnitRef, report.unitRef, report.UnitRef),
+    unitName: getTextValue(relatedRequisition?.unitName, relatedRequisition?.UnitName, report.unitName, report.UnitName),
     urgentRemark: getTextValue(relatedRequisition?.urgentRemark, report.urgentRemark, report.UrgentRemark),
     userRemark: getTextValue(relatedRequisition?.userRemark, report.userRemark, report.UserRemark, report.remark),
   }, requisitions)

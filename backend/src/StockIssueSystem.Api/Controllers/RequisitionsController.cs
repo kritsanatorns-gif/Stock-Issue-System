@@ -2,6 +2,7 @@ using System.Data;
 using System.Globalization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using StockIssueSystem.Api.Data;
 using StockIssueSystem.Api.Hubs;
@@ -24,7 +25,7 @@ public sealed class RequisitionsController(
     private const int MaxItemsPerRequisition = 15;
 
     [HttpGet]
-    public async Task<IActionResult> GetRequisitions([FromQuery] string? status, [FromQuery] string? department)
+    public async Task<IActionResult> GetRequisitions([FromQuery] string? status, [FromQuery] string? department, [FromQuery] string? unitRef)
     {
         var query = dbContext.StockHeaders
             .AsNoTracking()
@@ -44,6 +45,12 @@ public sealed class RequisitionsController(
             var requestedDepartment = department.Trim();
             // StockHeader.Division เก็บข้อมูลแผนกของผู้ขอเบิก
             query = query.Where(header => header.Division == requestedDepartment);
+        }
+
+        if (!string.IsNullOrWhiteSpace(unitRef))
+        {
+            var requestedUnitRef = unitRef.Trim();
+            query = query.Where(header => header.UnitRef == requestedUnitRef);
         }
 
         var reports = await query
@@ -112,12 +119,16 @@ public sealed class RequisitionsController(
 
         var products = await GetProducts(request.Items);
         var requester = GetRequesterKey(request);
+        var unitRef = request.UnitRef.Trim();
+        var unitName = await GetUnitName(unitRef) ?? request.UnitName.Trim();
         var header = new StockHeader
         {
             CreateBy = requester,
             CreateDate = DateTime.Now,
             Department = request.Department.Trim(),
             Division = request.Division.Trim(),
+            UnitRef = unitRef,
+            UnitName = unitName,
             DocType = RequisitionDocType,
             EmployeeId = requester,
             IsUrgent = request.IsUrgent,
@@ -151,7 +162,7 @@ public sealed class RequisitionsController(
         header.RequestNo = FormatRequestNo(header, requestSequence);
         await dbContext.SaveChangesAsync();
 
-        await notificationHub.Clients.Group(NotificationHub.HrGroup).SendAsync("RequisitionCreated", new
+        await notificationHub.Clients.Group(NotificationHub.UnitGroup(header.UnitRef)).SendAsync("RequisitionCreated", new
         {
             header.HeaderId,
             RequestNo = header.RequestNo,
@@ -159,13 +170,16 @@ public sealed class RequisitionsController(
             EmployeeName = header.RequesterName,
             Department = header.Department,
             Division = header.Division,
+            UnitRef = header.UnitRef,
+            UnitName = header.UnitName,
         });
-        await notificationHub.Clients.Group(NotificationHub.DepartmentGroup(header.Division)).SendAsync("DepartmentRequisitionCreated", new
+        await notificationHub.Clients.Group(NotificationHub.UnitGroup(header.UnitRef)).SendAsync("DepartmentRequisitionCreated", new
         {
             header.HeaderId,
             RequestNo = header.RequestNo,
             EmployeeId = request.EmployeeId,
             EmployeeName = header.RequesterName,
+            UnitName = header.UnitName,
         });
 
         return CreatedAtAction(nameof(GetRequisition), new { headerId = header.HeaderId }, new
@@ -283,6 +297,8 @@ public sealed class RequisitionsController(
             CreateDate = DateTime.Now,
             Department = GetRequisitionDepartment(requisition),
             Division = requisition.Division,
+            UnitRef = requisition.UnitRef,
+            UnitName = requisition.UnitName,
             DocType = IssueDocType,
             EmployeeId = request.EmployeeId.ToString(),
             Remark = requisition.Division,
@@ -447,16 +463,17 @@ public sealed class RequisitionsController(
             .Include(header => header.Details)
             .FirstOrDefaultAsync(header => header.HeaderId == headerId && header.DocType == RequisitionDocType);
         if (requisition is null) return NotFound("Requisition not found.");
-        if (requisition.Status == RequisitionStatuses.Backlog)
-            return BadRequest("คำขอสถานะค้างไม่สามารถบันทึกไม่ให้เบิกได้");
         if (requisition.Status != RequisitionStatuses.AwaitingApproval
-            && requisition.Status != RequisitionStatuses.Pending)
+            && requisition.Status != RequisitionStatuses.Pending
+            && requisition.Status != RequisitionStatuses.Backlog)
             return BadRequest("This request cannot be changed in its current status.");
 
         var detail = requisition.Details.FirstOrDefault(item => item.DetailId == detailId);
         if (detail is null) return NotFound("Requisition item not found.");
         if (RequisitionProgress.GetBacklogQty(detail) <= 0)
             return BadRequest("This requisition item has no remaining quantity.");
+        if (RequisitionProgress.GetFulfilledQty(detail) > 0)
+            return BadRequest("จ่ายสินค้ารายการนี้แล้ว จึงไม่สามารถบันทึกไม่ให้เบิกได้");
 
         RequisitionProgress.RecordDenial(detail);
         detail.Remark = request.ItemRemark?.Trim() ?? detail.Remark;
@@ -638,6 +655,23 @@ public sealed class RequisitionsController(
         }
     }
 
+    private async Task<string?> GetUnitName(string unitRef)
+    {
+        if (string.IsNullOrWhiteSpace(unitRef)) return null;
+
+        await using var connection = new SqlConnection(dbContext.Database.GetConnectionString());
+        await using var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT TOP (1) NULLIF(LTRIM(RTRIM(Name1)), N'')
+            FROM MARSHR.HRM.dbo.Unitref
+            WHERE LTRIM(RTRIM(UnitRefID)) COLLATE DATABASE_DEFAULT = @UnitRef COLLATE DATABASE_DEFAULT;
+            """;
+        command.Parameters.Add(new SqlParameter("@UnitRef", SqlDbType.NVarChar, 100) { Value = unitRef });
+
+        await connection.OpenAsync();
+        return (await command.ExecuteScalarAsync())?.ToString();
+    }
+
     private static object ToRequisitionDto(
         StockHeader header,
         IReadOnlyDictionary<int, Employee> employees,
@@ -658,6 +692,8 @@ public sealed class RequisitionsController(
             header.ApprovedBy,
             Department = department,
             Division = header.Division,
+            UnitRef = header.UnitRef,
+            UnitName = header.UnitName,
             EmployeeId = employeeId,
             // ชื่อที่กรอกในใบคำขอคือผู้ขอเบิกจริง จึงต้องมีลำดับสูงกว่าข้อมูลพนักงานเดิม
             EmployeeName = requesterName ?? employee?.EmployeeName ?? header.EmployeeId,
@@ -708,7 +744,7 @@ public sealed class RequisitionsController(
                 StatusId = requisition.Status,
             });
         await notificationHub.Clients
-            .Group(NotificationHub.DepartmentGroup(requisition.Division))
+            .Group(NotificationHub.UnitGroup(requisition.UnitRef))
             .SendAsync("DepartmentRequisitionStatusChanged", new
             {
                 requisition.HeaderId,

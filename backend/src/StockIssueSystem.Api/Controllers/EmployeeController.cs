@@ -118,6 +118,7 @@ public sealed class EmployeeController(AppDbContext dbContext) : ControllerBase
             EmployeeId = request.EmployeeId,
             EmployeeName = request.EmployeeName.Trim(),
             Department = NormalizeDepartment(request.Department),
+            UnitRef = NormalizeUnitRef(request.UnitRef),
             Permission = NormalizePermissionId(request.Permission),
             Username = request.Username.Trim(),
             Password = request.Password.Trim(),
@@ -183,6 +184,7 @@ public sealed class EmployeeController(AppDbContext dbContext) : ControllerBase
 
         savedEmployee.EmployeeName = request.EmployeeName.Trim();
         savedEmployee.Department = NormalizeDepartment(request.Department);
+        savedEmployee.UnitRef = NormalizeUnitRef(request.UnitRef);
         savedEmployee.Permission = NormalizePermissionId(request.Permission);
         savedEmployee.Username = request.Username.Trim();
         savedEmployee.Status = request.Status;
@@ -269,6 +271,7 @@ public sealed class EmployeeController(AppDbContext dbContext) : ControllerBase
             EmployeeId = employee.EmployeeId,
             EmployeeName = employee.EmployeeName ?? string.Empty,
             Department = string.IsNullOrWhiteSpace(employee.Department) ? "HR" : employee.Department,
+            UnitRef = employee.UnitRef ?? string.Empty,
             Permission = permissionId,
             PermissionId = permissionId,
             PermissionName = permissionNames.GetValueOrDefault(permissionId, permissionId),
@@ -287,6 +290,8 @@ public sealed class EmployeeController(AppDbContext dbContext) : ControllerBase
     {
         return string.IsNullOrWhiteSpace(department) ? "HR" : department.Trim();
     }
+
+    private static string NormalizeUnitRef(string unitRef) => unitRef?.Trim() ?? string.Empty;
 
     private static string? ValidateEmployee(int employeeId, string employeeName, string username, string password)
     {

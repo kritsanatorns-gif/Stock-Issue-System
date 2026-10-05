@@ -12,5 +12,11 @@ public sealed class Department
     [MaxLength(100)]
     public string DivisionName { get; set; } = string.Empty;
 
+    [MaxLength(200)]
+    public string UnitName { get; set; } = string.Empty;
+
+    [MaxLength(50)]
+    public string UnitRef { get; set; } = string.Empty;
+
     public int DepartmentStatus { get; set; } = 1;
 }

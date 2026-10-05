@@ -388,7 +388,12 @@ function AppTable({
                     {visibleColumns.map((column) => (
                       <TableCell
                         key={column.key}
-                        align={column.bodyAlign ?? (column.key === 'productName' ? 'left' : (column.align ?? 'center'))}
+                        align={column.bodyAlign ?? (
+                          ['category', 'department', 'division', 'employeeName', 'itemRemark', 'label', 'productName', 'remark', 'supplierName', 'unitName']
+                            .includes(column.key)
+                            ? 'left'
+                            : (column.align ?? 'center')
+                        )}
                         sx={{
                           color: '#0f172a',
                           fontSize: 13,

@@ -199,7 +199,7 @@ export function exportDepartmentIssueToExcel(groups, fileName, periodLabel, vatR
 
   groups.forEach((group) => {
     const departmentRow = rows.length
-    rows.push([`${groupLabel} : ${group.department}`, ...Array(headers.length - 1).fill('')])
+    rows.push([`${groupLabel} : ${group.department}${groupLabel === 'แผนก' || group.unitRef ? ` · หน่วย : ${group.unitName || group.unitRef || '-'}` : ''}`, ...Array(headers.length - 1).fill('')])
     merges.push({ s: { r: departmentRow, c: 0 }, e: { r: departmentRow, c: headers.length - 1 } })
     group.products.forEach((product, index) => {
       const qty = Number(product.totalQty ?? 0)

@@ -12,9 +12,10 @@ namespace StockIssueSystem.Api.Controllers;
 public sealed class HrEmployeesController(AppDbContext dbContext) : ControllerBase
 {
     [HttpGet]
-    public async Task<ActionResult<IReadOnlyList<HrEmployeeDto>>> GetEmployees([FromQuery] string? department = null)
+    public async Task<ActionResult<IReadOnlyList<HrEmployeeDto>>> GetEmployees([FromQuery] string? department = null, [FromQuery] string? unitRef = null)
     {
         var employeeDepartment = department?.Trim() ?? string.Empty;
+        var employeeUnitRef = unitRef?.Trim() ?? string.Empty;
 
         if (string.IsNullOrWhiteSpace(employeeDepartment))
         {
@@ -24,15 +25,21 @@ public sealed class HrEmployeesController(AppDbContext dbContext) : ControllerBa
         await using var connection = new SqlConnection(dbContext.Database.GetConnectionString());
         await using var command = connection.CreateCommand();
         command.CommandText = """
-            SELECT CAST(Code AS nvarchar(50)) AS Code,
-                LTRIM(RTRIM(ISNULL(Name1, N'') + N' ' + ISNULL(Lastname1, N''))) AS Name,
-                ISNULL(Department, N'') AS Department,
-                ISNULL(Division, N'') AS Division
-            FROM MARSHR.HRM.dbo.EMPLOYEE
-            WHERE Division = @Department
-            ORDER BY Code
+            SELECT CAST(employee.Code AS nvarchar(50)) AS Code,
+                LTRIM(RTRIM(ISNULL(employee.Name1, N'') + N' ' + ISNULL(employee.Lastname1, N''))) AS Name,
+                ISNULL(employee.Department, N'') AS Department,
+                ISNULL(employee.Division, N'') AS Division,
+                ISNULL(employee.UnitRef, N'') AS UnitRef,
+                ISNULL(unitRef.Name1, N'') AS UnitName
+            FROM MARSHR.HRM.dbo.EMPLOYEE AS employee
+            LEFT JOIN MARSHR.HRM.dbo.Unitref AS unitRef
+                ON LTRIM(RTRIM(unitRef.UnitRefID)) COLLATE DATABASE_DEFAULT = LTRIM(RTRIM(employee.UnitRef)) COLLATE DATABASE_DEFAULT
+            WHERE employee.Division = @Department
+                AND (@UnitRef = N'' OR employee.UnitRef = @UnitRef)
+            ORDER BY employee.Code
             """;
         command.Parameters.Add(new SqlParameter("@Department", SqlDbType.NVarChar, 100) { Value = employeeDepartment });
+        command.Parameters.Add(new SqlParameter("@UnitRef", SqlDbType.NVarChar, 100) { Value = employeeUnitRef });
 
         await connection.OpenAsync();
         await using var reader = await command.ExecuteReaderAsync();
@@ -46,6 +53,8 @@ public sealed class HrEmployeesController(AppDbContext dbContext) : ControllerBa
                 Name = reader["Name"]?.ToString() ?? string.Empty,
                 Department = reader["Department"]?.ToString() ?? string.Empty,
                 Division = reader["Division"]?.ToString() ?? string.Empty,
+                UnitRef = reader["UnitRef"]?.ToString() ?? string.Empty,
+                UnitName = reader["UnitName"]?.ToString() ?? string.Empty,
             });
         }
 
@@ -53,10 +62,11 @@ public sealed class HrEmployeesController(AppDbContext dbContext) : ControllerBa
     }
 
     [HttpGet("{code}")]
-    public async Task<ActionResult<HrEmployeeDto>> GetEmployee(string code, [FromQuery] string? department = null)
+    public async Task<ActionResult<HrEmployeeDto>> GetEmployee(string code, [FromQuery] string? department = null, [FromQuery] string? unitRef = null)
     {
         var employeeCode = code.Trim();
         var employeeDepartment = department?.Trim() ?? string.Empty;
+        var employeeUnitRef = unitRef?.Trim() ?? string.Empty;
 
         if (string.IsNullOrWhiteSpace(employeeCode))
         {
@@ -68,13 +78,18 @@ public sealed class HrEmployeesController(AppDbContext dbContext) : ControllerBa
 
         command.CommandText = """
             SELECT TOP (1)
-                CAST(Code AS nvarchar(50)) AS Code,
-                LTRIM(RTRIM(ISNULL(Name1, N'') + N' ' + ISNULL(Lastname1, N''))) AS Name,
-                ISNULL(Department, N'') AS Department,
-                ISNULL(Division, N'') AS Division
-            FROM MARSHR.HRM.dbo.EMPLOYEE
-            WHERE CAST(Code AS nvarchar(50)) = @Code
-                AND (@Department = N'' OR Division = @Department)
+                CAST(employee.Code AS nvarchar(50)) AS Code,
+                LTRIM(RTRIM(ISNULL(employee.Name1, N'') + N' ' + ISNULL(employee.Lastname1, N''))) AS Name,
+                ISNULL(employee.Department, N'') AS Department,
+                ISNULL(employee.Division, N'') AS Division,
+                ISNULL(employee.UnitRef, N'') AS UnitRef,
+                ISNULL(unitRef.Name1, N'') AS UnitName
+            FROM MARSHR.HRM.dbo.EMPLOYEE AS employee
+            LEFT JOIN MARSHR.HRM.dbo.Unitref AS unitRef
+                ON LTRIM(RTRIM(unitRef.UnitRefID)) COLLATE DATABASE_DEFAULT = LTRIM(RTRIM(employee.UnitRef)) COLLATE DATABASE_DEFAULT
+            WHERE CAST(employee.Code AS nvarchar(50)) = @Code
+                AND (@Department = N'' OR employee.Division = @Department)
+                AND (@UnitRef = N'' OR employee.UnitRef = @UnitRef)
         """;
         command.CommandType = CommandType.Text;
         command.Parameters.Add(new SqlParameter("@Code", SqlDbType.NVarChar, 50)
@@ -84,6 +99,10 @@ public sealed class HrEmployeesController(AppDbContext dbContext) : ControllerBa
         command.Parameters.Add(new SqlParameter("@Department", SqlDbType.NVarChar, 50)
         {
             Value = employeeDepartment,
+        });
+        command.Parameters.Add(new SqlParameter("@UnitRef", SqlDbType.NVarChar, 100)
+        {
+            Value = employeeUnitRef,
         });
 
         await connection.OpenAsync();
@@ -100,6 +119,8 @@ public sealed class HrEmployeesController(AppDbContext dbContext) : ControllerBa
             Name = reader["Name"]?.ToString() ?? string.Empty,
             Department = reader["Department"]?.ToString() ?? string.Empty,
             Division = reader["Division"]?.ToString() ?? string.Empty,
+            UnitRef = reader["UnitRef"]?.ToString() ?? string.Empty,
+            UnitName = reader["UnitName"]?.ToString() ?? string.Empty,
         });
     }
 }

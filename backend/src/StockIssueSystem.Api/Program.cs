@@ -71,10 +71,19 @@ app.MapHub<NotificationHub>("/hubs/notifications");
 
 app.Logger.LogInformation("Preparing database schema: employee department");
 await EnsureEmployeeDepartmentColumn(app);
+app.Logger.LogInformation("Preparing database schema: employee notification units");
+await EnsureEmployeeUnitRefColumn(app);
 app.Logger.LogInformation("Preparing database schema: department division");
 await EnsureDepartmentDivisionColumn(app);
+app.Logger.LogInformation("Preparing database schema: department units");
+await EnsureDepartmentUnitNameColumn(app);
+await EnsureDepartmentUnitRefColumn(app);
 app.Logger.LogInformation("Preparing database schema: stock header remarks");
 await EnsureStockHeaderSeparatedRemarkColumns(app);
+app.Logger.LogInformation("Preparing database schema: stock header unit references");
+await EnsureStockHeaderUnitRefColumn(app);
+await EnsureStockHeaderUnitNameColumn(app);
+await BackfillStockHeaderUnitNames(app);
 app.Logger.LogInformation("Preparing stored requisition document numbers");
 await EnsureStockHeaderRequestNumbers(app);
 app.Logger.LogInformation("Preparing stored receive document numbers");
@@ -267,6 +276,55 @@ static async Task EnsureDepartmentDivisionColumn(WebApplication app)
 
 }
 
+static async Task EnsureDepartmentUnitNameColumn(WebApplication app)
+{
+    await using var scope = app.Services.CreateAsyncScope();
+    var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+    await dbContext.Database.ExecuteSqlRawAsync("""
+        IF COL_LENGTH(N'dbo.Department', N'UnitName') IS NULL
+        BEGIN
+            ALTER TABLE dbo.Department
+            ADD UnitName nvarchar(200) NOT NULL
+                CONSTRAINT DF_Department_UnitName DEFAULT N'';
+        END
+
+        IF COL_LENGTH(N'dbo.Department', N'UnitName') IS NOT NULL
+        BEGIN
+            DECLARE @departmentUnitDefaultConstraint sysname;
+            SELECT @departmentUnitDefaultConstraint = defaultConstraint.name
+            FROM sys.default_constraints defaultConstraint
+            INNER JOIN sys.columns columns
+                ON columns.object_id = defaultConstraint.parent_object_id
+                AND columns.column_id = defaultConstraint.parent_column_id
+            WHERE defaultConstraint.parent_object_id = OBJECT_ID(N'dbo.Department')
+                AND columns.name = N'UnitName';
+
+            IF @departmentUnitDefaultConstraint IS NOT NULL
+                EXEC(N'ALTER TABLE dbo.Department DROP CONSTRAINT [' + @departmentUnitDefaultConstraint + N']');
+
+            ALTER TABLE dbo.Department ALTER COLUMN UnitName nvarchar(max) NOT NULL;
+            ALTER TABLE dbo.Department
+            ADD CONSTRAINT DF_Department_UnitName DEFAULT N'' FOR UnitName;
+        END
+    """);
+}
+
+static async Task EnsureDepartmentUnitRefColumn(WebApplication app)
+{
+    await using var scope = app.Services.CreateAsyncScope();
+    var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+    await dbContext.Database.ExecuteSqlRawAsync("""
+        IF COL_LENGTH(N'dbo.Department', N'UnitRef') IS NULL
+        BEGIN
+            ALTER TABLE dbo.Department
+            ADD UnitRef nvarchar(50) NOT NULL
+                CONSTRAINT DF_Department_UnitRef DEFAULT N'';
+        END
+        """);
+}
+
 static async Task EnsureEmployeeDepartmentColumn(WebApplication app)
 {
     await using var scope = app.Services.CreateAsyncScope();
@@ -295,6 +353,31 @@ static async Task EnsureEmployeeDepartmentColumn(WebApplication app)
         UPDATE dbo.Employee
         SET Department = N'HR'
         WHERE Department IS NULL OR LTRIM(RTRIM(Department)) = N''
+    """);
+}
+
+static async Task EnsureEmployeeUnitRefColumn(WebApplication app)
+{
+    await using var scope = app.Services.CreateAsyncScope();
+    var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+    await dbContext.Database.ExecuteSqlRawAsync("""
+        IF NOT EXISTS (
+            SELECT 1
+            FROM sys.columns columns
+            INNER JOIN sys.tables tables
+                ON columns.object_id = tables.object_id
+            INNER JOIN sys.schemas schemas
+                ON tables.schema_id = schemas.schema_id
+            WHERE schemas.name = N'dbo'
+                AND tables.name = N'Employee'
+                AND columns.name = N'UnitRef'
+        )
+        BEGIN
+            ALTER TABLE dbo.Employee
+            ADD UnitRef nvarchar(100) NOT NULL
+                CONSTRAINT DF_Employee_UnitRef DEFAULT N''
+        END
     """);
 }
 
@@ -539,6 +622,51 @@ static async Task EnsureStockHeaderSeparatedRemarkColumns(WebApplication app)
                 CONSTRAINT DF_StockHeader_RequesterName DEFAULT N''
         END
 
+    """);
+}
+
+static async Task EnsureStockHeaderUnitRefColumn(WebApplication app)
+{
+    await using var scope = app.Services.CreateAsyncScope();
+    var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+    await dbContext.Database.ExecuteSqlRawAsync("""
+        IF COL_LENGTH(N'dbo.StockHeader', N'UnitRef') IS NULL
+        BEGIN
+            ALTER TABLE dbo.StockHeader
+            ADD UnitRef nvarchar(100) NOT NULL
+                CONSTRAINT DF_StockHeader_UnitRef DEFAULT N'';
+        END
+    """);
+}
+
+static async Task EnsureStockHeaderUnitNameColumn(WebApplication app)
+{
+    await using var scope = app.Services.CreateAsyncScope();
+    var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+    await dbContext.Database.ExecuteSqlRawAsync("""
+        IF COL_LENGTH(N'dbo.StockHeader', N'UnitName') IS NULL
+        BEGIN
+            ALTER TABLE dbo.StockHeader
+            ADD UnitName nvarchar(200) NOT NULL
+                CONSTRAINT DF_StockHeader_UnitName DEFAULT N'';
+        END
+    """);
+}
+
+static async Task BackfillStockHeaderUnitNames(WebApplication app)
+{
+    await using var scope = app.Services.CreateAsyncScope();
+    var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+    await dbContext.Database.ExecuteSqlRawAsync("""
+        UPDATE header
+        SET UnitName = ISNULL(unitRef.Name1, N'')
+        FROM dbo.StockHeader AS header
+        INNER JOIN MARSHR.HRM.dbo.Unitref AS unitRef
+            ON LTRIM(RTRIM(unitRef.UnitRefID)) COLLATE DATABASE_DEFAULT = LTRIM(RTRIM(header.UnitRef)) COLLATE DATABASE_DEFAULT
+        WHERE NULLIF(LTRIM(RTRIM(header.UnitRef)), N'') IS NOT NULL;
     """);
 }
 

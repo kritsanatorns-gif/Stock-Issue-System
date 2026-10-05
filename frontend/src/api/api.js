@@ -103,9 +103,9 @@ export async function importDepartmentsFromHr() {
   return response.data
 }
 
-export async function getHrEmployee(employeeCode, department = '') {
+export async function getHrEmployee(employeeCode, department = '', unitRef = '') {
   const response = await api.get(`/hr-employees/${encodeURIComponent(employeeCode)}`, {
-    params: department ? { department } : {},
+    params: { ...(department ? { department } : {}), ...(unitRef ? { unitRef } : {}) },
   })
 
   return response.data

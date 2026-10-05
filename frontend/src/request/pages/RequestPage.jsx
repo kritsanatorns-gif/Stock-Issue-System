@@ -268,13 +268,15 @@ async function getCarryOverBacklogItems({ currentHeaderId, department, employeeI
   }
 }
 
-function printRequestSlip({ department, division = '', isUrgent = false, items, remark, requesterName, requestNo = '' }) {
+function printRequestSlip({ department, division = '', isUrgent = false, items, remark, requesterName, requestNo = '', unitRef = '', unitName = '' }) {
   printHistorySlip({
     department, division, isUrgent, requestNo,
     createdAt: new Date(),
     employeeName: requesterName,
     userRemark: remark,
     statusId: 10,
+    unitRef,
+    unitName,
     items: items.map((item) => ({ ...item, unit: item.issueUnit ?? item.unit ?? '' })),
   })
 }
@@ -309,6 +311,8 @@ function RequestPage() {
   const requesterName = getEmployeeValue(employee, ['employeeName', 'EmployeeName', 'name', 'username', 'Username'], 'ผู้ใช้งาน')
   const department = getEmployeeValue(employee, ['department', 'Department', 'employeeDepartment', 'EmployeeDepartment'], 'HR')
   const division = getEmployeeValue(employee, ['division', 'Division'], '')
+  const unitRef = getEmployeeValue(employee, ['unitRef', 'UnitRef'], '')
+  const unitName = getEmployeeValue(employee, ['unitName', 'UnitName'], '')
   const isSessionActive = isAuthenticated && expiresAt && expiresAt > Date.now()
 
   useEffect(() => {
@@ -458,6 +462,8 @@ function RequestPage() {
         // StockHeader.Department เก็บฝ่าย, StockHeader.Division เก็บแผนก
         department: division,
         division: department,
+        unitRef,
+        unitName,
         employeeId,
         isUrgent,
         requesterName,
@@ -496,6 +502,8 @@ function RequestPage() {
           remark: isUrgent ? urgentRemark.trim() : '',
           requesterName,
           requestNo: savedRequest?.requestNo ?? savedRequest?.RequestNo ?? 'รอเลขคำขอ',
+          unitRef,
+          unitName,
         })
 
         // โหลดหน้าใหม่เพื่อให้ตัวเลขและสถานะที่หน้าประวัติคำขออัปเดตทันที
@@ -537,12 +545,16 @@ function RequestPage() {
               <Typography sx={{ fontWeight: 900 }}>{division || '-'}</Typography>
             </Grid>
             <Grid size={{ xs: 12, md: 3 }}>
-              <Typography sx={{ color: '#64748b', fontSize: 12, fontWeight: 800 }}>ผู้ขอเบิก</Typography>
-              <Typography sx={{ fontWeight: 900 }}>{requesterName}</Typography>
-            </Grid>
-            <Grid size={{ xs: 12, md: 6 }}>
               <Typography sx={{ color: '#64748b', fontSize: 12, fontWeight: 800 }}>แผนก</Typography>
               <Typography sx={{ fontWeight: 900 }}>{department}</Typography>
+            </Grid>
+            <Grid size={{ xs: 12, md: 3 }}>
+              <Typography sx={{ color: '#64748b', fontSize: 12, fontWeight: 800 }}>หน่วยงาน</Typography>
+              <Typography sx={{ fontWeight: 900 }}>{unitName || unitRef || '-'}</Typography>
+            </Grid>
+            <Grid size={{ xs: 12, md: 3 }}>
+              <Typography sx={{ color: '#64748b', fontSize: 12, fontWeight: 800 }}>ผู้ขอเบิก</Typography>
+              <Typography sx={{ fontWeight: 900 }}>{requesterName}</Typography>
             </Grid>
           </Grid>
         </CardContent>

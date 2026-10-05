@@ -68,6 +68,7 @@ function normalizeRequisition(row) {
     // StockHeader.Department เก็บฝ่าย, StockHeader.Division เก็บแผนก
     department: row.division ?? row.Division ?? '',
     division: row.department ?? row.Department ?? '',
+    unitName: row.unitName ?? row.UnitName ?? row.unitRef ?? row.UnitRef ?? '',
     employeeId: row.employeeId ?? row.EmployeeId ?? '',
     employeeName: row.employeeName ?? row.EmployeeName ?? '',
     headerId: row.headerId ?? row.HeaderId ?? '',
@@ -83,6 +84,8 @@ function normalizeRequisition(row) {
     totalBacklogQty: Number(row.totalBacklogQty ?? row.TotalBacklogQty ?? items.reduce((sum, item) => sum + item.backlogQty, 0)),
     totalFulfilledQty: Number(row.totalFulfilledQty ?? row.TotalFulfilledQty ?? items.reduce((sum, item) => sum + item.fulfilledQty, 0)),
     totalRequestedQty: Number(row.totalRequestedQty ?? row.TotalRequestedQty ?? items.reduce((sum, item) => sum + item.quantity, 0)),
+    unitRef: row.unitRef ?? row.UnitRef ?? '',
+    unitName: row.unitName ?? row.UnitName ?? '',
     urgentRemark,
   }
 }
@@ -474,7 +477,7 @@ function ApprovalsPage() {
     {
       key: 'approval',
       label: 'อนุมัติ',
-      width: 85,
+      width: 76,
       align: 'center',
       searchable: false,
       sortable: false,
@@ -487,16 +490,16 @@ function ApprovalsPage() {
     {
       key: 'createdAt',
       label: 'วันที่ส่งคำขอ',
-      width: 150,
+      width: 122,
       value: (row) => formatDisplayDateTime(row.createdAt),
       sortValue: (row) => Number(row.headerId ?? 0),
     },
-    { key: 'requestNo', label: 'เลขที่คำขอ', width: 170, minWidth: 170, render: (row) => <Box sx={{ whiteSpace: 'nowrap' }}>{row.requestNo}</Box> },
+    { key: 'requestNo', label: 'เลขที่คำขอ', width: 142, render: (row) => <Box sx={{ whiteSpace: 'nowrap' }}>{row.requestNo}</Box> },
     {
       key: 'isUrgent',
       headerNoWrap: true,
       label: 'เบิกด่วน',
-      width: 105,
+      width: 78,
       align: 'center',
       value: (row) => (row.isUrgent ? 'ด่วน' : ''),
       render: (row) => (
@@ -513,16 +516,17 @@ function ApprovalsPage() {
         )
       ),
     },
-    { key: 'division', label: 'ฝ่าย', width: 100 },
-    { key: 'department', label: 'แผนก', width: 100 },
-    { key: 'employeeId', label: 'รหัสพนักงาน', width: 130, align: 'center' },
-    { key: 'employeeName', label: 'ผู้ขอเบิก', width: 170 },
-    { key: 'totalItems', label: 'รายการ', width: 110, align: 'center' },
-    { key: 'totalQty', label: 'ยอดที่ต้องจ่าย', width: 130, align: 'center' },
+    { key: 'division', label: 'ฝ่าย', width: 68 },
+    { key: 'department', label: 'แผนก', width: 76 },
+    { key: 'unitName', label: 'หน่วยงาน', width: 180, headerAlign: 'center', bodyAlign: 'left', wrap: true },
+    { key: 'employeeId', label: 'รหัสพนักงาน', width: 96, align: 'center' },
+    { key: 'employeeName', label: 'ผู้ขอเบิก', width: 138 },
+    { key: 'totalItems', label: 'รายการ', width: 72, align: 'center' },
+    { key: 'totalQty', label: 'ยอดที่ต้องจ่าย', width: 96, align: 'center' },
     {
       key: 'waitingDuration',
       label: 'ระยะเวลารอ',
-      width: 125,
+      width: 96,
       align: 'center',
       value: (row) => (([6, 8].includes(row.statusId) && row.approvedAt) ? getElapsedDuration(row.approvedAt).label : '-'),
       sortValue: (row) => (([6, 8].includes(row.statusId) && row.approvedAt) ? getElapsedDuration(row.approvedAt).days * 24 + getElapsedDuration(row.approvedAt).hours : -1),
@@ -531,8 +535,7 @@ function ApprovalsPage() {
     {
       key: 'status',
       label: 'สถานะ',
-      width: 240,
-      minWidth: 240,
+      width: 150,
       value: (row) => getRequisitionStatusLabel(row),
       render: (row) => (Number(row.statusId) === 8 && isPartiallyAllowedRequisition(row)
         ? (
@@ -560,7 +563,7 @@ function ApprovalsPage() {
   ]
 
   const handleDenyItem = async (item) => {
-    if (!selectedRow || savingDenials || selectedRow.statusId === 8 || item.backlogQty <= 0) return
+    if (!selectedRow || savingDenials || item.backlogQty <= 0 || Number(item.fulfilledQty ?? 0) > 0) return
     const headerId = selectedRow.headerId
     const result = await Swal.fire({
       title: 'ยืนยันไม่ให้เบิกสินค้า',
@@ -620,7 +623,7 @@ function ApprovalsPage() {
       ) : (
         <Button
           color="error"
-          disabled={savingDenials || selectedRow?.statusId === 8 || Number(row.backlogQty ?? 0) <= 0}
+          disabled={savingDenials || Number(row.backlogQty ?? 0) <= 0 || Number(row.fulfilledQty ?? 0) > 0}
           size="small"
           variant="outlined"
           onClick={() => handleDenyItem(row)}
@@ -885,12 +888,16 @@ function ApprovalsPage() {
                   <Typography sx={{ fontWeight: 900 }}>{selectedRow.employeeName}</Typography>
                 </Grid>
                 <Grid size={{ xs: 12, md: 3 }}>
+                  <Typography sx={{ color: '#64748b', fontSize: 12, fontWeight: 800 }}>ฝ่าย</Typography>
+                  <Typography sx={{ fontWeight: 900 }}>{selectedRow.division || '-'}</Typography>
+                </Grid>
+                <Grid size={{ xs: 12, md: 3 }}>
                   <Typography sx={{ color: '#64748b', fontSize: 12, fontWeight: 800 }}>แผนก</Typography>
                   <Typography sx={{ fontWeight: 900 }}>{selectedRow.department}</Typography>
                 </Grid>
                 <Grid size={{ xs: 12, md: 3 }}>
-                  <Typography sx={{ color: '#64748b', fontSize: 12, fontWeight: 800 }}>ฝ่าย</Typography>
-                  <Typography sx={{ fontWeight: 900 }}>{selectedRow.division || '-'}</Typography>
+                  <Typography sx={{ color: '#64748b', fontSize: 12, fontWeight: 800 }}>หน่วยงาน</Typography>
+                  <Typography sx={{ fontWeight: 900, overflowWrap: 'anywhere' }}>{selectedRow.unitName || '-'}</Typography>
                 </Grid>
                 <Grid size={{ xs: 12, md: 3 }}>
                   <Typography sx={{ color: '#64748b', fontSize: 12, fontWeight: 800 }}>วันที่ส่งคำขอ</Typography>

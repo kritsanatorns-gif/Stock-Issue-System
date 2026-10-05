@@ -325,6 +325,8 @@ function InventoryWorkspace({ mode }) {
   const [pendingDepartmentToCreate, setPendingDepartmentToCreate] = useState('')
   const [requesterEmployeeId, setRequesterEmployeeId] = useState('')
   const [requesterName, setRequesterName] = useState('')
+  const [requesterUnitName, setRequesterUnitName] = useState('')
+  const [requesterUnitRef, setRequesterUnitRef] = useState('')
   const [departmentSearchText, setDepartmentSearchText] = useState('')
   const [issueDepartment, setIssueDepartment] = useState('')
   const [issueDivision, setIssueDivision] = useState('')
@@ -577,8 +579,12 @@ function InventoryWorkspace({ mode }) {
         requester.department ?? requester.Department ?? '',
       )
       setRequesterName(String(requester.name ?? requester.Name ?? '').trim())
+      setRequesterUnitRef(String(requester.unitRef ?? requester.UnitRef ?? '').trim())
+      setRequesterUnitName(String(requester.unitName ?? requester.UnitName ?? requester.unitRef ?? requester.UnitRef ?? '').trim())
     } catch {
       setRequesterName('')
+      setRequesterUnitName('')
+      setRequesterUnitRef('')
       setDepartmentCodeText('')
       setDepartmentSearchText('')
       setIssueDepartment('')
@@ -1410,6 +1416,8 @@ function InventoryWorkspace({ mode }) {
         employeeId: Number(requesterEmployeeId),
         isUrgent: isIssueUrgent,
         requesterName: safeRequesterName,
+        unitName: requesterUnitName,
+        unitRef: requesterUnitRef,
         remark: '',
         urgentRemark: isIssueUrgent ? issueUrgentRemark.trim() : '',
         items: transactionPayload.items.map((item) => ({
@@ -1429,6 +1437,8 @@ function InventoryWorkspace({ mode }) {
       setIssueDivision('')
       setIssueDepartmentCode('')
       setRequesterName('')
+      setRequesterUnitName('')
+      setRequesterUnitRef('')
       setRequesterEmployeeId('')
       setPendingDepartmentToCreate('')
       setIssueRequestType('')
@@ -2092,6 +2102,8 @@ function InventoryWorkspace({ mode }) {
 
                               if (!nextEmployeeId) {
                                 setRequesterName('')
+                                setRequesterUnitName('')
+                                setRequesterUnitRef('')
                                 setDepartmentCodeText('')
                                 setDepartmentSearchText('')
                                 setIssueDepartment('')
@@ -2201,6 +2213,19 @@ function InventoryWorkspace({ mode }) {
                           </TextField>
                         </Grid>
                       </Grid>
+                      <TextField
+                        disabled
+                        fullWidth
+                        helperText={requesterUnitRef ? `รหัสหน่วยงาน: ${requesterUnitRef}` : 'ระบบเลือกจากข้อมูลพนักงาน'}
+                        label="หน่วยงาน"
+                        size="small"
+                        value={requesterUnitName}
+                        slotProps={{
+                          input: {
+                            readOnly: true,
+                          },
+                        }}
+                      />
                       <TextField
                         disabled
                         fullWidth

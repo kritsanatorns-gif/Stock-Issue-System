@@ -206,7 +206,11 @@ export async function addReportDocumentPages(pdf, container, html2canvas) {
   template.querySelectorAll('tbody, tfoot').forEach((body) => body.replaceChildren())
   const page = template.cloneNode(true)
   container.after(page)
-  const maxHeight = container.getBoundingClientRect().width * 275 / 200
+  const pageWidth = pdf.internal.pageSize.getWidth()
+  const pageHeight = pdf.internal.pageSize.getHeight()
+  const contentWidth = pageWidth - 10
+  const contentHeight = pageHeight - 10
+  const maxHeight = container.getBoundingClientRect().width * contentHeight / contentWidth
   let count = 0
   let hasRows = false
   let activeCategory = null
@@ -226,7 +230,7 @@ export async function addReportDocumentPages(pdf, container, html2canvas) {
   const capture = async () => {
     const canvas = await html2canvas(page, { backgroundColor: '#fff', scale: 2, useCORS: true })
     if (count++) pdf.addPage()
-    const width = Math.min(200, 275 * canvas.width / canvas.height)
+    const width = Math.min(contentWidth, contentHeight * canvas.width / canvas.height)
     pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 5, 5, width, canvas.height * width / canvas.width)
   }
   try {

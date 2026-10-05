@@ -74,8 +74,9 @@ function RequestLayout() {
 
   const requesterName = employee?.employeeName || employee?.name || employee?.username || 'ผู้ขอเบิก'
   const department = employee?.department || '-'
-  const notificationStorageKey = `stock-issue-request-notifications-v3-${employeeId || requesterName}`
-  const statusStorageKey = `stock-issue-request-statuses-v3-${employeeId || requesterName}`
+  const unitRef = String(employee?.unitRef ?? employee?.UnitRef ?? '').trim()
+  const notificationStorageKey = `stock-issue-request-notifications-v4-${employeeId || requesterName}-${unitRef || 'unassigned'}`
+  const statusStorageKey = `stock-issue-request-statuses-v4-${employeeId || requesterName}-${unitRef || 'unassigned'}`
 
   const matchesCurrentRequester = useCallback((row) => {
     const rowEmployeeId = Number(row.employeeId ?? row.EmployeeId ?? 0)
@@ -87,12 +88,10 @@ function RequestLayout() {
 
   const checkRequestStatuses = useCallback(async () => {
     try {
-      const departmentRequests = await getRequisitions({ department })
-      const requests = departmentRequests.filter(matchesCurrentRequester)
-      // The history menu is shared by everyone in the department, so its badge
-      // must include every department request that still needs action.
+      const unitRequests = await getRequisitions({ department, unitRef })
+      const requests = unitRequests.filter(matchesCurrentRequester)
       setNotCompletedRequestCount(
-        departmentRequests.filter((request) => isRequestActionable(Number(request.statusId ?? request.StatusId ?? 0))).length,
+        unitRequests.filter((request) => isRequestActionable(Number(request.statusId ?? request.StatusId ?? 0))).length,
       )
       const previousStatuses = JSON.parse(localStorage.getItem(statusStorageKey) || '{}')
       const storedNotifications = JSON.parse(localStorage.getItem(notificationStorageKey) || '[]')
@@ -130,9 +129,9 @@ function RequestLayout() {
         }
       })
 
-      // Sync currently open requests in this department as a fallback for a
+      // Sync currently open requests in this unit as a fallback for a
       // missed live SignalR message (for example, while the page was loading).
-      departmentRequests
+      unitRequests
         .filter((request) => !matchesCurrentRequester(request))
         .forEach((request) => {
           const headerId = String(request.headerId ?? request.HeaderId ?? '')
@@ -162,7 +161,7 @@ function RequestLayout() {
     } catch {
       // Keep the request page usable even if the periodic status check fails.
     }
-  }, [department, matchesCurrentRequester, notificationStorageKey, statusStorageKey])
+  }, [department, matchesCurrentRequester, notificationStorageKey, statusStorageKey, unitRef])
 
   useEffect(() => {
     if (!isSessionActive) {
@@ -192,8 +191,8 @@ function RequestLayout() {
         groupMethod: 'JoinRequesterNotifications',
         groupArguments: [employeeId],
         additionalGroupInvocations: [{
-          method: 'JoinDepartmentNotifications',
-          arguments: [department],
+          method: 'JoinUnitNotifications',
+          arguments: [unitRef],
         }],
         onConnectionStateChange: (isConnected) => {
           if (isConnected) stopFallbackStatusCheck()
@@ -297,7 +296,7 @@ function RequestLayout() {
       stopFallbackStatusCheck()
       connection?.stop()
     }
-  }, [checkRequestStatuses, department, employeeId, isSessionActive, notificationStorageKey, statusStorageKey])
+  }, [checkRequestStatuses, employeeId, isSessionActive, notificationStorageKey, statusStorageKey, unitRef])
 
   if (!isSessionActive) {
     return <Navigate to="/request-login" replace />

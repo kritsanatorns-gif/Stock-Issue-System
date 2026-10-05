@@ -14,6 +14,8 @@ public sealed class EmployeeDto
 
     public string Department { get; set; } = string.Empty;
 
+    public string UnitRef { get; set; } = string.Empty;
+
     public string Username { get; set; } = string.Empty;
 
     public int Status { get; set; }
