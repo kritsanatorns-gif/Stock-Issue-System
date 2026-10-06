@@ -1,4 +1,4 @@
-import { installReportPrinting } from '../../utils/reportPagination'
+﻿import { installReportPrinting } from '../../utils/reportPagination'
 ﻿import {
   Alert,
   Box,
@@ -314,7 +314,7 @@ function RequestPage() {
   const unitRef = getEmployeeValue(employee, ['unitRef', 'UnitRef'], '')
   const unitName = getEmployeeValue(employee, ['unitName', 'UnitName'], '')
   const isSessionActive = isAuthenticated && expiresAt && expiresAt > Date.now()
-
+  
   useEffect(() => {
     async function loadProducts() {
       try {

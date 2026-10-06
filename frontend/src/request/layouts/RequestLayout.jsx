@@ -14,10 +14,10 @@ import {
   Typography,
   useMediaQuery,
 } from '@mui/material'
-import { Bell, ChevronDown, ClipboardList, History, Menu as MenuIcon, Moon, PackageCheck, Sun } from 'lucide-react'
+import { Bell, ChevronDown, CircleHelp, ClipboardList, History, Menu as MenuIcon, Moon, PackageCheck, Sun } from 'lucide-react'
 import { useCallback, useContext, useEffect, useState } from 'react'
 import { NavLink, Navigate, Outlet, useNavigate } from 'react-router-dom'
-import { getRequisitions } from '../../api/api'
+import { getNotificationSummary } from '../../api/api'
 import { connectNotificationHub } from '../../api/notificationHub'
 import { useRequestAuthStore } from '../../store/requestAuthStore'
 import { ColorModeContext } from '../../theme/ColorModeContext'
@@ -45,6 +45,9 @@ function getInitials(name) {
 }
 
 function getNotificationMeta(statusId) {
+  if (statusId === 6) return { label: 'HR อนุมัติคำขอแล้ว รอจัดของ', color: 'info' }
+  if (statusId === 7) return { label: 'คำขอเสร็จสิ้นแล้ว ตรวจสอบยอดจ่ายในรายละเอียด', color: 'success' }
+  if (statusId === 9) return { label: 'HR ไม่อนุญาตให้เบิก ตรวจสอบเหตุผลในรายละเอียด', color: 'error' }
   if (statusId === 8) return { label: 'HR จ่ายสินค้าแล้วบางส่วน มีรายการค้าง', color: 'warning' }
   return null
 }
@@ -88,7 +91,8 @@ function RequestLayout() {
 
   const checkRequestStatuses = useCallback(async () => {
     try {
-      const unitRequests = await getRequisitions({ department, unitRef })
+      if (document.hidden) return
+      const unitRequests = await getNotificationSummary({ department, unitRef })
       const requests = unitRequests.filter(matchesCurrentRequester)
       setNotCompletedRequestCount(
         unitRequests.filter((request) => isRequestActionable(Number(request.statusId ?? request.StatusId ?? 0))).length,
@@ -96,18 +100,7 @@ function RequestLayout() {
       const previousStatuses = JSON.parse(localStorage.getItem(statusStorageKey) || '{}')
       const storedNotifications = JSON.parse(localStorage.getItem(notificationStorageKey) || '[]')
       const nextStatuses = {}
-      const actionableHeaderIds = new Set(
-        requests
-          .filter((request) => isRequestActionable(Number(request.statusId ?? request.StatusId ?? 0)))
-          .map((request) => String(request.headerId ?? request.HeaderId ?? '')),
-      )
-      const nextNotifications = storedNotifications.filter((item) => {
-        // These entries concern a colleague's requisition; do not remove them
-        // when this user's own requisitions are refreshed.
-        if (String(item.id ?? '').startsWith('department-')) return true
-        const headerId = String(item.id ?? '').split('-')[0]
-        return item.statusId === 8 && actionableHeaderIds.has(headerId)
-      })
+      const nextNotifications = [...storedNotifications]
 
       requests.forEach((request) => {
         const headerId = String(request.headerId ?? request.HeaderId ?? '')
@@ -115,7 +108,9 @@ function RequestLayout() {
         const meta = getNotificationMeta(statusId)
         nextStatuses[headerId] = statusId
 
-        if (meta && previousStatuses[headerId] !== undefined && previousStatuses[headerId] !== statusId) {
+        // Recover pending/backlog alerts even if the live event was missed.
+        const needsRecovery = statusId === 6 || statusId === 8
+        if (meta && (needsRecovery || (previousStatuses[headerId] !== undefined && previousStatuses[headerId] !== statusId))) {
           const notificationId = `${headerId}-${statusId}`
           if (!nextNotifications.some((item) => item.id === notificationId)) {
             nextNotifications.unshift({
@@ -172,9 +167,10 @@ function RequestLayout() {
     checkRequestStatuses()
     let statusCheckInterval
     const startFallbackStatusCheck = () => {
+      if (document.hidden) return
       if (!statusCheckInterval) {
         checkRequestStatuses()
-        statusCheckInterval = window.setInterval(checkRequestStatuses, 120000)
+        statusCheckInterval = window.setInterval(checkRequestStatuses, 30000)
       }
     }
     const stopFallbackStatusCheck = () => {
@@ -185,6 +181,12 @@ function RequestLayout() {
     }
     let connection
     let active = true
+    startFallbackStatusCheck()
+    const onVisibilityChange = () => {
+      if (document.hidden) stopFallbackStatusCheck()
+      else startFallbackStatusCheck()
+    }
+    document.addEventListener('visibilitychange', onVisibilityChange)
 
     if (employeeId > 0) {
       connectNotificationHub({
@@ -195,8 +197,9 @@ function RequestLayout() {
           arguments: [unitRef],
         }],
         onConnectionStateChange: (isConnected) => {
-          if (isConnected) stopFallbackStatusCheck()
-          else startFallbackStatusCheck()
+          if (!active) return
+          startFallbackStatusCheck()
+          if (isConnected) checkRequestStatuses()
         },
         handlers: {
           DepartmentRequisitionCreated: (request) => {
@@ -293,6 +296,7 @@ function RequestLayout() {
 
     return () => {
       active = false
+      document.removeEventListener('visibilitychange', onVisibilityChange)
       stopFallbackStatusCheck()
       connection?.stop()
     }
@@ -402,6 +406,11 @@ function RequestLayout() {
             </Typography>
           </Box>
 
+          <Tooltip title="คู่มือการใช้งาน">
+            <IconButton aria-label="คู่มือการใช้งาน" onClick={() => navigate('/request/manual')} sx={{ border: '1px solid #d7e3f4', borderRadius: 2 }}>
+              <CircleHelp size={20} />
+            </IconButton>
+          </Tooltip>
           <IconButton
             aria-label="การแจ้งเตือนคำขอเบิก"
             onClick={handleOpenNotifications}

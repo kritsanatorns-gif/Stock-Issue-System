@@ -264,6 +264,11 @@ export async function getRequisitions(params = {}) {
   return response.data
 }
 
+export async function getNotificationSummary(params = {}) {
+  const response = await api.get('/requisitions/notification-summary', { params })
+  return response.data
+}
+
 export async function createRequisition(requisition) {
   const response = await api.post('/requisitions', requisition)
 

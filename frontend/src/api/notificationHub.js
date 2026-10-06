@@ -19,7 +19,7 @@ export async function connectNotificationHub({
   Object.entries(handlers).forEach(([eventName, handler]) => connection.on(eventName, handler))
   const joinGroups = async () => {
     await connection.invoke(groupMethod, ...groupArguments)
-    await Promise.allSettled(additionalGroupInvocations.map(({ method, arguments: argumentsList = [] }) => (
+    await Promise.all(additionalGroupInvocations.map(({ method, arguments: argumentsList = [] }) => (
       connection.invoke(method, ...argumentsList)
     )))
   }
@@ -35,8 +35,14 @@ export async function connectNotificationHub({
     }
   })
 
-  await connection.start()
-  await joinGroups()
+  try {
+    await connection.start()
+    await joinGroups()
+  } catch (error) {
+    onConnectionStateChange?.(false)
+    await connection.stop()
+    throw error
+  }
   onConnectionStateChange?.(true)
 
   return connection

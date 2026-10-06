@@ -1,9 +1,9 @@
 import { Badge, Box, IconButton, Menu as MuiMenu, MenuItem, Tooltip, Typography } from '@mui/material'
-import { Bell, Menu, Moon, Sun } from 'lucide-react'
+import { Bell, CircleHelp, Menu, Moon, Sun } from 'lucide-react'
 import { useContext, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { connectNotificationHub } from '../api/notificationHub'
-import { getRequisitions } from '../api/api'
+import { getNotificationSummary } from '../api/api'
 import { canAccessMenu } from '../app/navigationItems'
 import { useAuthStore } from '../store/authStore'
 import { ColorModeContext } from '../theme/ColorModeContext'
@@ -44,7 +44,8 @@ function AppHeader({ onToggleSidebar, sidebarCollapsed }) {
     localStorage.setItem(notificationStorageKey, JSON.stringify(savedNotifications))
     const checkNewRequisitions = async () => {
       try {
-        const requests = await getRequisitions()
+        if (document.hidden) return
+        const requests = await getNotificationSummary({ unitRef })
         const unitRequests = (requests ?? []).filter((request) => (
           String(request.unitRef ?? request.UnitRef ?? '').trim().toUpperCase() === unitRef.toUpperCase()
         ))
@@ -65,7 +66,7 @@ function AppHeader({ onToggleSidebar, sidebarCollapsed }) {
           .filter(Boolean)
         const knownRequestIds = JSON.parse(localStorage.getItem(knownRequestStorageKey) || '[]')
 
-        if (knownRequestIds.length === 0) {
+        if (localStorage.getItem(knownRequestStorageKey) === null) {
           localStorage.setItem(knownRequestStorageKey, JSON.stringify(requestIds.slice(0, 300)))
           return
         }
@@ -104,9 +105,10 @@ function AppHeader({ onToggleSidebar, sidebarCollapsed }) {
     window.addEventListener('stock-issue:requisition-updated', handleRequisitionUpdated)
     let requestCheckInterval
     const startFallbackRequestCheck = () => {
+      if (document.hidden) return
       if (!requestCheckInterval) {
         checkNewRequisitions()
-        requestCheckInterval = window.setInterval(checkNewRequisitions, 120000)
+        requestCheckInterval = window.setInterval(checkNewRequisitions, 30000)
       }
     }
     const stopFallbackRequestCheck = () => {
@@ -117,13 +119,20 @@ function AppHeader({ onToggleSidebar, sidebarCollapsed }) {
     }
     let connection
     let active = true
+    startFallbackRequestCheck()
+    const onVisibilityChange = () => {
+      if (document.hidden) stopFallbackRequestCheck()
+      else startFallbackRequestCheck()
+    }
+    document.addEventListener('visibilitychange', onVisibilityChange)
 
     connectNotificationHub({
       groupMethod: 'JoinUnitNotifications',
       groupArguments: [unitRef],
       onConnectionStateChange: (isConnected) => {
-        if (isConnected) stopFallbackRequestCheck()
-        else startFallbackRequestCheck()
+        if (!active) return
+        startFallbackRequestCheck()
+        if (isConnected) checkNewRequisitions()
       },
       handlers: {
         RequisitionCreated: (request) => {
@@ -156,6 +165,7 @@ function AppHeader({ onToggleSidebar, sidebarCollapsed }) {
 
     return () => {
       active = false
+      document.removeEventListener('visibilitychange', onVisibilityChange)
       stopFallbackRequestCheck()
       connection?.stop()
       window.removeEventListener('stock-issue:requisition-updated', handleRequisitionUpdated)
@@ -194,6 +204,11 @@ function AppHeader({ onToggleSidebar, sidebarCollapsed }) {
       </Box>
 
       <Box className="app-header__right">
+        <Tooltip title="คู่มือการใช้งาน">
+          <IconButton aria-label="คู่มือการใช้งาน" className="app-header__theme-button" onClick={() => navigate('/manual')}>
+            <CircleHelp size={20} />
+          </IconButton>
+        </Tooltip>
         {canApproveRequests ? (
           <>
             <Tooltip title="การแจ้งเตือนคำขอเบิกใหม่">

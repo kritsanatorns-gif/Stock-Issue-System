@@ -1,4 +1,4 @@
-import { addReportCanvas, clampReportTableCells, installReportPrinting } from '../../utils/reportPagination'
+﻿import { addReportCanvas, clampReportTableCells, installReportPrinting } from '../../utils/reportPagination'
 ﻿import {
   Alert,
   Box,

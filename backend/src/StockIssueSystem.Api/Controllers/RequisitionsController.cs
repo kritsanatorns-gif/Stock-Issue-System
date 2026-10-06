@@ -80,6 +80,28 @@ public sealed class RequisitionsController(
         return Ok(reports.Select(header => ToRequisitionDto(header, employees, balances)));
     }
 
+    [HttpGet("notification-summary")]
+    public async Task<IActionResult> GetNotificationSummary([FromQuery] string? unitRef, [FromQuery] string? department)
+    {
+        if (string.IsNullOrWhiteSpace(unitRef)) return Ok(Array.Empty<object>());
+        var query = dbContext.StockHeaders.AsNoTracking()
+            .Where(h => h.DocType == RequisitionDocType && h.UnitRef == unitRef.Trim());
+        if (!string.IsNullOrWhiteSpace(department))
+            query = query.Where(h => h.Division == department.Trim());
+        var headers = await query.OrderByDescending(h => h.HeaderId).ToListAsync(HttpContext.RequestAborted);
+        var ids = headers.Select(h => int.TryParse(h.EmployeeId, out var id) ? id : 0).Distinct().ToList();
+        var names = await dbContext.Employees.AsNoTracking().Where(e => ids.Contains(e.EmployeeId))
+            .ToDictionaryAsync(e => e.EmployeeId, e => e.EmployeeName, HttpContext.RequestAborted);
+        return Ok(headers.Select(h => {
+            var id = int.TryParse(h.EmployeeId, out var parsed) ? parsed : 0;
+            names.TryGetValue(id, out var name);
+            var requester = GetRequisitionRequester(h) ?? name ?? h.EmployeeId;
+            return new { h.HeaderId, h.RequestNo, h.UnitRef, EmployeeId = id,
+                EmployeeName = requester, RequesterName = requester,
+                Department = GetRequisitionDepartment(h), StatusId = h.Status };
+        }));
+    }
+
     [HttpGet("{headerId:int}")]
     public async Task<IActionResult> GetRequisition(int headerId)
     {
