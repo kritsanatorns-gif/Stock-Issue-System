@@ -15,6 +15,9 @@ public sealed class Employee
     [MaxLength(50)]
     public string? Department { get; set; } = "HR";
 
+    [MaxLength(100)]
+    public string? UnitRef { get; set; }
+
     [MaxLength(50)]
     public string? Username { get; set; }
 

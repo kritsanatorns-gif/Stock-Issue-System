@@ -20,7 +20,7 @@ export const navigationItems = [
   { menuCode: 'STOCK_ADJUST', menuId: 9, label: 'ปรับสต๊อก', path: '/stock-adjust', icon: SlidersHorizontal },
   { menuCode: 'PRODUCTS', menuId: 4, label: 'สินค้า', path: '/products', icon: PackageSearch },
   { menuCode: 'HISTORY', menuId: 5, label: 'ประวัติ', path: '/history', icon: History },
-  { menuCode: 'SUPPLIERS', menuId: 11, label: 'ผู้ขาย', path: '/suppliers', icon: Store },
+  { menuCode: 'SUPPLIERS', menuId: 11, label: 'ซัพพลาย', path: '/suppliers', icon: Store },
   { menuCode: 'REPORTS', menuId: 6, label: 'รายงาน', path: '/reports', icon: BarChart3 },
   { menuCode: 'USERS', menuId: 7, label: 'ผู้ใช้งาน', path: '/users', icon: Users },
   { menuCode: 'DEPARTMENTS', menuId: 8, label: 'แผนก', path: '/departments', icon: Building2 },

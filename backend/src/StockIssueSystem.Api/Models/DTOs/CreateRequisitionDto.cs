@@ -6,6 +6,8 @@ public sealed class CreateRequisitionDto
     // Department = ฝ่าย (HR.Department), Division = แผนก (HR.Division)
     public string Department { get; set; } = string.Empty;
     public string Division { get; set; } = string.Empty;
+    public string UnitRef { get; set; } = string.Empty;
+    public string UnitName { get; set; } = string.Empty;
     public string RequesterName { get; set; } = string.Empty;
     public bool IsUrgent { get; set; }
     public string UrgentRemark { get; set; } = string.Empty;

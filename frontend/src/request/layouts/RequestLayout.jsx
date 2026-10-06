@@ -14,10 +14,10 @@ import {
   Typography,
   useMediaQuery,
 } from '@mui/material'
-import { Bell, ChevronDown, ClipboardList, History, Menu as MenuIcon, Moon, PackageCheck, Sun } from 'lucide-react'
+import { Bell, ChevronDown, CircleHelp, ClipboardList, History, Menu as MenuIcon, Moon, PackageCheck, Sun } from 'lucide-react'
 import { useCallback, useContext, useEffect, useState } from 'react'
 import { NavLink, Navigate, Outlet, useNavigate } from 'react-router-dom'
-import { getRequisitions } from '../../api/api'
+import { getNotificationSummary } from '../../api/api'
 import { connectNotificationHub } from '../../api/notificationHub'
 import { useRequestAuthStore } from '../../store/requestAuthStore'
 import { ColorModeContext } from '../../theme/ColorModeContext'
@@ -45,6 +45,9 @@ function getInitials(name) {
 }
 
 function getNotificationMeta(statusId) {
+  if (statusId === 6) return { label: 'HR อนุมัติคำขอแล้ว รอจัดของ', color: 'info' }
+  if (statusId === 7) return { label: 'คำขอเสร็จสิ้นแล้ว ตรวจสอบยอดจ่ายในรายละเอียด', color: 'success' }
+  if (statusId === 9) return { label: 'HR ไม่อนุญาตให้เบิก ตรวจสอบเหตุผลในรายละเอียด', color: 'error' }
   if (statusId === 8) return { label: 'HR จ่ายสินค้าแล้วบางส่วน มีรายการค้าง', color: 'warning' }
   return null
 }
@@ -74,8 +77,9 @@ function RequestLayout() {
 
   const requesterName = employee?.employeeName || employee?.name || employee?.username || 'ผู้ขอเบิก'
   const department = employee?.department || '-'
-  const notificationStorageKey = `stock-issue-request-notifications-v3-${employeeId || requesterName}`
-  const statusStorageKey = `stock-issue-request-statuses-v3-${employeeId || requesterName}`
+  const unitRef = String(employee?.unitRef ?? employee?.UnitRef ?? '').trim()
+  const notificationStorageKey = `stock-issue-request-notifications-v4-${employeeId || requesterName}-${unitRef || 'unassigned'}`
+  const statusStorageKey = `stock-issue-request-statuses-v4-${employeeId || requesterName}-${unitRef || 'unassigned'}`
 
   const matchesCurrentRequester = useCallback((row) => {
     const rowEmployeeId = Number(row.employeeId ?? row.EmployeeId ?? 0)
@@ -87,20 +91,16 @@ function RequestLayout() {
 
   const checkRequestStatuses = useCallback(async () => {
     try {
-      const requests = (await getRequisitions()).filter(matchesCurrentRequester)
-      setNotCompletedRequestCount(requests.filter((request) => isRequestActionable(Number(request.statusId ?? request.StatusId ?? 0))).length)
+      if (document.hidden) return
+      const unitRequests = await getNotificationSummary({ department, unitRef })
+      const requests = unitRequests.filter(matchesCurrentRequester)
+      setNotCompletedRequestCount(
+        unitRequests.filter((request) => isRequestActionable(Number(request.statusId ?? request.StatusId ?? 0))).length,
+      )
       const previousStatuses = JSON.parse(localStorage.getItem(statusStorageKey) || '{}')
       const storedNotifications = JSON.parse(localStorage.getItem(notificationStorageKey) || '[]')
       const nextStatuses = {}
-      const actionableHeaderIds = new Set(
-        requests
-          .filter((request) => isRequestActionable(Number(request.statusId ?? request.StatusId ?? 0)))
-          .map((request) => String(request.headerId ?? request.HeaderId ?? '')),
-      )
-      const nextNotifications = storedNotifications.filter((item) => {
-        const headerId = String(item.id ?? '').split('-')[0]
-        return item.statusId === 8 && actionableHeaderIds.has(headerId)
-      })
+      const nextNotifications = [...storedNotifications]
 
       requests.forEach((request) => {
         const headerId = String(request.headerId ?? request.HeaderId ?? '')
@@ -108,7 +108,9 @@ function RequestLayout() {
         const meta = getNotificationMeta(statusId)
         nextStatuses[headerId] = statusId
 
-        if (meta && previousStatuses[headerId] !== undefined && previousStatuses[headerId] !== statusId) {
+        // Recover pending/backlog alerts even if the live event was missed.
+        const needsRecovery = statusId === 6 || statusId === 8
+        if (meta && (needsRecovery || (previousStatuses[headerId] !== undefined && previousStatuses[headerId] !== statusId))) {
           const notificationId = `${headerId}-${statusId}`
           if (!nextNotifications.some((item) => item.id === notificationId)) {
             nextNotifications.unshift({
@@ -122,13 +124,39 @@ function RequestLayout() {
         }
       })
 
+      // Sync currently open requests in this unit as a fallback for a
+      // missed live SignalR message (for example, while the page was loading).
+      unitRequests
+        .filter((request) => !matchesCurrentRequester(request))
+        .forEach((request) => {
+          const headerId = String(request.headerId ?? request.HeaderId ?? '')
+          const statusId = Number(request.statusId ?? request.StatusId ?? 0)
+          if (!headerId || (statusId !== 10 && statusId !== 8)) return
+
+          const requester = request.employeeName ?? request.EmployeeName ?? 'สมาชิกในแผนก'
+          const notificationId = statusId === 10
+            ? `department-new-${headerId}`
+            : `department-status-${headerId}-${statusId}`
+          if (nextNotifications.some((item) => item.id === notificationId)) return
+
+          nextNotifications.unshift({
+            id: notificationId,
+            label: statusId === 10
+              ? `คำขอใหม่จาก ${requester}`
+              : `${requester}: ${getNotificationMeta(statusId).label}`,
+            read: false,
+            requestNo: request.requestNo ?? request.RequestNo ?? `คำขอ #${headerId}`,
+            statusId,
+          })
+        })
+
       localStorage.setItem(statusStorageKey, JSON.stringify(nextStatuses))
       localStorage.setItem(notificationStorageKey, JSON.stringify(nextNotifications.slice(0, 30)))
       setNotifications(nextNotifications.slice(0, 30))
     } catch {
       // Keep the request page usable even if the periodic status check fails.
     }
-  }, [matchesCurrentRequester, notificationStorageKey, statusStorageKey])
+  }, [department, matchesCurrentRequester, notificationStorageKey, statusStorageKey, unitRef])
 
   useEffect(() => {
     if (!isSessionActive) {
@@ -139,9 +167,10 @@ function RequestLayout() {
     checkRequestStatuses()
     let statusCheckInterval
     const startFallbackStatusCheck = () => {
+      if (document.hidden) return
       if (!statusCheckInterval) {
         checkRequestStatuses()
-        statusCheckInterval = window.setInterval(checkRequestStatuses, 120000)
+        statusCheckInterval = window.setInterval(checkRequestStatuses, 30000)
       }
     }
     const stopFallbackStatusCheck = () => {
@@ -152,16 +181,65 @@ function RequestLayout() {
     }
     let connection
     let active = true
+    startFallbackStatusCheck()
+    const onVisibilityChange = () => {
+      if (document.hidden) stopFallbackStatusCheck()
+      else startFallbackStatusCheck()
+    }
+    document.addEventListener('visibilitychange', onVisibilityChange)
 
     if (employeeId > 0) {
       connectNotificationHub({
         groupMethod: 'JoinRequesterNotifications',
         groupArguments: [employeeId],
+        additionalGroupInvocations: [{
+          method: 'JoinUnitNotifications',
+          arguments: [unitRef],
+        }],
         onConnectionStateChange: (isConnected) => {
-          if (isConnected) stopFallbackStatusCheck()
-          else startFallbackStatusCheck()
+          if (!active) return
+          startFallbackStatusCheck()
+          if (isConnected) checkRequestStatuses()
         },
         handlers: {
+          DepartmentRequisitionCreated: (request) => {
+            if (!active || Number(request.employeeId ?? request.EmployeeId) === employeeId) return
+            const headerId = String(request.headerId ?? request.HeaderId ?? '')
+            if (!headerId) return
+            const notificationId = `department-new-${headerId}`
+            setNotifications((current) => {
+              if (current.some((item) => item.id === notificationId)) return current
+              const nextNotifications = [{
+                id: notificationId,
+                label: `คำขอใหม่จาก ${request.employeeName ?? request.EmployeeName ?? 'สมาชิกในแผนก'}`,
+                read: false,
+                requestNo: request.requestNo ?? request.RequestNo ?? `คำขอ #${headerId}`,
+                statusId: 10,
+              }, ...current].slice(0, 30)
+              localStorage.setItem(notificationStorageKey, JSON.stringify(nextNotifications))
+              return nextNotifications
+            })
+          },
+          DepartmentRequisitionStatusChanged: (request) => {
+            if (!active || Number(request.employeeId ?? request.EmployeeId) === employeeId) return
+            const statusId = Number(request.statusId ?? request.StatusId ?? 0)
+            const meta = getNotificationMeta(statusId)
+            const headerId = String(request.headerId ?? request.HeaderId ?? '')
+            if (!meta || !headerId) return
+            const notificationId = `department-status-${headerId}-${statusId}`
+            setNotifications((current) => {
+              if (current.some((item) => item.id === notificationId)) return current
+              const nextNotifications = [{
+                id: notificationId,
+                label: `${request.employeeName ?? request.EmployeeName ?? 'สมาชิกในแผนก'}: ${meta.label}`,
+                read: false,
+                requestNo: request.requestNo ?? request.RequestNo ?? `คำขอ #${headerId}`,
+                statusId,
+              }, ...current].slice(0, 30)
+              localStorage.setItem(notificationStorageKey, JSON.stringify(nextNotifications))
+              return nextNotifications
+            })
+          },
           RequisitionStatusChanged: (request) => {
             if (!active) return
 
@@ -218,10 +296,11 @@ function RequestLayout() {
 
     return () => {
       active = false
+      document.removeEventListener('visibilitychange', onVisibilityChange)
       stopFallbackStatusCheck()
       connection?.stop()
     }
-  }, [checkRequestStatuses, employeeId, isSessionActive, notificationStorageKey, statusStorageKey])
+  }, [checkRequestStatuses, employeeId, isSessionActive, notificationStorageKey, statusStorageKey, unitRef])
 
   if (!isSessionActive) {
     return <Navigate to="/request-login" replace />
@@ -327,6 +406,11 @@ function RequestLayout() {
             </Typography>
           </Box>
 
+          <Tooltip title="คู่มือการใช้งาน">
+            <IconButton aria-label="คู่มือการใช้งาน" onClick={() => navigate('/request/manual')} sx={{ border: '1px solid #d7e3f4', borderRadius: 2 }}>
+              <CircleHelp size={20} />
+            </IconButton>
+          </Tooltip>
           <IconButton
             aria-label="การแจ้งเตือนคำขอเบิก"
             onClick={handleOpenNotifications}

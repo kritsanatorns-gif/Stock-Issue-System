@@ -64,6 +64,7 @@ const emptyForm = {
   employeeId: '',
   name: '',
   department: 'HR',
+  unitRef: '',
   username: '',
   password: '',
   role: '',
@@ -76,6 +77,7 @@ const userTableColumns = [
   { key: 'employeeId', label: 'รหัสพนักงาน', width: 120, sortable: true },
   { key: 'name', label: 'ชื่อพนักงาน', width: 280, sortable: true },
   { key: 'department', label: 'แผนก', width: 130, sortable: true },
+  { key: 'unitRef', label: 'หน่วยงาน', width: 130, sortable: true },
   { key: 'username', label: 'ชื่อผู้ใช้', width: 220, sortable: true },
   { key: 'role', label: 'สิทธิ์การใช้งาน', width: 170, sortable: true },
   { key: 'menus', label: 'เมนูที่มองเห็น', width: 190, sortable: false },
@@ -144,6 +146,7 @@ function mapEmployee(row) {
     employeeId: String(row.employeeId ?? ''),
     name: row.employeeName ?? '',
     department: row.department || 'HR',
+    unitRef: row.unitRef ?? '',
     role: row.permissionId ?? row.permission ?? '',
     roleName: row.permissionName ?? row.permission ?? '',
     username: row.username ?? '',
@@ -397,6 +400,7 @@ function UsersPage() {
       employeeId: row.employeeId,
       name: row.name,
       department: row.department || 'HR',
+      unitRef: row.unitRef || '',
       username: row.username,
       password: '',
       role: row.role || permissionOptions[0]?.value || emptyForm.role,
@@ -498,6 +502,7 @@ function UsersPage() {
           <div><b>รหัสพนักงาน:</b> ${form.employeeId.trim()}</div>
           <div><b>ชื่อพนักงาน:</b> ${form.name.trim()}</div>
           <div><b>แผนก:</b> ${form.department.trim() || 'HR'}</div>
+          <div><b>รหัสหน่วยงานแจ้งเตือน:</b> ${form.unitRef.trim() || 'ยังไม่กำหนด'}</div>
           <div><b>ชื่อผู้ใช้:</b> ${form.username.trim()}</div>
           <div><b>สิทธิ์:</b> ${selectedRole.label}</div>
           <div><b>เมนูที่เห็น:</b> ${selectedMenuLabels.join(', ')}</div>
@@ -518,6 +523,7 @@ function UsersPage() {
         employeeId: Number(form.employeeId.trim()),
         employeeName: form.name.trim(),
         department: form.department.trim() || 'HR',
+        unitRef: form.unitRef.trim().toUpperCase(),
         permission: form.role,
         username: form.username.trim(),
         password: form.password.trim(),
@@ -645,7 +651,7 @@ function UsersPage() {
           <DialogContent>
             <Stack spacing={2.25} sx={{ pt: 1 }}>
               <Grid container spacing={2}>
-                <Grid size={5}>
+                <Grid size={3}>
                   <BufferedTextField
                     autoFocus
                     fullWidth
@@ -658,7 +664,7 @@ function UsersPage() {
                     onChange={(event) => handleChange('employeeId', event.target.value)}
                   />
                 </Grid>
-                <Grid size={4}>
+                <Grid size={3}>
                   <BufferedTextField
                     fullWidth
                     required
@@ -680,6 +686,17 @@ function UsersPage() {
                     name="stock-employee-department"
                     value={form.department}
                     onChange={(event) => handleChange('department', event.target.value)}
+                  />
+                </Grid>
+                <Grid size={3}>
+                  <BufferedTextField
+                    fullWidth
+                    autoComplete="off"
+                    helperText="ใช้รับแจ้งเตือนเฉพาะใบเบิกของหน่วยนี้ เช่น OHSA"
+                    label="รหัสหน่วยงานแจ้งเตือน"
+                    name="stock-employee-notification-unit"
+                    value={form.unitRef}
+                    onChange={(event) => handleChange('unitRef', event.target.value.toUpperCase())}
                   />
                 </Grid>
               </Grid>

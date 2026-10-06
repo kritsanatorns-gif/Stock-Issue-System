@@ -103,9 +103,9 @@ export async function importDepartmentsFromHr() {
   return response.data
 }
 
-export async function getHrEmployee(employeeCode, department = '') {
+export async function getHrEmployee(employeeCode, department = '', unitRef = '') {
   const response = await api.get(`/hr-employees/${encodeURIComponent(employeeCode)}`, {
-    params: department ? { department } : {},
+    params: { ...(department ? { department } : {}), ...(unitRef ? { unitRef } : {}) },
   })
 
   return response.data
@@ -264,6 +264,11 @@ export async function getRequisitions(params = {}) {
   return response.data
 }
 
+export async function getNotificationSummary(params = {}) {
+  const response = await api.get('/requisitions/notification-summary', { params })
+  return response.data
+}
+
 export async function createRequisition(requisition) {
   const response = await api.post('/requisitions', requisition)
 
@@ -391,6 +396,11 @@ export async function getPurchasesByProduct(params = {}) {
 export async function getPurchaseTrend(params = {}) {
   const response = await api.get('/reports/purchase-trend', { params })
 
+  return response.data
+}
+
+export async function getStockStatusTrend(params = {}) {
+  const response = await api.get('/reports/stock-status-trend', { params })
   return response.data
 }
 

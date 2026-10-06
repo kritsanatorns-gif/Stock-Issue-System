@@ -43,11 +43,11 @@ function getDocumentTypeChipProps(row) {
 
 function createColumns(onViewDocument) {
   const columns = [
-    { key: 'date', label: 'วันที่', width: 160, align: 'center' },
+    { key: 'date', label: 'วันที่', width: 145, align: 'center' },
     {
       key: 'documentTypeLabel',
       label: 'ประเภทเอกสาร',
-      width: 160,
+      width: 135,
       align: 'center',
       render: (row) => {
         const chipProps = getDocumentTypeChipProps(row)
@@ -61,35 +61,44 @@ function createColumns(onViewDocument) {
         )
       },
     },
-    { key: 'employeeDepartment', label: 'แผนกทำรายการ', width: 170, align: 'center' },
+    { key: 'employeeDepartment', label: 'แผนกทำรายการ', width: 125, align: 'center' },
     {
       key: 'requestDepartment',
       label: 'แผนกผู้เบิก',
-      width: 170,
+      width: 115,
       align: 'center',
       render: (row) => row.documentType === 'ISSUE' ? (row.requestDepartment || '-') : '-',
     },
     {
+      key: 'unitName',
+      label: 'หน่วยงานผู้ขอเบิก',
+      width: 200,
+      headerAlign: 'center',
+      bodyAlign: 'left',
+      wrap: true,
+      value: (row) => row.unitName || '-',
+    },
+    {
       key: 'poInvoiceNo',
       label: 'Invoice',
-      width: 150,
+      width: 100,
       align: 'center',
       render: (row) => row.documentType === 'RECEIVE' ? (row.poInvoiceNo || '-') : '-',
     },
     { key: 'totalItems', label: 'จำนวนรายการสินค้า', width: 150, align: 'center' },
-    { key: 'totalQty', label: 'จำนวนรวม', width: 130, align: 'center' },
+    { key: 'totalQty', label: 'จำนวนรวม', width: 100, align: 'center' },
     {
       key: 'totalCost',
       label: 'ต้นทุนรวม',
-      width: 140,
+      width: 120,
       align: 'center',
       render: (row) => formatMoney(row.totalCost),
     },
-    { key: 'employeeName', label: 'ผู้ทำรายการ', width: 180 },
+    { key: 'employeeName', label: 'ผู้ทำรายการ', width: 150, wrap: true },
     {
       key: 'action',
       label: 'รายการ',
-      width: 120,
+      width: 100,
       searchable: false,
       sortable: false,
       render: (row) => (
@@ -119,6 +128,7 @@ function ReportDataTable({ data, isLoading, onViewDocument }) {
   return (
     <AppTable
       columns={columns}
+      fitToWidth
       defaultSortDirection="desc"
       defaultSortField="date"
       isLoading={isLoading}

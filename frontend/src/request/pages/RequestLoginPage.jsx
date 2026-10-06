@@ -15,15 +15,15 @@ import {
 import { Barcode, Building2, ClipboardCheck, ClipboardList, LogIn, PackageCheck, Search, ShieldCheck, User } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
-import { getDepartments, getHrEmployee } from '../../api/api'
+import { getDepartments, getHrEmployee, getHrEmployees } from '../../api/api'
 import BufferedTextField from '../../components/BufferedTextField'
 import { useRequestAuthStore } from '../../store/requestAuthStore'
 import { useAuthStore } from '../../store/authStore'
 import './RequestLoginPage.css'
 
 function normalizeDepartmentRow(row) {
-  const divisionName = row.divisionName ?? row.DivisionName ?? ''
-  const departmentName = row.departmentName ?? row.DepartmentName ?? ''
+  const divisionName = String(row.divisionName ?? row.DivisionName ?? '').trim()
+  const departmentName = String(row.departmentName ?? row.DepartmentName ?? '').trim()
 
   return {
     code: String(row.departmentId ?? row.DepartmentId ?? ''),
@@ -50,6 +50,8 @@ function RequestLoginPage() {
   const [selectedDepartmentCode, setSelectedDepartmentCode] = useState('')
   const [departmentSearchText, setDepartmentSearchText] = useState('')
   const [departmentOptions, setDepartmentOptions] = useState([])
+  const [unitOptions, setUnitOptions] = useState([])
+  const [selectedUnitRef, setSelectedUnitRef] = useState('')
   const [errorMessage, setErrorMessage] = useState('')
   const [employeeCodeError, setEmployeeCodeError] = useState('')
   const [departmentError, setDepartmentError] = useState('')
@@ -61,7 +63,7 @@ function RequestLoginPage() {
   const [isEmployeeFocused, setIsEmployeeFocused] = useState(false)
   const isSessionActive = isAuthenticated && expiresAt && expiresAt > Date.now()
   const isHrSessionActive = isHrAuthenticated && hrExpiresAt && hrExpiresAt > Date.now()
-  const canSubmit = username.trim() && department.trim() && !employeeCodeError && !departmentError && !isSubmitting
+  const canSubmit = username.trim() && department.trim() && selectedUnitRef && !employeeCodeError && !departmentError && !isSubmitting
 
   useEffect(() => {
     const handleMouseMove = (event) => setEyeOffset({
@@ -72,8 +74,34 @@ function RequestLoginPage() {
     return () => window.removeEventListener('mousemove', handleMouseMove)
   }, [])
 
+  useEffect(() => {
+    let isMounted = true
+    if (!department) { setUnitOptions([]); setSelectedUnitRef(''); return undefined }
+    getHrEmployees(department)
+      .then((employees) => {
+        if (!isMounted) return
+        const units = new Map()
+        ;(employees ?? []).forEach((employee) => {
+          const unitRef = String(employee.unitRef ?? '').trim()
+          if (unitRef) units.set(unitRef, { unitRef, unitName: String(employee.unitName ?? '').trim() })
+        })
+        setUnitOptions([...units.values()].sort((a, b) => a.unitName.localeCompare(b.unitName, 'th') || a.unitRef.localeCompare(b.unitRef, 'th')))
+      })
+      .catch(() => { if (isMounted) setUnitOptions([]) })
+    return () => { isMounted = false }
+  }, [department])
+
   const activeDepartmentOptions = useMemo(
-    () => departmentOptions.filter((item) => item.status === 1),
+    () => {
+      const seen = new Set()
+      return departmentOptions.filter((item) => {
+        if (item.status !== 1) return false
+        const key = JSON.stringify([item.divisionName.toLowerCase(), item.name.toLowerCase()])
+        if (seen.has(key)) return false
+        seen.add(key)
+        return true
+      })
+    },
     [departmentOptions],
   )
 
@@ -143,6 +171,7 @@ function RequestLoginPage() {
     clearCheckedEmployee()
     setUsername('')
     setDepartment(departmentRow?.name ?? '')
+    setSelectedUnitRef('')
     setSelectedDepartmentCode(departmentRow?.code ?? '')
     setDepartmentCodeText(departmentRow?.code ?? '')
     setDepartmentSearchText('')
@@ -153,6 +182,8 @@ function RequestLoginPage() {
     clearCheckedEmployee()
     setUsername('')
     setDepartment('')
+    setUnitOptions([])
+    setSelectedUnitRef('')
     setSelectedDepartmentCode('')
     setDepartmentCodeText('')
     setDepartmentSearchText('')
@@ -235,7 +266,7 @@ function RequestLoginPage() {
     setIsCheckingEmployee(true)
 
     try {
-      const employee = await getHrEmployee(employeeCode, employeeDepartment)
+      const employee = await getHrEmployee(employeeCode, employeeDepartment, selectedUnitRef)
 
       setHrEmployee(employee)
     } catch (error) {
@@ -266,9 +297,9 @@ function RequestLoginPage() {
       const employeeCode = username.trim()
       const employeeDepartment = department.trim()
       const checkedEmployee =
-        hrEmployee?.code === employeeCode && hrEmployee?.division === employeeDepartment
+        hrEmployee?.code === employeeCode && hrEmployee?.division === employeeDepartment && hrEmployee?.unitRef === selectedUnitRef
           ? hrEmployee
-          : await getHrEmployee(employeeCode, employeeDepartment)
+          : await getHrEmployee(employeeCode, employeeDepartment, selectedUnitRef)
 
       await login({
         // HR Department is the division (ฝ่าย); HR Division is the department (แผนก).
@@ -276,6 +307,8 @@ function RequestLoginPage() {
         division: checkedEmployee.department,
         employeeCode: checkedEmployee.code,
         employeeName: checkedEmployee.name,
+        unitRef: checkedEmployee.unitRef,
+        unitName: checkedEmployee.unitName,
         username: checkedEmployee.name,
       })
       navigate('/request/history', { replace: true })
@@ -345,6 +378,7 @@ function RequestLoginPage() {
             flexDirection: 'column',
             justifyContent: 'flex-start',
             minHeight: 850,
+            minWidth: 0,
             p: 5,
             position: 'relative',
           }}
@@ -355,7 +389,7 @@ function RequestLoginPage() {
             src="/tlp-logo.png"
             sx={{ filter: 'brightness(0) invert(1)', height: 'auto', opacity: 0.92, position: 'absolute', right: 38, top: 36, width: 86, zIndex: 1 }}
           />
-          <Stack direction="row" spacing={2} sx={{ position: 'relative', zIndex: 1 }}>
+          <Stack direction="row" spacing={2} sx={{ position: 'relative', pr: '100px', minWidth: 0, overflowWrap: 'anywhere', zIndex: 1 }}>
             <Box sx={{ alignItems: 'center', bgcolor: 'rgba(53,94,172,.85)', borderRadius: 1.5, color: '#fff', display: 'flex', fontSize: 17, fontWeight: 900, height: 58, justifyContent: 'center', width: 58 }}>User</Box>
             <Box>
               <Typography sx={{ color: '#fff', fontSize: 21, fontWeight: 900 }}>ระบบจัดการคลังสำนักงาน</Typography>
@@ -365,14 +399,14 @@ function RequestLoginPage() {
           <Box sx={{ marginTop: 14, position: 'relative', zIndex: 1 }}>
             <Typography sx={{ color: '#fff', fontSize: 27, fontWeight: 900 }}>เบิกสินค้าได้ง่าย</Typography>
             <Typography sx={{ color: '#b8c7e8', fontSize: 15, lineHeight: 1.7, mt: 1 }}>ค้นหาสินค้า ส่งคำขอเบิก และติดตามสถานะคำขอได้ในที่เดียว</Typography>
-            <Stack direction="row" spacing={2.5} sx={{ mt: 4 }}>
+            <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 180px), 1fr))', gap: 2.5, mt: 4 }}>
               {[['ค้นหาสินค้า', 'ดูรายการสินค้าและจำนวนคงเหลือ', <PackageCheck size={21} />], ['ส่งคำขอเบิก', 'เลือกสินค้าและระบุจำนวนที่ต้องการ', <ClipboardCheck size={21} />], ['ติดตามสถานะ', 'ตรวจสอบคำขอว่าอยู่ระหว่างรอจัดของหรือดำเนินการแล้ว', <ShieldCheck size={21} />]].map(([title, text, icon]) => (
-                <Stack key={title} direction="row" spacing={1}>
-                  <Box sx={{ alignItems: 'center', bgcolor: 'rgba(69,122,211,.5)', borderRadius: 1.5, color: '#bdddff', display: 'flex', height: 46, justifyContent: 'center', width: 46 }}>{icon}</Box>
-                  <Box><Typography sx={{ color: '#fff', fontSize: 12, fontWeight: 800, whiteSpace: 'nowrap' }}>{title}</Typography><Typography sx={{ color: '#b8c7e8', fontSize: 10, whiteSpace: 'nowrap' }}>{text}</Typography></Box>
+                <Stack key={title} direction="row" spacing={1} sx={{ minWidth: 0 }}>
+                  <Box sx={{ alignItems: 'center', bgcolor: 'rgba(69,122,211,.5)', borderRadius: 1.5, color: '#bdddff', display: 'flex', flexShrink: 0, height: 46, justifyContent: 'center', width: 46 }}>{icon}</Box>
+                  <Box sx={{ minWidth: 0, overflowWrap: 'anywhere' }}><Typography sx={{ color: '#fff', fontSize: 12, fontWeight: 800 }}>{title}</Typography><Typography sx={{ color: '#b8c7e8', fontSize: 10, lineHeight: 1.7 }}>{text}</Typography></Box>
                 </Stack>
               ))}
-            </Stack>
+            </Box>
           </Box>
         </Box>
 
@@ -383,6 +417,7 @@ function RequestLoginPage() {
           sx={{
             alignItems: 'center',
             background: '#fffdf8',
+            minWidth: 0,
             display: 'flex',
             justifyContent: 'center',
             p: { xs: 3, md: 9 },
@@ -525,6 +560,27 @@ function RequestLoginPage() {
                 ) : (
                   <MenuItem disabled>ไม่พบแผนก</MenuItem>
                 )}
+              </Select>
+            </FormControl>
+
+            <FormControl fullWidth required disabled={!department || !unitOptions.length}>
+              <InputLabel id="request-unit-select-label">เลือกหน่วยงาน</InputLabel>
+              <Select
+                label="เลือกหน่วยงาน"
+                labelId="request-unit-select-label"
+                value={selectedUnitRef}
+                onChange={(event) => {
+                  clearCheckedEmployee()
+                  setSelectedUnitRef(event.target.value)
+                }}
+                startAdornment={
+                  <InputAdornment position="start">
+                    <Building2 color="#5f7f99" size={22} />
+                  </InputAdornment>
+                }
+              >
+                <MenuItem value="">เลือกหน่วยงาน</MenuItem>
+                {unitOptions.map((unit) => <MenuItem key={unit.unitRef} value={unit.unitRef}>{unit.unitName ? `${unit.unitName} (${unit.unitRef})` : unit.unitRef}</MenuItem>)}
               </Select>
             </FormControl>
 

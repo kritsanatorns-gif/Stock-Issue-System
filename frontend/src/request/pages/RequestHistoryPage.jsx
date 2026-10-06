@@ -1,4 +1,4 @@
-import { addReportCanvas, clampReportTableCells, installReportPrinting } from '../../utils/reportPagination'
+﻿import { addReportCanvas, clampReportTableCells, installReportPrinting } from '../../utils/reportPagination'
 ﻿import {
   Alert,
   Box,
@@ -50,12 +50,16 @@ function normalizeRequisition(row) {
   // StockHeader.Department เก็บฝ่าย, StockHeader.Division เก็บแผนก
   const department = row.division ?? row.Division ?? ''
   const division = row.department ?? row.Department ?? ''
+  const unitRef = row.unitRef ?? row.UnitRef ?? ''
+  const unitName = row.unitName ?? row.UnitName ?? ''
 
   return {
     approvedAt: row.approvedAt ?? row.ApprovedAt ?? null,
     createdAt: row.createdAt ?? row.CreatedAt ?? '',
     department,
     division,
+    unitRef,
+    unitName,
     employeeId: Number(row.employeeId ?? row.EmployeeId ?? 0),
     employeeName: row.employeeName ?? row.EmployeeName ?? '',
     headerId: row.headerId ?? row.HeaderId ?? '',
@@ -448,7 +452,7 @@ th, td { border: 1px solid #111; font-size: 10px; height: 40px; padding: 3px 4px
                 แผนก
                 <span class="line line-md print-value">${escapeHtml(row.department || '')}</span>
                 หน่วย
-                <span class="line line-md"></span>
+                <span class="line line-md print-value">${escapeHtml(row.unitName || row.unitRef || '')}</span>
               </div>
             </div>
 
@@ -521,6 +525,36 @@ th, td { border: 1px solid #111; font-size: 10px; height: 40px; padding: 3px 4px
   printWindow.document.close()
 }
 
+// Use real borders for each rendered line; canvas does not support underline offsets.
+function drawUnitNameLines(root) {
+  const doc = root.ownerDocument || root
+  root.querySelectorAll('.request-pdf-unit-rule').forEach((line) => line.remove())
+  root.querySelectorAll('.request-pdf-organization').forEach((organization) => {
+    const name = organization.querySelector('.request-pdf-unit-name')
+    const reference = organization.querySelector('.request-pdf-org-field .request-pdf-line')
+    if (!name || !reference) return
+    const range = doc.createRange()
+    range.selectNodeContents(name)
+    const rects = Array.from(range.getClientRects()).filter((rect) => rect.width > 0)
+    if (!rects.length) return
+    const origin = organization.getBoundingClientRect()
+    const referenceBottom = reference.getBoundingClientRect().bottom
+    const firstTop = rects[0].top
+    const lines = []
+    rects.forEach((rect) => {
+      const existing = lines.find((line) => Math.abs(line.top - rect.top) < 2)
+      if (existing) { existing.left = Math.min(existing.left, rect.left); existing.right = Math.max(existing.right, rect.right) }
+      else lines.push({ top: rect.top, left: rect.left, right: rect.right })
+    })
+    lines.forEach((rect) => {
+      const line = doc.createElement('span')
+      line.className = 'request-pdf-unit-rule'
+      line.style.cssText = `position:absolute;pointer-events:none;border-bottom:1px solid #111;height:0;left:${rect.left - origin.left}px;top:${referenceBottom - origin.top - 1 + rect.top - firstTop}px;width:${rect.right - rect.left}px;`
+      organization.appendChild(line)
+    })
+  })
+}
+
 function buildRequestPdfHtml(row) {
   const requestRemark = getRequestSlipRemark(row)
   const escapeHtml = (value) =>
@@ -551,6 +585,7 @@ function buildRequestPdfHtml(row) {
 
   const slipStamp = getRequestSlipStamp(row) || modeConfig.stampFallback
   const slipStampColor = getRequestSlipStampColor(slipStamp)
+  const unitName = String(row.unitName || row.unitRef || '')
   const barcodeImage = createRequestBarcodeDataUrl(row.requestNo)
   const rowsHtml = displayRows
     .map(
@@ -631,6 +666,13 @@ function buildRequestPdfHtml(row) {
       .request-pdf-xl { min-width: 270px; }
       .request-pdf-top { display: grid; gap: 10px; grid-template-columns: minmax(0, 1fr) 310px; margin-top: 4px; }
       .request-pdf-row { margin-bottom: 4px; white-space: nowrap; }
+      .request-pdf-organization { display: block; font-size: 13px; line-height: 24px; white-space: normal; overflow-wrap: anywhere; }
+      .request-pdf-organization .request-pdf-value { font-size: 13px; }
+      .request-pdf-organization .request-pdf-org-field { white-space: nowrap; }
+      .request-pdf-organization .request-pdf-org-field .request-pdf-line { min-width: 60px; }
+      .request-pdf-organization .request-pdf-unit { display: inline; white-space: normal; }
+      .request-pdf-organization { position: relative; }
+      .request-pdf-organization .request-pdf-unit-name { overflow-wrap: anywhere; text-decoration: none; }
       .request-pdf-approval { border: 1px solid #111; display: grid; grid-template-columns: 1fr 1fr; }
       .request-pdf-approval-cell { min-height: 96px; padding: 3px 6px; text-align: center; }
       .request-pdf-approval-cell + .request-pdf-approval-cell { border-left: 1px solid #111; }
@@ -677,13 +719,10 @@ function buildRequestPdfHtml(row) {
             น.
           </div>
           <div class="request-pdf-row">ชื่อ-สกุล ผู้ขอเบิก <span class="request-pdf-line request-pdf-xl request-pdf-value">${escapeHtml(row.employeeName || '')}</span></div>
-          <div class="request-pdf-row">
-            ฝ่าย
-            <span class="request-pdf-line request-pdf-md request-pdf-value">${escapeHtml(row.division || '')}</span>
-            แผนก
-            <span class="request-pdf-line request-pdf-md request-pdf-value">${escapeHtml(row.department || '')}</span>
-            หน่วย
-            <span class="request-pdf-line request-pdf-md"></span>
+          <div class="request-pdf-row request-pdf-organization">
+            <span class="request-pdf-org-field">ฝ่าย <span class="request-pdf-line request-pdf-md request-pdf-value">${escapeHtml(row.division || '')}</span></span>
+            <span class="request-pdf-org-field">แผนก <span class="request-pdf-line request-pdf-md request-pdf-value">${escapeHtml(row.department || '')}</span></span>
+            <span class="request-pdf-unit">หน่วย <span class="request-pdf-unit-name request-pdf-value">${escapeHtml(unitName)}</span></span>
           </div>
         </div>
 
@@ -775,7 +814,7 @@ export function printHistorySlip(row) {
       </head>
       <body>
         ${html}
-        <script>window.onload = () => { window.print() }</script>
+        <script>window.onload = async () => { await document.fonts.ready; (${drawUnitNameLines.toString()})(document); window.print() }</script>
       </body>
     </html>
   `)
@@ -813,12 +852,15 @@ export async function downloadHistorySlipPdf(row) {
   try {
     const requestSheet = container.querySelector('.request-pdf-sheet')
     clampReportTableCells(requestSheet)
+    await document.fonts.ready
+    drawUnitNameLines(requestSheet)
     const canvas = await html2canvas(requestSheet, {
       backgroundColor: '#ffffff',
       scale: 2,
       useCORS: true,
     })
     const pdf = new jsPDF('p', 'mm', 'a4')
+    pdf.setDisplayMode('100%')
     addReportCanvas(pdf, canvas, { landscape: false })
 
     pdf.save(`${row.requestNo || 'request-slip'}.pdf`)
@@ -836,20 +878,21 @@ function RequestHistoryPage() {
   const [endDate, setEndDate] = useState(() => dayjs().format('YYYY-MM-DD'))
   const [startDate, setStartDate] = useState(() => dayjs().subtract(1, 'month').format('YYYY-MM-DD'))
   const department = employee?.department ?? ''
+  const unitRef = employee?.unitRef ?? employee?.UnitRef ?? ''
 
   const loadRows = useCallback(async () => {
     setLoadError('')
 
     try {
-      const data = await getRequisitions({ department })
+      const data = await getRequisitions({ department, unitRef })
       const normalizedRows = (data ?? []).map(normalizeRequisition)
 
-      setRows(normalizedRows.filter((row) => department && row.department === department))
+      setRows(normalizedRows.filter((row) => department && row.department === department && (!unitRef || row.unitRef === unitRef)))
     } catch {
       setLoadError('โหลดประวัติคำขอเบิกไม่สำเร็จ กรุณาตรวจสอบ Backend API')
       setRows([])
     }
-  }, [department])
+  }, [department, unitRef])
 
   useEffect(() => {
     loadRows()
@@ -912,6 +955,7 @@ function RequestHistoryPage() {
     { key: 'requestNo', label: 'เลขที่คำขอ', width: 150 },
     { key: 'employeeName', label: 'ผู้ขอเบิก', width: 160, align: 'center', wrap: true },
     { key: 'department', label: 'แผนก', width: 120, align: 'center' },
+    { key: 'unitName', label: 'หน่วยงาน', width: 160, align: 'center' },
     {
       key: 'isUrgent',
       label: 'เบิกด่วน',
@@ -929,10 +973,23 @@ function RequestHistoryPage() {
     {
       key: 'status',
       label: 'สถานะ',
-      width: 140,
+      width: 220,
+      minWidth: 220,
       value: (row) => getRequestStatusMeta(row).label,
       render: (row) => {
         const statusStyle = requestStatusStyle(row)
+        const hasBacklogAndPartial = Number(row.statusId) === 8 && isPartiallyAllowedRequisition(row)
+
+        if (hasBacklogAndPartial) {
+          return (
+            <Box sx={{ display: 'flex', justifyContent: 'center', width: '100%' }}>
+              <Stack alignItems="center" direction="row" spacing={0.5}>
+                <Chip label="ค้าง" size="small" sx={{ bgcolor: '#f97316', color: '#fff', fontWeight: 800 }} />
+                <Chip label="เบิกได้บางส่วน" size="small" sx={{ bgcolor: '#0e7490', color: '#fff', fontWeight: 800 }} />
+              </Stack>
+            </Box>
+          )
+        }
 
         return (
           <Chip
@@ -942,7 +999,7 @@ function RequestHistoryPage() {
               backgroundColor: statusStyle.backgroundColor,
               height: 'auto',
               maxWidth: '100%',
-              '& .MuiChip-label': { whiteSpace: 'normal', py: 0.5 },
+              '& .MuiChip-label': { whiteSpace: 'nowrap', py: 0.5 },
               color: statusStyle.color,
               fontWeight: 800,
             }}
@@ -1072,7 +1129,13 @@ function RequestHistoryPage() {
         </CardContent>
       </Card>
 
-      <Dialog fullWidth maxWidth="lg" open={Boolean(selectedRow)} onClose={() => setSelectedRow(null)}>
+      <Dialog
+        fullWidth
+        maxWidth="xl"
+        open={Boolean(selectedRow)}
+        PaperProps={{ sx: { maxWidth: '1440px', width: '96vw' } }}
+        onClose={() => setSelectedRow(null)}
+      >
         <DialogTitle sx={{ alignItems: 'center', display: 'flex', gap: 1 }}>
           <ClipboardList size={22} />
           รายละเอียดคำขอเบิก
@@ -1081,23 +1144,33 @@ function RequestHistoryPage() {
           {selectedRow ? (
             <Stack spacing={2} sx={{ pt: 1 }}>
               <Grid container spacing={2}>
-                <Grid size={{ xs: 12, md: 3 }}>
+                <Grid size={{ xs: 12, md: 'auto' }}>
                   <Typography sx={{ color: '#64748b', fontSize: 12, fontWeight: 800 }}>เลขที่คำขอ</Typography>
                   <Typography sx={{ fontWeight: 900 }}>{selectedRow.requestNo || '-'}</Typography>
                 </Grid>
-                <Grid size={{ xs: 12, md: 3 }}>
+                <Grid size={{ xs: 12, md: 'auto' }}>
                   <Typography sx={{ color: '#64748b', fontSize: 12, fontWeight: 800 }}>วันที่ขอเบิก</Typography>
                   <Typography sx={{ fontWeight: 900 }}>{formatDisplayDateTime(selectedRow.createdAt)}</Typography>
                 </Grid>
-                <Grid size={{ xs: 12, md: 3 }}>
-                  <Typography sx={{ color: '#64748b', fontSize: 12, fontWeight: 800 }}>แผนก</Typography>
-                  <Typography sx={{ fontWeight: 900 }}>{selectedRow.department || '-'}</Typography>
+                <Grid size={{ xs: 12, md: 'grow' }} sx={{ pl: { md: 3 } }}>
+                  <Grid container columnSpacing={2} rowSpacing={1}>
+                    <Grid size={{ xs: 4, sm: 2 }}>
+                      <Typography sx={{ color: '#64748b', fontSize: 12, fontWeight: 800 }}>ฝ่าย</Typography>
+                      <Typography sx={{ fontWeight: 900 }}>{selectedRow.division || '-'}</Typography>
+                    </Grid>
+                    <Grid size={{ xs: 4, sm: 2 }}>
+                      <Typography sx={{ color: '#64748b', fontSize: 12, fontWeight: 800 }}>แผนก</Typography>
+                      <Typography sx={{ fontWeight: 900 }}>{selectedRow.department || '-'}</Typography>
+                    </Grid>
+                    <Grid size={{ xs: 12, sm: 8 }}>
+                      <Typography sx={{ color: '#64748b', fontSize: 12, fontWeight: 800 }}>หน่วยงาน</Typography>
+                      <Typography sx={{ fontWeight: 900, overflowWrap: 'anywhere' }}>
+                        {selectedRow.unitName || selectedRow.unitRef || '-'}
+                      </Typography>
+                    </Grid>
+                  </Grid>
                 </Grid>
-                <Grid size={{ xs: 12, md: 3 }}>
-                  <Typography sx={{ color: '#64748b', fontSize: 12, fontWeight: 800 }}>ฝ่าย</Typography>
-                  <Typography sx={{ fontWeight: 900 }}>{selectedRow.division || '-'}</Typography>
-                </Grid>
-                <Grid size={{ xs: 12, md: 3 }}>
+                <Grid size={{ xs: 12, md: 'auto' }}>
                   <Typography sx={{ color: '#64748b', fontSize: 12, fontWeight: 800 }}>สถานะ</Typography>
                   <Chip
                     label={getRequestStatusMeta(selectedRow).label}

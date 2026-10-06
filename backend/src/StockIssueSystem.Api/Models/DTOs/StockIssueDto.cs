@@ -10,6 +10,8 @@ public sealed class StockIssueDto
     public DateTime CreatedAt { get; set; }
     public string Department { get; set; } = string.Empty;
     public string Division { get; set; } = string.Empty;
+    public string UnitRef { get; set; } = string.Empty;
+    public string UnitName { get; set; } = string.Empty;
     public string DocumentNo { get; set; } = string.Empty;
     public string CancelNo { get; set; } = string.Empty;
     public int? RequestHeaderId { get; set; }

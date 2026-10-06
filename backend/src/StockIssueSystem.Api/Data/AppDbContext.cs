@@ -92,6 +92,8 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
             entity.HasKey(department => department.DepartmentId);
             entity.Property(department => department.DepartmentName).HasMaxLength(50).IsRequired();
             entity.Property(department => department.DivisionName).HasMaxLength(100).HasDefaultValue("");
+            entity.Property(department => department.UnitName).HasColumnType("nvarchar(max)").HasDefaultValue("");
+            entity.Property(department => department.UnitRef).HasMaxLength(50).HasDefaultValue("");
             entity.Property(department => department.DepartmentStatus).HasDefaultValue(1);
         });
 
@@ -103,6 +105,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
             entity.Property(employee => employee.EmployeeName).HasMaxLength(50);
             entity.Property(employee => employee.Permission).HasMaxLength(50);
             entity.Property(employee => employee.Department).HasMaxLength(50).HasDefaultValue("HR");
+            entity.Property(employee => employee.UnitRef).HasMaxLength(100).HasDefaultValue("");
             entity.Property(employee => employee.Username).HasColumnName("Usersname").HasMaxLength(50);
             entity.Property(employee => employee.Password).HasMaxLength(50);
             entity.Property(employee => employee.Status).HasColumnName("EmployeeStatus");
@@ -257,6 +260,8 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
             entity.Property(header => header.TransactionDate).HasDefaultValueSql("GETDATE()");
             entity.Property(header => header.Department).HasMaxLength(50).HasDefaultValue("");
             entity.Property(header => header.Division).HasMaxLength(100).HasDefaultValue("");
+            entity.Property(header => header.UnitRef).HasMaxLength(100).HasDefaultValue("");
+            entity.Property(header => header.UnitName).HasMaxLength(200).HasDefaultValue("");
             entity.Property(header => header.RequesterName).HasMaxLength(100).HasDefaultValue("");
             entity.Property(header => header.IsUrgent).HasDefaultValue(false);
             entity.Property(header => header.UrgentRemark).HasMaxLength(500).HasDefaultValue("");

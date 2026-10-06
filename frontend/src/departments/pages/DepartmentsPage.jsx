@@ -26,6 +26,7 @@ const emptyForm = {
   departmentId: '',
   departmentName: '',
   divisionName: '',
+  unitName: '',
   departmentStatus: 1,
 }
 
@@ -34,6 +35,7 @@ function mapDepartment(row) {
     departmentId: row.departmentId ?? row.DepartmentId ?? '',
     departmentName: row.departmentName ?? row.DepartmentName ?? '',
     divisionName: row.divisionName ?? row.DivisionName ?? row.departmentName ?? row.DepartmentName ?? '',
+    unitName: row.unitName ?? row.UnitName ?? '',
     departmentStatus: Number(row.departmentStatus ?? row.DepartmentStatus ?? 1),
   }
 }
@@ -85,7 +87,7 @@ function DepartmentsPage() {
   const handleImportFromHr = async () => {
     const result = await Swal.fire({
       title: 'นำเข้าฝ่ายและแผนกจาก HR',
-      text: 'ระบบจะอ่านข้อมูลจาก HR แล้วเพิ่มเฉพาะรายการที่ยังไม่มีในระบบนี้ โดยจะไม่แก้ไขหรือลบข้อมูล HR',
+      text: 'ระบบจะลบรายการฝ่าย แผนก และหน่วยงานเดิมทั้งหมด แล้วดึงข้อมูลชุดใหม่จาก HR',
       icon: 'question',
       showCancelButton: true,
       confirmButtonText: 'นำเข้า',
@@ -101,7 +103,7 @@ function DepartmentsPage() {
       await loadDepartments()
       await Swal.fire({
         title: 'นำเข้าข้อมูลสำเร็จ',
-        text: `เพิ่ม ${importResult.imported ?? 0} รายการ · มีอยู่แล้ว ${importResult.skipped ?? 0} รายการ`,
+        text: `นำเข้าฝ่าย แผนก และหน่วยงานใหม่ ${importResult.imported ?? 0} รายการ`,
         icon: 'success',
         confirmButtonText: 'ตกลง',
         customClass: { container: 'stock-swal-container' },
@@ -122,7 +124,7 @@ function DepartmentsPage() {
   const handleFormChange = (field, value) => {
     setForm((current) => ({
       ...current,
-      [field]: field === 'departmentName' || field === 'divisionName' ? normalizePlainName(value) : value,
+      [field]: ['departmentName', 'divisionName', 'unitName'].includes(field) ? normalizePlainName(value) : value,
     }))
   }
 
@@ -135,6 +137,7 @@ function DepartmentsPage() {
     const payload = {
       departmentName: form.departmentName.trim(),
       divisionName: form.divisionName.trim(),
+      unitName: form.unitName.trim(),
       departmentStatus: Number(form.departmentStatus),
     }
 
@@ -184,6 +187,7 @@ function DepartmentsPage() {
     },
     { key: 'divisionName', label: 'ฝ่าย', width: 180 },
     { key: 'departmentName', label: 'ชื่อแผนก', width: 260 },
+    { key: 'unitName', label: 'หน่วยงาน', width: 300, bodyAlign: 'left' },
     {
       key: 'departmentStatus', label: 'สถานะ', width: 140, align: 'center', searchable: false,
       render: (row) => (
@@ -228,6 +232,7 @@ function DepartmentsPage() {
             </Grid>
             <TextField fullWidth required helperText="รองรับภาษาไทย อังกฤษ ตัวเลข และ . _ / -" label="ฝ่าย" value={form.divisionName} onChange={(event) => handleFormChange('divisionName', event.target.value)} />
             <TextField fullWidth required label="ชื่อแผนก" value={form.departmentName} onChange={(event) => handleFormChange('departmentName', event.target.value)} />
+            <TextField fullWidth label="หน่วยงาน" value={form.unitName} onChange={(event) => handleFormChange('unitName', event.target.value)} />
           </Stack>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2.5 }}>
@@ -243,6 +248,7 @@ function DepartmentsPage() {
             <Alert severity="info">ต้องการบันทึกข้อมูลแผนกนี้ใช่หรือไม่</Alert>
             <Typography sx={{ color: '#475569', fontSize: 14 }}>ฝ่าย: {form.divisionName || '-'}</Typography>
             <Typography sx={{ color: '#475569', fontSize: 14 }}>แผนก: {form.departmentName || '-'}</Typography>
+            <Typography sx={{ color: '#475569', fontSize: 14 }}>หน่วยงาน: {form.unitName || '-'}</Typography>
           </Stack>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2.5 }}>

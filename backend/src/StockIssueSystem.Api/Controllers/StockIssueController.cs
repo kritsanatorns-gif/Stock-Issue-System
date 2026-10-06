@@ -584,6 +584,8 @@ public sealed class StockIssueController(AppDbContext dbContext, FifoCostService
             CreatedAt = report.TransactionDate,
             Department = report.Remark,
             Division = report.Department,
+            UnitRef = report.UnitRef,
+            UnitName = report.UnitName,
             DocumentNo = report.SourceRequisitionId is int requestHeaderId && requestNumbers?.TryGetValue(requestHeaderId, out var requestNo) == true && !string.IsNullOrWhiteSpace(requestNo)
                 ? requestNo
                 : (!string.IsNullOrWhiteSpace(report.RequestNo) ? report.RequestNo : report.HeaderId.ToString()),

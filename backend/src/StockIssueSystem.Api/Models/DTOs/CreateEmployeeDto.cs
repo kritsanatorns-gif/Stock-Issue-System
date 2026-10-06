@@ -10,6 +10,8 @@ public sealed class CreateEmployeeDto
 
     public string Department { get; set; } = "HR";
 
+    public string UnitRef { get; set; } = string.Empty;
+
     public string Username { get; set; } = string.Empty;
 
     public string Password { get; set; } = string.Empty;

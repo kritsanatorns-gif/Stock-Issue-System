@@ -140,6 +140,7 @@ public sealed class AuthController(AppDbContext dbContext, StaffSession staffSes
             EmployeeCode = user.EmployeeId.ToString(),
             FullName = user.EmployeeName ?? string.Empty,
             Department = string.IsNullOrWhiteSpace(user.Department) ? "HR" : user.Department,
+            UnitRef = user.UnitRef ?? string.Empty,
             Role = permissionNames.GetValueOrDefault(permissionId, permissionId),
             IsActive = user.Status == 1,
             MenuIds = menuPermissions.GetValueOrDefault(user.EmployeeId, []),

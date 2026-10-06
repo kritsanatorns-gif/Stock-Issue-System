@@ -14,7 +14,7 @@ const labelsByPath = {
   '/reports': 'รายงาน',
   '/users': 'ผู้ใช้งาน',
   '/departments': 'แผนก',
-  '/suppliers': 'จัดการผู้ขาย',
+  '/suppliers': 'จัดการซัพพลาย',
 }
 
 function AppBreadcrumb() {

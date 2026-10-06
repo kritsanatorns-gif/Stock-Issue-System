@@ -78,13 +78,20 @@ public sealed class StockReceiveController(AppDbContext dbContext) : ControllerB
 
         await UpsertProducts(request);
 
+        var transactionDate = ThailandDateTime.FromClient(request.CreatedAt);
+        var vatRate = await dbContext.VatSettings.AsNoTracking()
+            .Where(setting => setting.EffectiveFrom <= transactionDate.Date)
+            .OrderByDescending(setting => setting.EffectiveFrom)
+            .Select(setting => (decimal?)setting.VatRate)
+            .FirstOrDefaultAsync() ?? 7m;
         var subtotal = request.Items.Sum(item => VatCalculator.Money(TryParseCost(item.CostLot)));
+        var vatAmount = request.Items.Sum(item => VatCalculator.Money(TryParseCost(item.CostLot) * vatRate / 100m));
         var stockHeader = new StockHeader
         {
-            VatRate = 0,
-            VatAmount = 0,
+            VatRate = vatRate,
+            VatAmount = vatAmount,
             PurchaseSubtotal = subtotal,
-            HasVatSnapshot = false,
+            HasVatSnapshot = true,
             CreateBy = request.EmployeeId.ToString(),
             CreateDate = DateTime.Now,
             Details = request.Items.Select(item => new StockDetail
@@ -107,14 +114,14 @@ public sealed class StockReceiveController(AppDbContext dbContext) : ControllerB
             Remark = request.Division.Trim(),
             SupplierId = supplierIds.Count == 1 ? supplierIds[0] : null,
             Status = StockHeaderStatuses.Completed,
-            TransactionDate = ThailandDateTime.FromClient(request.CreatedAt),
+            TransactionDate = transactionDate,
         };
 
         dbContext.StockHeaders.Add(stockHeader);
         await UpdateStockBalances(request);
         await dbContext.SaveChangesAsync();
         stockHeader.ReceiveNo = FormatReceiveNo(stockHeader, await GetDailyReceiveSequence(stockHeader));
-        AddCostLots(stockHeader, request, suppliersById);
+        AddCostLots(stockHeader, request, suppliersById, vatRate);
         await dbContext.SaveChangesAsync();
         await transaction.CommitAsync();
 
@@ -195,7 +202,8 @@ public sealed class StockReceiveController(AppDbContext dbContext) : ControllerB
     private void AddCostLots(
         StockHeader stockHeader,
         CreateStockIssueDto request,
-        IReadOnlyDictionary<int, Supplier> suppliersById)
+        IReadOnlyDictionary<int, Supplier> suppliersById,
+        decimal vatRate)
     {
         var detailQueueByProductId = stockHeader.Details
             .OrderBy(detail => detail.DetailId)
@@ -218,6 +226,8 @@ public sealed class StockReceiveController(AppDbContext dbContext) : ControllerB
             var receiveQty = item.Quantity;
             var purchaseCost = VatCalculator.Money(TryParseCost(item.CostLot));
             var unitCost = receiveQty <= 0 ? 0 : Math.Round(purchaseCost / receiveQty, 2);
+            var vatAmount = VatCalculator.Money(purchaseCost * vatRate / 100m);
+            var unitVat = receiveQty <= 0 ? 0 : Math.Round(vatAmount / receiveQty, 6);
             var supplier = suppliersById[item.SupplierId!.Value];
 
             dbContext.StockCostLots.Add(new StockCostLot
@@ -232,10 +242,9 @@ public sealed class StockReceiveController(AppDbContext dbContext) : ControllerB
                 SupplierName = supplier.SupplierName,
                 Status = 1,
                 UnitCost = unitCost,
-                // VAT belongs to the receiving document total only; FIFO costs stay before VAT.
-                VatRate = 0,
-                VatAmount = 0,
-                UnitVat = 0,
+                VatRate = vatRate,
+                VatAmount = vatAmount,
+                UnitVat = unitVat,
             });
         }
     }

@@ -8,6 +8,7 @@ import RequireMenuAccess from '../auth/components/RequireMenuAccess'
 import RequestLayout from '../request/layouts/RequestLayout'
 
 const LoginPage = lazy(() => import('../auth/pages/LoginPage'))
+const ManualPage = lazy(() => import('../help/ManualPage'))
 const ApprovalsPage = lazy(() => import('../approvals/pages/ApprovalsPage'))
 const DashboardPage = lazy(() => import('../Dashboard/pages/DashboardPage'))
 const DepartmentsPage = lazy(() => import('../departments/pages/DepartmentsPage'))
@@ -69,6 +70,7 @@ export const router = createBrowserRouter([
     path: '/request',
     element: <RequestLayout />,
     children: [
+      { path: 'manual', element: renderLazyPage(ManualPage) },
       {
         index: true,
         element: renderLazyPage(RequestPage),
@@ -86,6 +88,7 @@ export const router = createBrowserRouter([
         path: '/',
         element: <MainLayout />,
         children: [
+          { path: 'manual', element: renderLazyPage(ManualPage) },
           {
             index: true,
             element: <NavigateToFirstAllowed />,

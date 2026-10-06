@@ -4,5 +4,7 @@ public sealed class UpdateDepartmentDto
 {
     public string DepartmentName { get; set; } = string.Empty;
     public string DivisionName { get; set; } = string.Empty;
+    public string UnitName { get; set; } = string.Empty;
+    public string UnitRef { get; set; } = string.Empty;
     public int DepartmentStatus { get; set; } = 1;
 }
