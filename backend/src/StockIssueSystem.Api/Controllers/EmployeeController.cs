@@ -143,12 +143,18 @@ public sealed class EmployeeController(AppDbContext dbContext) : ControllerBase
     public async Task<ActionResult<EmployeeDto>> UpdateEmployee(int employeeId, UpdateEmployeeDto request)
     {
         var employee = await dbContext.Employees.FindAsync(employeeId);
-        var newEmployeeId = request.EmployeeId > 0 ? request.EmployeeId : employeeId;
 
         if (employee is null)
         {
             return NotFound("Employee not found.");
         }
+
+        if (request.EmployeeId <= 0)
+        {
+            return BadRequest("Employee ID must be a number greater than zero.");
+        }
+
+        var newEmployeeId = request.EmployeeId;
 
         var validationError = ValidateEmployeeForUpdate(newEmployeeId, request.EmployeeName, request.Username);
         if (validationError is not null)

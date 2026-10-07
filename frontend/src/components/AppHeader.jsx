@@ -22,9 +22,8 @@ function AppHeader({ onToggleSidebar, sidebarCollapsed }) {
   const canApproveRequests = canAccessMenu(employee, 'APPROVALS')
   const employeeId = Number(employee?.id ?? employee?.employeeId ?? employee?.EmployeeId ?? 0)
   const employeeName = employee?.fullName || employee?.employeeName || employee?.name || employee?.username || 'hr'
-  const unitRef = String(employee?.unitRef ?? employee?.UnitRef ?? '').trim()
-  const notificationStorageKey = `stock-issue-hr-request-notifications-v2-${employeeId || employeeName}-${unitRef || 'unassigned'}`
-  const knownRequestStorageKey = `stock-issue-hr-known-request-ids-v2-${employeeId || employeeName}-${unitRef || 'unassigned'}`
+  const notificationStorageKey = `stock-issue-hr-request-notifications-v3-${employeeId || employeeName}`
+  const knownRequestStorageKey = `stock-issue-hr-known-request-ids-v3-${employeeId || employeeName}`
   const sidebarToggleLabel = sidebarCollapsed ? 'ขยายเมนู' : 'ย่อเมนู'
   const themeToggleLabel = isDarkMode ? 'โหมดสว่าง' : 'โหมดมืด'
   const isNotificationOpen = Boolean(notificationAnchor)
@@ -33,7 +32,7 @@ function AppHeader({ onToggleSidebar, sidebarCollapsed }) {
     localStorage.removeItem(`stock-issue-hr-request-notifications-v1-${employeeId || employeeName}`)
     localStorage.removeItem('stock-issue-hr-known-request-ids-v1')
 
-    if (!canApproveRequests || !unitRef) {
+    if (!canApproveRequests) {
       setNotifications([])
       return undefined
     }
@@ -45,11 +44,8 @@ function AppHeader({ onToggleSidebar, sidebarCollapsed }) {
     const checkNewRequisitions = async () => {
       try {
         if (document.hidden) return
-        const requests = await getNotificationSummary({ unitRef })
-        const unitRequests = (requests ?? []).filter((request) => (
-          String(request.unitRef ?? request.UnitRef ?? '').trim().toUpperCase() === unitRef.toUpperCase()
-        ))
-        const activeRequestIds = new Set(unitRequests
+        const approvalRequests = await getNotificationSummary({ allUnits: true })
+        const activeRequestIds = new Set(approvalRequests
           .filter((request) => [10, 6, 8].includes(Number(request.statusId ?? request.StatusId ?? 0)))
           .map((request) => `new-request-${String(request.headerId ?? request.HeaderId ?? '')}`))
         setNotifications((current) => {
@@ -61,7 +57,7 @@ function AppHeader({ onToggleSidebar, sidebarCollapsed }) {
 
           return nextNotifications
         })
-        const requestIds = unitRequests
+        const requestIds = approvalRequests
           .map((request) => String(request.headerId ?? request.HeaderId ?? ''))
           .filter(Boolean)
         const knownRequestIds = JSON.parse(localStorage.getItem(knownRequestStorageKey) || '[]')
@@ -72,7 +68,7 @@ function AppHeader({ onToggleSidebar, sidebarCollapsed }) {
         }
 
         const knownIds = new Set(knownRequestIds)
-        const newRequests = unitRequests.filter((request) => !knownIds.has(String(request.headerId ?? request.HeaderId ?? '')))
+        const newRequests = approvalRequests.filter((request) => !knownIds.has(String(request.headerId ?? request.HeaderId ?? '')))
         localStorage.setItem(knownRequestStorageKey, JSON.stringify(requestIds.slice(0, 300)))
 
         if (newRequests.length === 0) return
@@ -127,8 +123,8 @@ function AppHeader({ onToggleSidebar, sidebarCollapsed }) {
     document.addEventListener('visibilitychange', onVisibilityChange)
 
     connectNotificationHub({
-      groupMethod: 'JoinUnitNotifications',
-      groupArguments: [unitRef],
+      groupMethod: 'JoinApprovalNotifications',
+      groupArguments: [],
       onConnectionStateChange: (isConnected) => {
         if (!active) return
         startFallbackRequestCheck()
@@ -170,7 +166,7 @@ function AppHeader({ onToggleSidebar, sidebarCollapsed }) {
       connection?.stop()
       window.removeEventListener('stock-issue:requisition-updated', handleRequisitionUpdated)
     }
-  }, [canApproveRequests, knownRequestStorageKey, notificationStorageKey, unitRef])
+  }, [canApproveRequests, knownRequestStorageKey, notificationStorageKey])
 
   const unreadNotificationCount = notifications.filter((item) => !item.read).length
   const handleOpenNotifications = (event) => {

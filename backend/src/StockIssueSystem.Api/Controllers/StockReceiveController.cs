@@ -558,6 +558,9 @@ public sealed class StockReceiveController(AppDbContext dbContext) : ControllerB
                 return $"Product {productId} is not active.";
             }
 
+            var readinessError = ProductReadiness.Validate(product);
+            if (readinessError is not null) return readinessError;
+
             if (!string.Equals(product.ReceiveUnit.Trim(), receiveUnit, StringComparison.OrdinalIgnoreCase))
             {
                 return $"Receive unit for product {productId} must be {product.ReceiveUnit}.";

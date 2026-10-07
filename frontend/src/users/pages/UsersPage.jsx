@@ -33,6 +33,7 @@ import {
 } from '../../api/api'
 import BufferedTextField from '../../components/BufferedTextField'
 import AppTable from '../../components/common/AppTable'
+import { useAuthStore } from '../../store/authStore'
 import {
   normalizeEmployeeName,
   normalizeEmployeeNumericId,
@@ -77,7 +78,6 @@ const userTableColumns = [
   { key: 'employeeId', label: 'รหัสพนักงาน', width: 120, sortable: true },
   { key: 'name', label: 'ชื่อพนักงาน', width: 280, sortable: true },
   { key: 'department', label: 'แผนก', width: 130, sortable: true },
-  { key: 'unitRef', label: 'หน่วยงาน', width: 130, sortable: true },
   { key: 'username', label: 'ชื่อผู้ใช้', width: 220, sortable: true },
   { key: 'role', label: 'สิทธิ์การใช้งาน', width: 170, sortable: true },
   { key: 'menus', label: 'เมนูที่มองเห็น', width: 190, sortable: false },
@@ -115,6 +115,35 @@ const roleDefaultMenuCodes = {
   3: ['DASHBOARD', 'STOCK_OUT', 'APPROVALS'],
 }
 
+function formatEmployeeId(value) {
+  const employeeId = String(value ?? '').trim()
+  return /^\d+$/.test(employeeId) ? employeeId.padStart(4, '0') : employeeId
+}
+
+function getSaveErrorMessage(error, fallbackMessage) {
+  if (error?.response?.status === 401 || error?.message === 'Session expired.') {
+    return 'ข้อมูลเข้าสู่ระบบหมดอายุหรือบัญชีมีการเปลี่ยนแปลง กรุณาออกจากระบบแล้วเข้าสู่ระบบใหม่ก่อนบันทึกอีกครั้ง'
+  }
+  if (error?.response?.status === 403) {
+    return 'บัญชีนี้ไม่มีสิทธิ์จัดการผู้ใช้งาน กรุณาติดต่อผู้ดูแลระบบ'
+  }
+  const responseData = error?.response?.data
+  const validationErrors = responseData?.errors && typeof responseData.errors === 'object'
+    ? Object.values(responseData.errors).flat().filter(Boolean)
+    : []
+
+  if (validationErrors.length) return validationErrors.join(' ')
+  if (typeof responseData === 'string' && responseData.trim()) return responseData.trim()
+  if (typeof responseData?.message === 'string' && responseData.message.trim()) return responseData.message.trim()
+  if (typeof responseData?.title === 'string' && responseData.title.trim()) return responseData.title.trim()
+
+  if (!error?.response) {
+    return `เชื่อมต่อ API ไม่สำเร็จ: ${error?.message || 'กรุณาตรวจสอบการเชื่อมต่อเครือข่าย'}`
+  }
+
+  return fallbackMessage
+}
+
 function getStatusOption(status, options = defaultStatusOptions) {
   return (
     options.find((option) => option.value === String(status)) ?? {
@@ -143,7 +172,7 @@ function getDefaultMenuIdsByRole(role, menuOptions) {
 
 function mapEmployee(row) {
   return {
-    employeeId: String(row.employeeId ?? ''),
+    employeeId: formatEmployeeId(row.employeeId),
     name: row.employeeName ?? '',
     department: row.department || 'HR',
     unitRef: row.unitRef ?? '',
@@ -502,7 +531,6 @@ function UsersPage() {
           <div><b>รหัสพนักงาน:</b> ${form.employeeId.trim()}</div>
           <div><b>ชื่อพนักงาน:</b> ${form.name.trim()}</div>
           <div><b>แผนก:</b> ${form.department.trim() || 'HR'}</div>
-          <div><b>รหัสหน่วยงานแจ้งเตือน:</b> ${form.unitRef.trim() || 'ยังไม่กำหนด'}</div>
           <div><b>ชื่อผู้ใช้:</b> ${form.username.trim()}</div>
           <div><b>สิทธิ์:</b> ${selectedRole.label}</div>
           <div><b>เมนูที่เห็น:</b> ${selectedMenuLabels.join(', ')}</div>
@@ -523,7 +551,6 @@ function UsersPage() {
         employeeId: Number(form.employeeId.trim()),
         employeeName: form.name.trim(),
         department: form.department.trim() || 'HR',
-        unitRef: form.unitRef.trim().toUpperCase(),
         permission: form.role,
         username: form.username.trim(),
         password: form.password.trim(),
@@ -557,11 +584,15 @@ function UsersPage() {
       const message =
         error?.response?.status === 409
           ? 'รหัสพนักงานนี้มีอยู่แล้ว'
-          : isEditMode
-            ? 'แก้ไขข้อมูลไม่สำเร็จ กรุณาตรวจสอบข้อมูลอีกครั้ง'
-            : 'บันทึกข้อมูลไม่สำเร็จ กรุณาตรวจสอบข้อมูลอีกครั้ง'
+          : getSaveErrorMessage(
+            error,
+            isEditMode
+              ? 'แก้ไขข้อมูลไม่สำเร็จ กรุณาตรวจสอบข้อมูลอีกครั้ง'
+              : 'บันทึกข้อมูลไม่สำเร็จ กรุณาตรวจสอบข้อมูลอีกครั้ง',
+          )
 
       setErrorMessage(message)
+      const requiresLogin = error?.response?.status === 401 || error?.message === 'Session expired.'
       await Swal.fire({
         title: 'ไม่สำเร็จ',
         text: message,
@@ -569,8 +600,9 @@ function UsersPage() {
         customClass: {
           container: 'stock-swal-container',
         },
-        confirmButtonText: 'ตกลง',
+        confirmButtonText: requiresLogin ? 'เข้าสู่ระบบใหม่' : 'ตกลง',
       })
+      if (requiresLogin) useAuthStore.getState().logout()
     } finally {
       setIsSaving(false)
     }
@@ -651,20 +683,20 @@ function UsersPage() {
           <DialogContent>
             <Stack spacing={2.25} sx={{ pt: 1 }}>
               <Grid container spacing={2}>
-                <Grid size={3}>
+                <Grid size={4}>
                   <BufferedTextField
                     autoFocus
                     fullWidth
                     required
                     autoComplete="new-password"
-                    helperText="รองรับเฉพาะตัวเลขเท่านั้น"
+                    helperText="ใช้ตัวเลขตั้งแต่ 1 ขึ้นไป; 0000 ใช้ไม่ได้"
                     label="รหัสพนักงาน"
                     name="stock-employee-code"
                     value={form.employeeId}
                     onChange={(event) => handleChange('employeeId', event.target.value)}
                   />
                 </Grid>
-                <Grid size={3}>
+                <Grid size={4}>
                   <BufferedTextField
                     fullWidth
                     required
@@ -676,7 +708,7 @@ function UsersPage() {
                     onChange={(event) => handleChange('name', event.target.value)}
                   />
                 </Grid>
-                <Grid size={3}>
+                <Grid size={4}>
                   <BufferedTextField
                     fullWidth
                     required
@@ -686,17 +718,6 @@ function UsersPage() {
                     name="stock-employee-department"
                     value={form.department}
                     onChange={(event) => handleChange('department', event.target.value)}
-                  />
-                </Grid>
-                <Grid size={3}>
-                  <BufferedTextField
-                    fullWidth
-                    autoComplete="off"
-                    helperText="ใช้รับแจ้งเตือนเฉพาะใบเบิกของหน่วยนี้ เช่น OHSA"
-                    label="รหัสหน่วยงานแจ้งเตือน"
-                    name="stock-employee-notification-unit"
-                    value={form.unitRef}
-                    onChange={(event) => handleChange('unitRef', event.target.value.toUpperCase())}
                   />
                 </Grid>
               </Grid>

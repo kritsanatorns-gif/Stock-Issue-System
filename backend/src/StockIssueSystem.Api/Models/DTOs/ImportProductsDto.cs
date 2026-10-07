@@ -2,6 +2,7 @@ namespace StockIssueSystem.Api.Models.DTOs;
 
 public sealed class ImportProductsDto
 {
+    public bool CatalogOnly { get; set; }
     public int EmployeeId { get; set; }
     public string EmployeeName { get; set; } = string.Empty;
     public int? SupplierId { get; set; }

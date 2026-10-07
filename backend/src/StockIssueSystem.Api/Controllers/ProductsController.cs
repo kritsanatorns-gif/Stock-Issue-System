@@ -5,6 +5,7 @@ using System.Text.RegularExpressions;
 using StockIssueSystem.Api.Data;
 using StockIssueSystem.Api.Models;
 using StockIssueSystem.Api.Models.DTOs;
+using StockIssueSystem.Api.Services;
 
 namespace StockIssueSystem.Api.Controllers;
 
@@ -756,7 +757,7 @@ public sealed class ProductsController(AppDbContext dbContext) : ControllerBase
             return BadRequest("At least one product row is required.");
         }
 
-        var validationErrors = ValidateImportRows(request.Items);
+        var validationErrors = ValidateImportRows(request.Items, request.CatalogOnly);
 
         if (validationErrors.Count > 0)
         {
@@ -767,7 +768,7 @@ public sealed class ProductsController(AppDbContext dbContext) : ControllerBase
             });
         }
 
-        if (request.Items.Any(item => string.IsNullOrWhiteSpace(item.SupplierName)))
+        if (!request.CatalogOnly && request.Items.Any(item => string.IsNullOrWhiteSpace(item.SupplierName)))
         {
             return BadRequest("Each imported product must have a supplier.");
         }
@@ -844,6 +845,7 @@ public sealed class ProductsController(AppDbContext dbContext) : ControllerBase
         }
 
         var supplierNames = request.Items
+            .Where(_ => !request.CatalogOnly)
             .Select(item => item.SupplierName.Trim())
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
@@ -897,7 +899,7 @@ public sealed class ProductsController(AppDbContext dbContext) : ControllerBase
                 : item.ReceiveQty > 0
                     ? Convert.ToInt32(Math.Round(item.ReceiveQty * conversionQty, MidpointRounding.AwayFromZero))
                     : 0;
-            var stockQty = baseStockQty + Math.Max(0, item.BonusQty);
+            var stockQty = request.CatalogOnly ? 0 : baseStockQty + Math.Max(0, item.BonusQty);
             var receiveQty = item.ReceiveQty > 0 ? item.ReceiveQty : Math.Round(stockQty / conversionQty, 2);
             // Excel uses the same rule as the receive form: this is the total
             // amount paid for the whole received row, not a per-issue-unit cost.
@@ -928,6 +930,8 @@ public sealed class ProductsController(AppDbContext dbContext) : ControllerBase
                 Qty = stockQty,
             });
 
+            if (request.CatalogOnly) continue;
+
             stockHeader.Details.Add(new StockDetail
             {
                 Barcode = barcode,
@@ -942,7 +946,7 @@ public sealed class ProductsController(AppDbContext dbContext) : ControllerBase
             });
         }
 
-        dbContext.StockHeaders.Add(stockHeader);
+        if (!request.CatalogOnly) dbContext.StockHeaders.Add(stockHeader);
         await dbContext.SaveChangesAsync();
 
         foreach (var detail in stockHeader.Details)
@@ -1004,6 +1008,21 @@ public sealed class ProductsController(AppDbContext dbContext) : ControllerBase
         }
 
         product.Barcode = updateBarcode;
+        var receiveUnit = request.ReceiveUnit?.Trim() ?? product.ReceiveUnit;
+        var issueUnit = request.IssueUnit?.Trim() ?? product.IssueUnit;
+        var conversionQty = request.ConversionQty ?? product.ConversionQty;
+        if (receiveUnit != product.ReceiveUnit || issueUnit != product.IssueUnit || conversionQty != product.ConversionQty)
+        {
+            if (string.IsNullOrWhiteSpace(receiveUnit) || string.IsNullOrWhiteSpace(issueUnit) || conversionQty <= 0)
+                return BadRequest("กรุณาระบุหน่วยรับเข้า หน่วยเบิก และอัตราแปลงที่มากกว่า 0");
+            if (await dbContext.StockDetails.AnyAsync(d => d.ProductId == productId)
+                || await dbContext.StockCostLots.AnyAsync(l => l.ProductId == productId)
+                || await dbContext.StockBalances.AnyAsync(b => b.ProductId == productId && b.Qty != 0))
+                return BadRequest("สินค้ามีรายการเคลื่อนไหวแล้ว จึงไม่สามารถเปลี่ยนหน่วยหรืออัตราแปลงได้");
+            product.ReceiveUnit = receiveUnit;
+            product.IssueUnit = issueUnit;
+            product.ConversionQty = conversionQty;
+        }
         product.CategoryName = updateCategoryName;
         product.Img = request.ImageName?.Trim() ?? string.Empty;
         product.ProductName = updateProductName;
@@ -1150,7 +1169,7 @@ public sealed class ProductsController(AppDbContext dbContext) : ControllerBase
         return null;
     }
 
-    private static List<string> ValidateImportRows(IReadOnlyList<ImportProductRowDto> items)
+    private static List<string> ValidateImportRows(IReadOnlyList<ImportProductRowDto> items, bool catalogOnly)
     {
         var errors = new List<string>();
         var productIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -1169,8 +1188,8 @@ public sealed class ProductsController(AppDbContext dbContext) : ControllerBase
 
             if (string.IsNullOrWhiteSpace(productId)
                 || string.IsNullOrWhiteSpace(productName)
-                || string.IsNullOrWhiteSpace(receiveUnit)
-                || string.IsNullOrWhiteSpace(issueUnit))
+                || (!catalogOnly && (string.IsNullOrWhiteSpace(receiveUnit)
+                || string.IsNullOrWhiteSpace(issueUnit))))
             {
                 errors.Add($"Row {rowNo}: ProductId, ProductName, ReceiveUnit, and IssueUnit are required.");
             }
