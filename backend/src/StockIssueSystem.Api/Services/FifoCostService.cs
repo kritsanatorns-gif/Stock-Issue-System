@@ -28,6 +28,16 @@ public sealed class FifoCostService(AppDbContext dbContext)
         }
 
         var productIds = requirements.Select(requirement => requirement.ProductId).ToList();
+        var products = await dbContext.Products.AsNoTracking()
+            .Where(product => productIds.Contains(product.ProductId))
+            .ToDictionaryAsync(product => product.ProductId, cancellationToken);
+        foreach (var requirement in requirements)
+        {
+            if (!products.TryGetValue(requirement.ProductId, out var product))
+                return $"ไม่พบข้อมูลสินค้า {requirement.ProductId} กรุณาตรวจสอบข้อมูลสินค้าก่อนเบิก";
+            var readinessError = ProductReadiness.Validate(product);
+            if (readinessError is not null) return readinessError;
+        }
         var lots = await dbContext.StockCostLots
             .AsNoTracking()
             .Where(lot => productIds.Contains(lot.ProductId) && lot.Status == 1 && lot.RemainingQty > 0)

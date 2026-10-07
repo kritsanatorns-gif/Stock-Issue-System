@@ -110,7 +110,7 @@ function mapProduct(row) {
     conversionQty: conversionQty > 0 ? conversionQty : 1,
     currentUnitCost: Number(row.currentUnitCost ?? row.CurrentUnitCost ?? 0),
     imageName: row.imageName ?? row.ImageName ?? '',
-    issueUnit: row.issueUnit || row.IssueUnit || unit,
+    issueUnit: row.issueUnit ?? row.IssueUnit ?? unit,
     lastRemark: row.lastRemark ?? row.LastRemark ?? '',
     lastRemarkSource: row.lastRemarkSource ?? row.LastRemarkSource ?? '',
     latestUnitCost: Number(row.latestUnitCost ?? row.LatestUnitCost ?? 0),
@@ -120,7 +120,7 @@ function mapProduct(row) {
     productName: row.productName ?? row.ProductName ?? row.name ?? '',
   productRemark: row.productRemark ?? row.ProductRemark ?? '',
     receiveQty: Number(row.receiveQty ?? row.ReceiveQty ?? row.lastReceiveQty ?? row.LastReceiveQty ?? 0),
-    receiveUnit: row.receiveUnit || row.ReceiveUnit || unit,
+    receiveUnit: row.receiveUnit ?? row.ReceiveUnit ?? '',
     remainingCostValue: Number(row.remainingCostValue ?? row.RemainingCostValue ?? 0),
     status: row.status ?? row.Status ?? 'Active',
     stockQty: Number(row.stockQty ?? row.StockQty ?? 0),
@@ -204,6 +204,13 @@ const importColumnAliases = {
   ยอดสต๊อก: 'stockQty',
   หน่วยการจ่าย: 'issueUnit',
   หมวดหมู่: 'categoryName',
+  หมวด: 'categoryName',
+  บารโค๊ด: 'barcode',
+  บาร์โค้ดสินค้า: 'barcode',
+  สต๊อก: 'stockQty',
+  สต็อก: 'stockQty',
+  หนวย: 'issueUnit',
+  หน่วย: 'issueUnit',
   จำนวนคงเหลือ: 'stockQty',
   จำนวนรับเข้า: 'receiveQty',
   ต้นทุน: 'unitCost',
@@ -275,8 +282,8 @@ function mapImportRow(row, defaults = {}) {
     }
   })
 
-  const receiveUnit = normalizePlainName(mappedRow.receiveUnit ?? '')
-  const issueUnit = normalizePlainName(mappedRow.issueUnit ?? '')
+  const receiveUnit = normalizePlainName(mappedRow.receiveUnit ?? '').trim().replace(/^[-–—]+$/, '')
+  const issueUnit = normalizePlainName(mappedRow.issueUnit ?? '').trim().replace(/^[-–—]+$/, '')
   const conversionQty = parseImportNumber(mappedRow.conversionQty, receiveUnit && issueUnit && receiveUnit === issueUnit ? 1 : 1)
   const receiveQty = parseImportNumber(mappedRow.receiveQty, 0)
   const bonusQty = Math.max(0, Math.trunc(parseImportNumber(mappedRow.bonusQty, 0)))
@@ -293,13 +300,13 @@ function mapImportRow(row, defaults = {}) {
     bonusQty,
     categoryName: normalizePlainName(mappedRow.categoryName ?? defaults.categoryName ?? 'General') || 'General',
     conversionQty: conversionQty > 0 ? conversionQty : 1,
-    issueUnit: issueUnit || receiveUnit,
+    issueUnit,
     minQty: parseImportNumber(mappedRow.minQty, 10),
     productId: normalizeBarcodeInput(mappedRow.productId ?? ''),
     productName: normalizePlainName(mappedRow.productName ?? ''),
     productRemark: String(mappedRow.productRemark ?? '').trim(),
     receiveQty: receiveQty || stockQty,
-    receiveUnit: receiveUnit || issueUnit,
+    receiveUnit,
     supplierName: normalizePlainName(mappedRow.supplierName ?? defaults.supplierName ?? ''),
     stockQty,
     unitCost: parseImportNumber(mappedRow.unitCost, 0),
@@ -319,7 +326,6 @@ function getCatalogHeaderMap(row) {
 
   return headerMap.productId !== undefined
     && headerMap.productName !== undefined
-    && headerMap.issueUnit !== undefined
     ? headerMap
     : null
 }
@@ -718,14 +724,6 @@ function ProductsPage() {
         errors.push('กรุณากรอกชื่อสินค้า')
       }
 
-      if (!row.receiveUnit) {
-        errors.push('กรุณากรอกหน่วยรับเข้า')
-      }
-
-      if (!row.issueUnit) {
-        errors.push('กรุณากรอกหน่วยเบิก')
-      }
-
       if (!row.supplierName) {
         errors.push('กรุณากรอกซัพพลาย')
       }
@@ -831,32 +829,6 @@ function ProductsPage() {
       return
     }
 
-    const zeroStockRows = importRows.filter((row) => Number(row.stockQty ?? 0) <= 0)
-
-    if (zeroStockRows.length > 0) {
-      const zeroStockResult = await Swal.fire({
-        title: 'พบยอดคงเหลือเป็น 0',
-        html: `
-          <div style="text-align:left;line-height:1.7">
-            <p>มีสินค้า ${zeroStockRows.length.toLocaleString('th-TH')} รายการที่ยอดคงเหลือเป็น 0</p>
-            <p>กรุณาตรวจสอบว่าใส่ยอดเป็น 0 จริง หรือระบบไม่สามารถอ่านค่ายอดคงเหลือจากไฟล์ Excel ได้</p>
-            <p style="font-weight:700">ถ้ายืนยัน ระบบจะนำเข้ารายการเหล่านี้ด้วยยอดคงเหลือ 0</p>
-          </div>
-        `,
-        icon: 'warning',
-        showCancelButton: true,
-        confirmButtonText: 'ยืนยันนำเข้า',
-        cancelButtonText: 'กลับไปตรวจสอบ',
-        customClass: {
-          container: 'stock-swal-container',
-        },
-      })
-
-      if (!zeroStockResult.isConfirmed) {
-        return
-      }
-    }
-
     const confirmResult = await Swal.fire({
       title: 'ยืนยันนำเข้า Excel',
       text: `ต้องการนำเข้าสินค้า ${importRows.length.toLocaleString('th-TH')} รายการใช่หรือไม่`,
@@ -877,6 +849,7 @@ function ProductsPage() {
 
     try {
       await importProducts({
+        catalogOnly: true,
         employeeId,
         employeeName,
         items: importRows.map(({ errors: _errors, rowNo: _rowNo, ...row }) => row),
@@ -938,6 +911,9 @@ function ProductsPage() {
 
     try {
       const updatedProduct = await updateProduct(editForm.productId, {
+        receiveUnit: editForm.receiveUnit,
+        issueUnit: editForm.issueUnit,
+        conversionQty: Number(editForm.conversionQty),
         barcode: editForm.barcode,
         categoryName: editForm.categoryName,
         imageName: editForm.imageName ?? '',
@@ -961,10 +937,10 @@ function ProductsPage() {
         },
         confirmButtonText: 'ตกลง',
       })
-    } catch {
+    } catch (error) {
       await Swal.fire({
         title: 'ไม่สำเร็จ',
-        text: 'บันทึกข้อมูลสินค้าไม่สำเร็จ',
+        text: typeof error?.response?.data === 'string' ? error.response.data : 'บันทึกข้อมูลสินค้าไม่สำเร็จ',
         icon: 'error',
         customClass: {
           container: 'stock-swal-container',
@@ -1331,9 +1307,7 @@ function ProductsPage() {
         <DialogTitle>นำเข้า Excel สินค้า</DialogTitle>
         <DialogContent>
           <Stack spacing={2} sx={{ pt: 1 }}>
-            <Alert severity="info">
-              รองรับแค็ตตาล็อกที่มีหลายชีตและหัวตารางซ้ำ โดยใช้รหัสสินค้า ชื่อสินค้า ยอดสต๊อก หน่วยการจ่าย และบาร์โค้ดตามไฟล์ต้นฉบับ ส่วนซัพพลายจะตั้งเป็น “นำเข้าจากแค็ตตาล็อก”, ราคาซื้อรวมเป็น 0 และจุดแจ้งเตือนเป็น 10 หน่วย หากไฟล์ไม่ได้ระบุไว้
-            </Alert>
+            <Alert severity="info">นำเข้าเฉพาะข้อมูลสินค้า ยอดเริ่มต้นเป็น 0 แล้วรับสต็อกและราคาภายหลังที่เมนูนำของเข้า กรุณาตรวจหน่วยและอัตราแปลงก่อนรับสต็อก</Alert>
 
             <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
               <Stack direction="row" spacing={1.5}>
@@ -1379,8 +1353,8 @@ function ProductsPage() {
                 { key: 'productName', label: 'ชื่อสินค้า', width: 240, align: 'center' },
                 { key: 'supplierName', label: 'ซัพพลาย', width: 180, align: 'center' },
                 { key: 'categoryName', label: 'หมวดหมู่', width: 140, align: 'center' },
-                { key: 'receiveUnit', label: 'รับเข้าเป็น', width: 120, align: 'center' },
-                { key: 'issueUnit', label: 'เบิกออกเป็น', width: 120, align: 'center' },
+                { key: 'receiveUnit', label: 'รับเข้าเป็น', width: 120, align: 'center', render: (row) => <span>{row.receiveUnit}</span> },
+                { key: 'issueUnit', label: 'เบิกออกเป็น', width: 120, align: 'center', render: (row) => <span>{row.issueUnit}</span> },
                 { key: 'conversionQty', label: 'อัตราแปลง', width: 120, align: 'center' },
                 { key: 'receiveQty', label: 'จำนวนรับเข้า', width: 130, align: 'center' },
                 { key: 'stockQty', label: 'ยอดคงเหลือ (หน่วยเบิก)', width: 160, align: 'center' },
@@ -1552,12 +1526,12 @@ function ProductsPage() {
             <Grid container spacing={2} sx={{ alignItems: 'flex-start' }}>
               <Grid size={4}>
                 <TextField
-                  disabled
                   fullWidth
                   required
-                  helperText="หน่วยตอนซื้อหรือรับของเข้า แก้ไขจากหน้านี้ไม่ได้"
+                  helperText="แก้ไขได้ก่อนมีรายการเคลื่อนไหว เช่น แพ็ค กล่อง"
                   label="รับเข้าเป็น"
                   value={editForm.receiveUnit}
+                  onChange={(event) => handleProductFormChange('receiveUnit', event.target.value)}
                 />
               </Grid>
               <Grid size={4}>
@@ -1583,13 +1557,13 @@ function ProductsPage() {
             <Grid container spacing={2}>
               <Grid size={5}>
                 <TextField
-                  disabled
                   fullWidth
                   required
                   helperText={`เช่น 1 ${editForm.receiveUnit || 'แพ็ค'} = ${editForm.conversionQty || '?'} ${editForm.issueUnit || 'ชิ้น'}`}
                   label="จำนวนส่งออกต่อ 1 หน่วยรับเข้า"
                   type="number"
                   value={editForm.conversionQty}
+                  onChange={(event) => handleProductFormChange('conversionQty', event.target.value)}
                 />
               </Grid>
               <Grid
@@ -1605,15 +1579,16 @@ function ProductsPage() {
               </Grid>
               <Grid size={6}>
                 <TextField
-                  disabled
                   fullWidth
                   required
                   helperText="หน่วยที่พนักงานใช้ตอนเบิก"
                   label="ส่งออกเป็น"
                   value={editForm.issueUnit}
+                  onChange={(event) => handleProductFormChange('issueUnit', event.target.value)}
                 />
               </Grid>
             </Grid>
+
 
             <Grid container spacing={2}>
               <Grid size={6}>

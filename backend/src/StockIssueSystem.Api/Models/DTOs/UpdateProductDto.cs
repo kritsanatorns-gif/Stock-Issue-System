@@ -2,6 +2,9 @@ namespace StockIssueSystem.Api.Models.DTOs;
 
 public sealed class UpdateProductDto
 {
+    public string? ReceiveUnit { get; set; }
+    public string? IssueUnit { get; set; }
+    public decimal? ConversionQty { get; set; }
     public string Barcode { get; set; } = string.Empty;
     public string CategoryName { get; set; } = "General";
     public string ImageName { get; set; } = string.Empty;

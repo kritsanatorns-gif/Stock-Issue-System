@@ -81,11 +81,13 @@ public sealed class RequisitionsController(
     }
 
     [HttpGet("notification-summary")]
-    public async Task<IActionResult> GetNotificationSummary([FromQuery] string? unitRef, [FromQuery] string? department)
+    public async Task<IActionResult> GetNotificationSummary([FromQuery] string? unitRef, [FromQuery] string? department, [FromQuery] bool allUnits = false)
     {
-        if (string.IsNullOrWhiteSpace(unitRef)) return Ok(Array.Empty<object>());
+        if (!allUnits && string.IsNullOrWhiteSpace(unitRef)) return Ok(Array.Empty<object>());
         var query = dbContext.StockHeaders.AsNoTracking()
-            .Where(h => h.DocType == RequisitionDocType && h.UnitRef == unitRef.Trim());
+            .Where(h => h.DocType == RequisitionDocType);
+        if (!allUnits)
+            query = query.Where(h => h.UnitRef == unitRef!.Trim());
         if (!string.IsNullOrWhiteSpace(department))
             query = query.Where(h => h.Division == department.Trim());
         var headers = await query.OrderByDescending(h => h.HeaderId).ToListAsync(HttpContext.RequestAborted);
@@ -185,6 +187,17 @@ public sealed class RequisitionsController(
         await dbContext.SaveChangesAsync();
 
         await notificationHub.Clients.Group(NotificationHub.UnitGroup(header.UnitRef)).SendAsync("RequisitionCreated", new
+        {
+            header.HeaderId,
+            RequestNo = header.RequestNo,
+            EmployeeId = request.EmployeeId,
+            EmployeeName = header.RequesterName,
+            Department = header.Department,
+            Division = header.Division,
+            UnitRef = header.UnitRef,
+            UnitName = header.UnitName,
+        });
+        await notificationHub.Clients.Group(NotificationHub.ApprovalGroup).SendAsync("RequisitionCreated", new
         {
             header.HeaderId,
             RequestNo = header.RequestNo,
@@ -577,6 +590,8 @@ public sealed class RequisitionsController(
             {
                 return $"Product {item.Code} is not active.";
             }
+            var readinessError = ProductReadiness.Validate(product);
+            if (readinessError is not null) return readinessError;
         }
 
         return null;

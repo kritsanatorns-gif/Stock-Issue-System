@@ -8,6 +8,9 @@ public sealed class NotificationHub : Hub
         ? Groups.AddToGroupAsync(Context.ConnectionId, UnitGroup(unitRef))
         : Task.CompletedTask;
 
+    public Task JoinApprovalNotifications() =>
+        Groups.AddToGroupAsync(Context.ConnectionId, ApprovalGroup);
+
     public Task JoinRequesterNotifications(int employeeId) => employeeId > 0
         ? Groups.AddToGroupAsync(Context.ConnectionId, RequesterGroup(employeeId))
         : Task.CompletedTask;
@@ -19,4 +22,5 @@ public sealed class NotificationHub : Hub
     public static string RequesterGroup(int employeeId) => $"notification-requester-{employeeId}";
     public static string DepartmentGroup(string department) => $"notification-department-{department.Trim().ToUpperInvariant()}";
     public static string UnitGroup(string unitRef) => $"notification-unit-{unitRef.Trim().ToUpperInvariant()}";
+    public const string ApprovalGroup = "notification-approvals";
 }

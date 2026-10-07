@@ -78,20 +78,65 @@ public sealed class UploadController(IWebHostEnvironment environment, AppDbConte
             var sheetName = (string?)sheet.Attribute("name") ?? "";
             var sheetRelationship = workbookRels.GetValueOrDefault((string?)sheet.Attribute(r + "id") ?? "");
             var sheetPath = Resolve("xl/workbook.xml", sheetRelationship?.Target);
+            var worksheet = XDocument.Load(archive.GetEntry(sheetPath)!.Open());
+            XNamespace spreadsheet = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            var defaultHeight = (double?)worksheet.Root?.Element(spreadsheet + "sheetFormatPr")?.Attribute("defaultRowHeight") ?? 15;
+            var rowHeights = worksheet.Descendants(spreadsheet + "row")
+                .ToDictionary(row => (int)row.Attribute("r")!, row =>
+                    (bool?)row.Attribute("hidden") == true ? 0 : ((double?)row.Attribute("ht") ?? defaultHeight) * 12700);
             var sheetRels = Relationships(archive, RelPath(sheetPath));
             var drawingRelationship = sheetRels.Values.FirstOrDefault(x => x.Type.EndsWith("/drawing", StringComparison.OrdinalIgnoreCase));
             var drawingPath = Resolve(sheetPath, drawingRelationship?.Target);
             if (string.IsNullOrEmpty(drawingPath) || archive.GetEntry(drawingPath) is null) continue;
             var drawing = XDocument.Load(archive.GetEntry(drawingPath)!.Open());
             var drawingRels = Relationships(archive, RelPath(drawingPath));
+            var bestRowCoverage = new Dictionary<int, double>();
             foreach (var anchor in drawing.Descendants().Where(x => x.Name == xdr + "twoCellAnchor" || x.Name == xdr + "oneCellAnchor"))
             {
                 var firstRow = int.TryParse(anchor.Element(xdr + "from")?.Element(xdr + "row")?.Value, out var zeroRow) ? zeroRow + 1 : 0;
                 var lastRow = int.TryParse(anchor.Element(xdr + "to")?.Element(xdr + "row")?.Value, out var zeroEndRow)
                     ? Math.Max(firstRow, zeroEndRow + 1)
                     : firstRow;
+                if (anchor.Name == xdr + "oneCellAnchor" && firstRow > 0)
+                {
+                    // Excel stores this anchor's size in EMUs, not an ending row.
+                    // One point = 12700 EMUs. Account for custom/hidden row heights.
+                    var remainingHeight = ((double?)anchor.Element(xdr + "from")?.Element(xdr + "rowOff") ?? 0)
+                        + ((double?)anchor.Element(xdr + "ext")?.Attribute("cy") ?? 0);
+                    while (lastRow < 1048576)
+                    {
+                        remainingHeight -= rowHeights.GetValueOrDefault(lastRow, defaultHeight * 12700);
+                        if (remainingHeight <= 0) break;
+                        lastRow++;
+                    }
+                }
+                else if (lastRow > firstRow && (long?)anchor.Element(xdr + "to")?.Element(xdr + "rowOff") == 0)
+                {
+                    // An image ending exactly at a row boundary excludes that row.
+                    lastRow--;
+                }
                 var embed = anchor.Descendants(a + "blip").Select(x => (string?)x.Attribute(r + "embed")).FirstOrDefault();
+                var rowCoverage = new Dictionary<int, double>();
+                if (anchor.Name == xdr + "oneCellAnchor")
+                {
+                    var imageTop = (double?)anchor.Element(xdr + "from")?.Element(xdr + "rowOff") ?? 0;
+                    var imageBottom = imageTop + ((double?)anchor.Element(xdr + "ext")?.Attribute("cy") ?? 0);
+                    double rowTop = 0;
+                    for (var row = firstRow; row <= lastRow; row++)
+                    {
+                        var rowHeight = rowHeights.GetValueOrDefault(row, defaultHeight * 12700);
+                        rowCoverage[row] = Math.Max(0, Math.Min(rowTop + rowHeight, imageBottom) - Math.Max(rowTop, imageTop));
+                        rowTop += rowHeight;
+                    }
+                }
                 var productIds = Enumerable.Range(firstRow, lastRow - firstRow + 1)
+                    .Where(row =>
+                    {
+                        var coverage = rowCoverage.GetValueOrDefault(row, rowHeights.GetValueOrDefault(row, defaultHeight * 12700));
+                        if (coverage <= bestRowCoverage.GetValueOrDefault(row)) return false;
+                        bestRowCoverage[row] = coverage;
+                        return true;
+                    })
                     .Select(row => lookup.GetValueOrDefault($"{sheetName}|{row}"))
                     .Where(productId => !string.IsNullOrWhiteSpace(productId))
                     .Distinct(StringComparer.OrdinalIgnoreCase)
