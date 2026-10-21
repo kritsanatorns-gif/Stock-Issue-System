@@ -37,7 +37,7 @@ import {
   updateUnit,
   updateProduct,
 } from '../../api/api'
-import { apiOrigin } from '../../api/apiConfig'
+import { getProductImageUrl } from '../../api/productImageUrl'
 import AppTable from '../../components/common/AppTable'
 import SummaryCard from '../../Dashboard/components/SummaryCard'
 import { useAuthStore } from '../../store/authStore'
@@ -137,33 +137,7 @@ function mapCategory(row) {
   }
 }
 
-function getProductImageUrl(imageName) {
-  if (!imageName) {
-    return ''
-  }
 
-  const normalizedImageName = String(imageName).trim()
-
-  if (!/\.(jpg|jpeg|png|webp)$/i.test(normalizedImageName)) {
-    return ''
-  }
-
-  if (/^https?:\/\//i.test(normalizedImageName)) {
-    return normalizedImageName
-  }
-
-  const baseUrl = apiOrigin
-
-  if (normalizedImageName.startsWith('/')) {
-    return `${baseUrl}${normalizedImageName}`
-  }
-
-  if (normalizedImageName.startsWith('uploads/')) {
-    return `${baseUrl}/${normalizedImageName}`
-  }
-
-  return `${baseUrl}/uploads/products/${normalizedImageName}`
-}
 
 const importTemplateHeaders = [
   'รูป',
@@ -633,7 +607,7 @@ function ProductsPage() {
     }
 
     try {
-      const uploadedImage = await uploadProductImage(file)
+      const uploadedImage = await uploadProductImage(file, editForm.productId)
 
       handleProductFormChange('imageName', uploadedImage.url ?? uploadedImage.Url ?? '')
       toast.success('อัปโหลดรูปสินค้าสำเร็จ')
@@ -1379,7 +1353,7 @@ function ProductsPage() {
               showGlobalSearch
             />
 
-            {importRows.some((row) => row.errors.length > 0) ? (
+            {!canImportProducts && importRows.some((row) => row.errors.length > 0) ? (
               <Alert severity="error">
                 พบข้อมูลผิดพลาด กรุณาแก้ไฟล์ Excel แล้วเลือกไฟล์ใหม่ก่อนนำเข้า
               </Alert>

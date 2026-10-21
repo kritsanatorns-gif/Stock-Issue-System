@@ -1,5 +1,14 @@
 # Stock Issue System — เอกสารส่งต่องาน
 
+## สลับโฟลเดอร์รูปตามเครื่องที่รัน API
+
+- รันผ่านโปรไฟล์ `http`/`https` ในเครื่อง: ใช้ environment `Development` ตาม `Properties/launchSettings.json` และอ่าน `ProductImages:Path` จาก `appsettings.Development.json` เป็น `W:\PictureCenter\Supplyes\Express`
+- บน IIS: ใช้ environment `Production` (ค่าเริ่มต้นหากไม่ได้กำหนด environment) และอ่าน `appsettings.Production.json` เป็น `\\pluto\data\PictureCenter\Supplyes\Express` ซึ่งเป็นโฟลเดอร์เดียวกับไดรฟ์ W: ในเครื่องพัฒนา ต้องนำไฟล์นี้ไปพร้อมผล publish ด้วย
+- หาก IIS เคยตั้ง `ASPNETCORE_ENVIRONMENT` หรือ `DOTNET_ENVIRONMENT` เป็น Development ให้เปลี่ยนเป็น Production ให้ตรงกัน แล้ว Recycle Application Pool
+- ตั้งค่าเฉพาะเครื่องโดย environment variable `ProductImages__Path` ได้ ค่านี้มีลำดับความสำคัญเหนือไฟล์ JSON
+- รูปสินค้าทั้งอ่านและอัปโหลดใช้โฟลเดอร์แชร์เดียวกันทั้งเครื่องพัฒนาและเซิร์ฟเวอร์ ไม่ต้องคัดลอกหรือซิงก์รูป การสลับนี้เป็นของ backend และไม่ขึ้นกับตัวเลือก API ใน frontend
+- บัญชี Application Pool ต้องได้รับสิทธิ์อ่าน/เขียนทั้ง Share และ NTFS ของโฟลเดอร์ Express การตั้งค่าพาธไม่ใช่การให้สิทธิ์เข้าถึง
+
 เอกสารนี้ใช้สำหรับย้ายงานไปเครื่องใหม่หรือส่งต่อให้ Codex คน/เครื่องอื่นอ่านก่อนเริ่มแก้ไข
 
 ## ภาพรวม

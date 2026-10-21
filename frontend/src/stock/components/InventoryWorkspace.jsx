@@ -35,7 +35,7 @@ import {
   Trash2,
   Upload,
 } from 'lucide-react'
-import { useCallback, useContext, useEffect, useMemo, useState } from 'react'
+import { memo, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import toast from 'react-hot-toast'
 import { useNavigate } from 'react-router-dom'
 import Swal from 'sweetalert2'
@@ -54,9 +54,8 @@ import {
   saveProductFavorite,
   updateSupplier,
   updateSupplierStatus,
-  uploadProductImage,
 } from '../../api/api'
-import { apiOrigin } from '../../api/apiConfig'
+import { getProductImageUrl as getImageUrl } from '../../api/productImageUrl'
 import AppTable from '../../components/common/AppTable'
 import DateInputField from '../../components/common/DateInputField'
 import { useAuthStore } from '../../store/authStore'
@@ -202,33 +201,7 @@ function getConversionHelperText(item) {
   return `${receiveQty} ${receiveUnit} x ${getDisplayConversionQty(item).toLocaleString('th-TH')}`
 }
 
-function getImageUrl(imageName) {
-  if (!imageName) {
-    return ''
-  }
 
-  const normalizedImageName = String(imageName).trim()
-
-  if (!/\.(jpg|jpeg|png|webp)$/i.test(normalizedImageName)) {
-    return ''
-  }
-
-  if (/^https?:\/\//i.test(normalizedImageName)) {
-    return normalizedImageName
-  }
-
-  const baseUrl = apiOrigin
-
-  if (normalizedImageName.startsWith('/')) {
-    return `${baseUrl}${normalizedImageName}`
-  }
-
-  if (normalizedImageName.startsWith('uploads/')) {
-    return `${baseUrl}/${normalizedImageName}`
-  }
-
-  return `${baseUrl}/uploads/products/${normalizedImageName}`
-}
 
 const pageConfig = {
   issue: {
@@ -317,6 +290,7 @@ function InventoryWorkspace({ mode }) {
   const [matchedProduct, setMatchedProduct] = useState(null)
   const [missingIssueCode, setMissingIssueCode] = useState('')
   const [productForm, setProductForm] = useState(defaultProductForm)
+  const [isSavingReceive, setIsSavingReceive] = useState(false)
   const [isProductFormSubmitted, setIsProductFormSubmitted] = useState(false)
   const [duplicateProductCodeAlerted, setDuplicateProductCodeAlerted] = useState('')
   const [receiveDraftItem, setReceiveDraftItem] = useState(null)
@@ -359,7 +333,7 @@ function InventoryWorkspace({ mode }) {
   }, [categoryOptions, inventoryItems])
   const receiveSubtotal = selectedItems.reduce((sum, item) => sum + Math.round(toPositiveNumber(item.unitCost) * 100), 0) / 100
   const money = (value) => Number(value).toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-  const productFormImageUrl = getImageUrl(productForm.imageName)
+  const productFormImageUrl = productForm.imagePreview || getImageUrl(productForm.imageName)
   const productFormConversionQty = shouldUseSameUnitConversion(productForm.receiveUnit, productForm.issueUnit)
     ? 1
     : toPositiveNumber(productForm.conversionQty)
@@ -670,7 +644,7 @@ function InventoryWorkspace({ mode }) {
     )
   }, [setSelectedItems])
 
-  const createSelectedItem = (item) => {
+  const createSelectedItem = useCallback((item) => {
     const unit = mode === 'receive' ? item.receiveUnit : item.issueUnit
     const conversionQty = shouldUseSameUnitConversion(item.receiveUnit, item.issueUnit)
       ? 1
@@ -686,9 +660,9 @@ function InventoryWorkspace({ mode }) {
       unitCost: '',
       unit,
     }
-  }
+  }, [mode])
 
-  const handleOpenReceiveDialog = (item) => {
+  const handleOpenReceiveDialog = useCallback((item) => {
     const existingItem = selectedItems.find((selected) => selected.id === item.id)
 
     const draftItem = existingItem ? { ...existingItem } : createSelectedItem(item)
@@ -697,7 +671,7 @@ function InventoryWorkspace({ mode }) {
       ...draftItem,
       conversionQty: getDisplayConversionQty(draftItem),
     })
-  }
+  }, [selectedItems, createSelectedItem])
 
   const handleReceiveDraftChange = (field, value) => {
     const nextValue = field === 'requestQty' || field === 'bonusQty' || field === 'conversionQty'
@@ -975,7 +949,7 @@ function InventoryWorkspace({ mode }) {
   }, [category, favoriteOnly, favoriteProductCodes, inventoryItems, searchText, stockStatus])
 
   const canSubmit =
-    selectedItems.length > 0
+    !isSavingReceive && selectedItems.length > 0
     && (mode !== 'issue' || selectedItems.length <= MAX_ISSUE_ITEMS_PER_REQUEST)
     && selectedItems.every((item) => toPositiveNumber(item.requestQty) > 0)
     && (mode !== 'issue' || issueDepartment.trim())
@@ -994,7 +968,7 @@ function InventoryWorkspace({ mode }) {
           && item.unitCost !== undefined,
       ))
 
-  const handleToggleItem = (item) => {
+  const handleToggleItem = useCallback((item) => {
     if (mode === 'receive') {
       handleOpenReceiveDialog(item)
       return
@@ -1019,7 +993,7 @@ function InventoryWorkspace({ mode }) {
         return [...current, createSelectedItem(item)]
       },
     )
-  }
+  }, [mode, handleOpenReceiveDialog, selectedItems, setSelectedItems, createSelectedItem])
 
   const handleSaveScanQueue = () => {
     const scanCode = normalizeBarcodeInput(scanText).trim()
@@ -1088,7 +1062,7 @@ function InventoryWorkspace({ mode }) {
     }
   }
 
-  const handleToggleFavorite = async (event, item) => {
+  const handleToggleFavorite = useCallback(async (event, item) => {
     event.stopPropagation()
 
     const productCode = item.code
@@ -1118,7 +1092,7 @@ function InventoryWorkspace({ mode }) {
           : [...new Set([productCode, ...current])],
       )
     }
-  }
+  }, [favoriteProductCodes, employeeId, mode])
 
   const productFormErrors = {
     barcode: Boolean(existingProductByBarcode),
@@ -1126,7 +1100,7 @@ function InventoryWorkspace({ mode }) {
     code: !productForm.code.trim() || Boolean(existingProductByCode),
     conversionQty: toPositiveNumber(productForm.conversionQty) <= 0,
     costLot: !productForm.costLot.trim(),
-    imageName: !productForm.imageName,
+    imageName: !productForm.imageName && !productForm.imageFile,
     issueUnit: !productForm.issueUnit.trim(),
     minQty: productForm.minQty === '' || productForm.minQty === null || productForm.minQty === undefined,
     name: !productForm.name.trim(),
@@ -1239,12 +1213,24 @@ function InventoryWorkspace({ mode }) {
     }
 
     try {
-      const uploadedImage = await uploadProductImage(file)
-
-      handleProductFormChange('imageName', uploadedImage.url ?? uploadedImage.Url ?? '')
-      toast.success('อัปโหลดรูปสินค้าสำเร็จ')
+      if (!productForm.code.trim()) {
+        toast.error('กรุณาระบุรหัสสินค้าก่อนอัปโหลดรูป')
+        return
+      }
+      if (!/\.(jpg|jpeg|png|webp)$/i.test(file.name) || file.size > 5 * 1024 * 1024) {
+        toast.error('เลือกรูป JPG, PNG หรือ WEBP ขนาดไม่เกิน 5 MB')
+        return
+      }
+      const preview = await new Promise((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload = () => resolve(reader.result)
+        reader.onerror = reject
+        reader.readAsDataURL(file)
+      })
+      // เก็บไฟล์ในหน่วยความจำ ยังไม่ส่งไปเซิร์ฟเวอร์จนกดบันทึกรับเข้า
+      setProductForm((current) => ({ ...current, imageFile: file, imagePreview: preview }))
     } catch {
-      toast.error('อัปโหลดรูปสินค้าไม่สำเร็จ กรุณาตรวจสอบ Backend API')
+      toast.error('อ่านรูปไม่สำเร็จ กรุณาเลือกไฟล์ใหม่')
     } finally {
       event.target.value = ''
     }
@@ -1269,6 +1255,8 @@ function InventoryWorkspace({ mode }) {
       conversionQty: productFormConversionQty || 1,
       costLot: productForm.costLot.trim(),
       imageName: productForm.imageName,
+      imageFile: productForm.imageFile,
+      imagePreview: productForm.imagePreview,
       isFavorite: false,
       issueUnit: productForm.issueUnit.trim(),
       minQty: Number(productForm.minQty) || 0,
@@ -1368,8 +1356,10 @@ function InventoryWorkspace({ mode }) {
     }
 
     if (mode === 'receive') {
+      setIsSavingReceive(true)
       try {
-        await createStockReceive(transactionPayload)
+        await createStockReceive(transactionPayload, selectedItems.flatMap((item, index) =>
+          item.imageFile ? [{ index, file: item.imageFile }] : []))
         setSelectedItems([])
         setPoInvoiceNo('')
         setReceiveDate(getThailandTodayInputValue())
@@ -1388,13 +1378,15 @@ function InventoryWorkspace({ mode }) {
       } catch {
         await Swal.fire({
           title: 'ไม่สำเร็จ',
-          text: 'บันทึกรับเข้าไม่สำเร็จ กรุณาตรวจสอบ Backend API',
+          text: 'บันทึกรับเข้าหรืออัปโหลดรูปไม่สำเร็จ รายการยังอยู่ กรุณาตรวจสอบ Backend API แล้วลองใหม่',
           icon: 'error',
           customClass: {
             container: 'stock-swal-container',
           },
           confirmButtonText: 'ตกลง',
         })
+      } finally {
+        setIsSavingReceive(false)
       }
 
       return
@@ -1768,106 +1760,7 @@ function InventoryWorkspace({ mode }) {
 
             <Box className="inventory-workspace__product-area">
               <Box className="inventory-workspace__product-grid">
-                {filteredItems.map((item) => {
-                  const imageUrl = getImageUrl(item.imageName)
-                  const selectedItem = selectedItems.find((selected) => selected.id === item.id)
-                  const isSelected = Boolean(selectedItem)
-                  const isLowStock = item.stockQty <= item.minQty
-                  const isOutOfStock = item.stockQty <= 0
-
-                  return (
-                    <Card
-                      className="inventory-workspace__product-card"
-                      key={item.id}
-                      elevation={0}
-                      onClick={() => handleToggleItem(item)}
-                      sx={{
-                        border: mode === 'issue' && isSelected ? '2px solid #2563eb' : '1px solid #d9e0ea',
-                        cursor: 'pointer',
-                      }}
-                    >
-                      <CardContent sx={{ p: 1.25 }}>
-                        <Stack spacing={0.75}>
-                          <Box
-                            className={[
-                              'inventory-workspace__product-image',
-                              mode === 'issue' && isSelected
-                                ? 'inventory-workspace__product-image--selected'
-                                : 'inventory-workspace__product-image--normal',
-                            ].join(' ')}
-                          >
-                            <IconButton
-                              className="inventory-workspace__favorite-button"
-                              size="small"
-                              onClick={(event) => handleToggleFavorite(event, item)}
-                            >
-                              <Star
-                                color={item.isFavorite ? '#f59e0b' : '#94a3b8'}
-                                fill={item.isFavorite ? '#f59e0b' : 'none'}
-                                size={18}
-                              />
-                            </IconButton>
-                            {imageUrl ? (
-                              <Box
-                                alt={item.name}
-                                className="inventory-workspace__product-photo"
-                                component="img"
-                                src={imageUrl}
-                              />
-                            ) : (
-                              <Camera color={isSelected ? '#2563eb' : '#94a3b8'} size={28} />
-                            )}
-                          </Box>
-                          <Stack direction="row" justifyContent="space-between" spacing={1}>
-                            <Typography sx={{ fontSize: 13, fontWeight: 800, lineHeight: 1.25 }}>
-                              {item.name}
-                            </Typography>
-                            <Checkbox checked={isSelected} size="small" />
-                          </Stack>
-                          <Typography sx={{ color: '#64748b', fontSize: 12, lineHeight: 1.2 }}>
-                            {item.code}
-                          </Typography>
-                          <Stack direction="row" flexWrap="wrap" gap={0.75}>
-                            <Chip label={item.category} size="small" />
-                            {item.isFavorite ? <Chip color="warning" label="โปรด" size="small" /> : null}
-                            {isOutOfStock ? (
-                              <Chip color="error" label="ของหมด" size="small" />
-                            ) : isLowStock ? (
-                              <Chip color="warning" label="ใกล้หมด" size="small" />
-                            ) : (
-                              <Chip color="success" label="พร้อมเบิก" size="small" />
-                            )}
-                          </Stack>
-                          <Typography sx={{ color: '#475569', fontSize: 12, lineHeight: 1.2 }}>
-                            {mode === 'receive' && selectedItem
-                              ? `รอรับเข้า ${getReceiveStockQty(selectedItem).toLocaleString('th-TH')} ${selectedItem.issueUnit}`
-                              : `คงเหลือ ${item.stockQty} ${item.issueUnit} | เตือนใกล้หมด ${item.minQty}`}
-                          </Typography>
-                          <Button
-                            color={mode === 'issue' && isSelected ? 'inherit' : 'primary'}
-                            disabled={mode === 'receive' && isSelected}
-                            fullWidth
-                            size="small"
-                            startIcon={mode === 'issue' && isSelected ? <CheckSquare size={15} /> : null}
-                            variant={mode === 'issue' && isSelected ? 'outlined' : 'contained'}
-                            onClick={(event) => {
-                              event.stopPropagation()
-                              handleToggleItem(item)
-                            }}
-                          >
-                            {mode === 'receive'
-                              ? selectedItem
-                                ? 'เพิ่มในรายการแล้ว'
-                                : 'เลือกสินค้า'
-                              : isSelected
-                                ? 'เลือกแล้ว'
-                                : 'เลือกสินค้า'}
-                          </Button>
-                        </Stack>
-                      </CardContent>
-                    </Card>
-                  )
-                })}
+                <InventoryProductCards filteredItems={filteredItems} selectedItems={selectedItems} mode={mode} handleToggleItem={handleToggleItem} handleToggleFavorite={handleToggleFavorite} />
               </Box>
             </Box>
           </Stack>
@@ -2002,12 +1895,12 @@ function InventoryWorkspace({ mode }) {
                               <Stack alignItems="flex-start" direction="row" justifyContent="space-between" spacing={1}>
                                 <Stack alignItems="center" direction="row" spacing={1.25} sx={{ minWidth: 0 }}>
                                   <Box className="inventory-workspace__receive-summary-image">
-                                    {getImageUrl(item.imageName) ? (
+                                    {item.imagePreview || getImageUrl(item.imageName) ? (
                                       <Box
                                         alt={item.name}
                                         className="inventory-workspace__receive-summary-photo"
                                         component="img"
-                                        src={getImageUrl(item.imageName)}
+                                        src={item.imagePreview || getImageUrl(item.imageName)}
                                       />
                                     ) : (
                                       <Camera color="#94a3b8" size={22} />
@@ -2361,7 +2254,7 @@ function InventoryWorkspace({ mode }) {
         <Button color="inherit" onClick={() => setIsConfirmSaveOpen(false)}>
           ยกเลิก
         </Button>
-        <Button startIcon={<CheckSquare size={18} />} variant="contained" onClick={handleSubmitTransaction}>
+        <Button disabled={isSavingReceive} startIcon={<CheckSquare size={18} />} variant="contained" onClick={handleSubmitTransaction}>
           ยืนยันบันทึก
         </Button>
       </DialogActions>
@@ -2386,11 +2279,11 @@ function InventoryWorkspace({ mode }) {
                   <Camera size={36} />
                   <Typography variant="caption">ไม่มีรูปสินค้า</Typography>
                 </Stack>
-                {getImageUrl(receiveDraftItem.imageName) ? (
+                {receiveDraftItem.imagePreview || getImageUrl(receiveDraftItem.imageName) ? (
                   <Box
-                    key={receiveDraftItem.imageName}
+                    key={receiveDraftItem.imagePreview || receiveDraftItem.imageName}
                     component="img"
-                    src={getImageUrl(receiveDraftItem.imageName)}
+                    src={receiveDraftItem.imagePreview || getImageUrl(receiveDraftItem.imageName)}
                     alt={receiveDraftItem.name}
                     sx={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain', bgcolor: '#fff', p: 1 }}
                     onError={(event) => { event.currentTarget.style.display = 'none' }}
@@ -3200,3 +3093,109 @@ function InventoryWorkspace({ mode }) {
 }
 
 export default InventoryWorkspace
+
+// พิมพ์ในฟอร์มไม่ต้องวาดการ์ดสินค้าทั้งหมดซ้ำ
+const InventoryProductCards = memo(function InventoryProductCards({ filteredItems, selectedItems, mode, handleToggleItem, handleToggleFavorite }) {
+  return <>
+                {filteredItems.map((item) => {
+                  const imageUrl = getImageUrl(item.imageName)
+                  const selectedItem = selectedItems.find((selected) => selected.id === item.id)
+                  const isSelected = Boolean(selectedItem)
+                  const isLowStock = item.stockQty <= item.minQty
+                  const isOutOfStock = item.stockQty <= 0
+
+                  return (
+                    <Card
+                      className="inventory-workspace__product-card"
+                      key={item.id}
+                      elevation={0}
+                      onClick={() => handleToggleItem(item)}
+                      sx={{
+                        border: mode === 'issue' && isSelected ? '2px solid #2563eb' : '1px solid #d9e0ea',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      <CardContent sx={{ p: 1.25, '&:last-child': { pb: 1.25 } }}>
+                        <Stack spacing={0.75}>
+                          <Box
+                            className={[
+                              'inventory-workspace__product-image',
+                              mode === 'issue' && isSelected
+                                ? 'inventory-workspace__product-image--selected'
+                                : 'inventory-workspace__product-image--normal',
+                            ].join(' ')}
+                          >
+                            <IconButton
+                              className="inventory-workspace__favorite-button"
+                              size="small"
+                              onClick={(event) => handleToggleFavorite(event, item)}
+                            >
+                              <Star
+                                color={item.isFavorite ? '#f59e0b' : '#94a3b8'}
+                                fill={item.isFavorite ? '#f59e0b' : 'none'}
+                                size={18}
+                              />
+                            </IconButton>
+                            {imageUrl ? (
+                              <Box
+                                alt={item.name}
+                                className="inventory-workspace__product-photo"
+                                component="img"
+                                src={imageUrl}
+                              />
+                            ) : (
+                              <Camera color={isSelected ? '#2563eb' : '#94a3b8'} size={28} />
+                            )}
+                          </Box>
+                          <Stack direction="row" justifyContent="space-between" spacing={1}>
+                            <Typography sx={{ fontSize: 13, fontWeight: 800, lineHeight: 1.25 }}>
+                              {item.name}
+                            </Typography>
+                            <Checkbox checked={isSelected} size="small" />
+                          </Stack>
+                          <Typography sx={{ color: '#64748b', fontSize: 12, lineHeight: 1.2 }}>
+                            {item.code}
+                          </Typography>
+                          <Stack direction="row" flexWrap="wrap" gap={0.75}>
+                            <Chip label={item.category} size="small" />
+                            {item.isFavorite ? <Chip color="warning" label="โปรด" size="small" /> : null}
+                            {isOutOfStock ? (
+                              <Chip color="error" label="ของหมด" size="small" />
+                            ) : isLowStock ? (
+                              <Chip color="warning" label="ใกล้หมด" size="small" />
+                            ) : (
+                              <Chip color="success" label="พร้อมเบิก" size="small" />
+                            )}
+                          </Stack>
+                          <Typography sx={{ color: '#475569', fontSize: 12, lineHeight: 1.2 }}>
+                            {mode === 'receive' && selectedItem
+                              ? `รอรับเข้า ${getReceiveStockQty(selectedItem).toLocaleString('th-TH')} ${selectedItem.issueUnit}`
+                              : `คงเหลือ ${item.stockQty} ${item.issueUnit} | เตือนใกล้หมด ${item.minQty}`}
+                          </Typography>
+                          <Button
+                            color={mode === 'issue' && isSelected ? 'inherit' : 'primary'}
+                            disabled={mode === 'receive' && isSelected}
+                            fullWidth
+                            size="small"
+                            startIcon={mode === 'issue' && isSelected ? <CheckSquare size={15} /> : null}
+                            variant={mode === 'issue' && isSelected ? 'outlined' : 'contained'}
+                            onClick={(event) => {
+                              event.stopPropagation()
+                              handleToggleItem(item)
+                            }}
+                          >
+                            {mode === 'receive'
+                              ? selectedItem
+                                ? 'เพิ่มในรายการแล้ว'
+                                : 'เลือกสินค้า'
+                              : isSelected
+                                ? 'เลือกแล้ว'
+                                : 'เลือกสินค้า'}
+                          </Button>
+                        </Stack>
+                      </CardContent>
+                    </Card>
+                  )
+                })}
+  </>
+})

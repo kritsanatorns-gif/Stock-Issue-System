@@ -208,10 +208,11 @@ export async function getProductMovements(productId) {
   return response.data
 }
 
-export async function uploadProductImage(file) {
+export async function uploadProductImage(file, productId) {
   const formData = new FormData()
 
   formData.append('file', file)
+  formData.append('productId', productId ?? '')
 
   const response = await api.post('/uploads/products', formData, {
     headers: {
@@ -316,8 +317,18 @@ export async function cancelStockIssue(headerId, payload) {
   return response.data
 }
 
-export async function createStockReceive(stockReceive) {
-  const response = await api.post('/stock-receives', stockReceive)
+export async function createStockReceive(stockReceive, imageFiles = []) {
+  const form = new FormData()
+  form.append('payload', JSON.stringify(stockReceive))
+  imageFiles.forEach(({ index, file }) => {
+    const extension = file.name.split('.').pop()
+    form.append('images', file, `${index}.${extension}`)
+  })
+  const response = imageFiles.length
+    ? await api.post('/stock-receives/with-images', form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
+    : await api.post('/stock-receives', stockReceive)
 
   return response.data
 }

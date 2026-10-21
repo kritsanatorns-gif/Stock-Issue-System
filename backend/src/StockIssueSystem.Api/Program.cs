@@ -29,6 +29,7 @@ catch (Exception error) when (error is UnauthorizedAccessException or IOExceptio
     Console.Error.WriteLine($"Data-protection key persistence is unavailable: {error.Message}");
 }
 builder.Services.AddSingleton<StaffSession>();
+builder.Services.AddSingleton<ProductImageStorage>();
 builder.Services.AddSignalR();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
@@ -65,7 +66,9 @@ var app = builder.Build();
 app.UseSwagger();
 app.UseSwaggerUI();
 
-app.UseStaticFiles();
+// รูปสินค้าต้องผ่าน UploadController เพื่ออ่านจากแชร์ ไม่ให้ static files ส่งรูปสำเนาในเครื่อง
+app.UseWhen(context => !context.Request.Path.StartsWithSegments(
+    "/uploads/products", StringComparison.OrdinalIgnoreCase), branch => branch.UseStaticFiles());
 app.UseCors("Frontend");
 app.UseMiddleware<AuditLogMiddleware>();
 
