@@ -1,22 +1,19 @@
 import { Badge, Box, IconButton, Menu as MuiMenu, MenuItem, Tooltip, Typography } from '@mui/material'
-import { Bell, CircleHelp, Menu, Moon, Sun } from 'lucide-react'
-import { useContext, useEffect, useState } from 'react'
+import { Bell, CircleHelp, Menu } from 'lucide-react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { connectNotificationHub } from '../api/notificationHub'
 import { getNotificationSummary } from '../api/api'
 import { canAccessMenu } from '../app/navigationItems'
 import { useAuthStore } from '../store/authStore'
-import { ColorModeContext } from '../theme/ColorModeContext'
 import UserMenu from './UserMenu'
 import './AppShell.css'
 
 const maxRequestNotifications = 5
 
 function AppHeader({ onToggleSidebar, sidebarCollapsed }) {
-  const { mode, toggleColorMode } = useContext(ColorModeContext)
   const navigate = useNavigate()
   const employee = useAuthStore((state) => state.employee)
-  const isDarkMode = mode === 'dark'
   const [notificationAnchor, setNotificationAnchor] = useState(null)
   const [notifications, setNotifications] = useState([])
   const canApproveRequests = canAccessMenu(employee, 'APPROVALS')
@@ -25,7 +22,6 @@ function AppHeader({ onToggleSidebar, sidebarCollapsed }) {
   const notificationStorageKey = `stock-issue-hr-request-notifications-v3-${employeeId || employeeName}`
   const knownRequestStorageKey = `stock-issue-hr-known-request-ids-v3-${employeeId || employeeName}`
   const sidebarToggleLabel = sidebarCollapsed ? 'ขยายเมนู' : 'ย่อเมนู'
-  const themeToggleLabel = isDarkMode ? 'โหมดสว่าง' : 'โหมดมืด'
   const isNotificationOpen = Boolean(notificationAnchor)
 
   useEffect(() => {
@@ -248,15 +244,6 @@ function AppHeader({ onToggleSidebar, sidebarCollapsed }) {
             </MuiMenu>
           </>
         ) : null}
-        <Tooltip title={themeToggleLabel}>
-          <IconButton
-            aria-label={themeToggleLabel}
-            className="app-header__theme-button"
-            onClick={toggleColorMode}
-          >
-            {isDarkMode ? <Sun size={20} /> : <Moon size={20} />}
-          </IconButton>
-        </Tooltip>
         <UserMenu />
       </Box>
     </Box>

@@ -413,6 +413,7 @@ function ProductDataTable({
   return (
     <AppTable
       columns={columns}
+      fitToWidth
       minTableWidth={2200}
       defaultSortDirection="asc"
       defaultSortField="stockStatus"
