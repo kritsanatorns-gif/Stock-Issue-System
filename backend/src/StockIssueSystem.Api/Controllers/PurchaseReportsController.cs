@@ -1,5 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Data.SqlClient;
+using System.Data;
 using StockIssueSystem.Api.Data;
 using StockIssueSystem.Api.Models;
 using StockIssueSystem.Api.Models.DTOs;
@@ -8,7 +10,7 @@ namespace StockIssueSystem.Api.Controllers;
 
 [ApiController]
 [Route("api/reports")]
-public sealed class PurchaseReportsController(AppDbContext dbContext) : ControllerBase
+public sealed class PurchaseReportsController(AppDbContext dbContext, IConfiguration configuration) : ControllerBase
 {
     [HttpGet("stock-status-trend")]
     public async Task<IActionResult> GetStockStatusTrend([FromQuery] int year)
@@ -77,14 +79,27 @@ public sealed class PurchaseReportsController(AppDbContext dbContext) : Controll
         [FromQuery] DateTime? endDate)
     {
         var endOfDay = endDate?.Date.AddDays(1);
-        var lots = await (
+        // ใช้ SP ดึงข้อมูล; ตั้ง false เพื่อย้อนกลับไปใช้ LINQ เดิมโดยไม่เปลี่ยนผลรายงาน
+        var useStoredProcedure = configuration.GetValue("Reports:UsePurchaseProductStoredProcedure", true);
+        var lots = useStoredProcedure
+            ? await dbContext.Database.SqlQueryRaw<PurchaseProductLotRow>(
+                "EXEC dbo.usp_ReportPurchaseProductLots @StartDate, @EndExclusive",
+                new SqlParameter("@StartDate", SqlDbType.DateTime2) { Value = (object?)startDate?.Date ?? DBNull.Value },
+                new SqlParameter("@EndExclusive", SqlDbType.DateTime2) { Value = (object?)endOfDay ?? DBNull.Value })
+                .ToListAsync(HttpContext.RequestAborted)
+            : await (
             from lot in dbContext.StockCostLots.AsNoTracking()
             join detail in dbContext.StockDetails.AsNoTracking() on lot.ReceiveDetailId equals detail.DetailId
             join header in dbContext.StockHeaders.AsNoTracking() on lot.ReceiveHeaderId equals header.HeaderId
             where header.DocType == "RECEIVE" && header.Status != StockHeaderStatuses.Cancelled && lot.Status != 2
                 && (!startDate.HasValue || header.TransactionDate >= startDate.Value.Date)
                 && (!endOfDay.HasValue || header.TransactionDate < endOfDay.Value)
-            select new { detail.ProductId, detail.ProductName, detail.Category, detail.Unit, lot.OriginalQty, lot.UnitCost, lot.VatAmount }
+            select new PurchaseProductLotRow
+            {
+                ProductId = detail.ProductId, ProductName = detail.ProductName,
+                Category = detail.Category, Unit = detail.Unit,
+                OriginalQty = lot.OriginalQty, UnitCost = lot.UnitCost, VatAmount = lot.VatAmount,
+            }
         ).ToListAsync();
 
         return Ok(lots.GroupBy(row => new { row.ProductId, row.ProductName, row.Category, row.Unit })
@@ -109,7 +124,18 @@ public sealed class PurchaseReportsController(AppDbContext dbContext) : Controll
         [FromQuery] DateTime? endDate)
     {
         var endOfDay = endDate?.Date.AddDays(1);
-        var lots = await (
+        // ย้ายเฉพาะการดึงข้อมูลไป SQL Server ส่วนจัดกลุ่มและรวมยอดยังเหมือนเดิม
+        // ตั้ง Reports:UsePurchaseSupplierStoredProcedure=false เพื่อกลับไปใช้วิธีเดิม
+        var useStoredProcedure = configuration.GetValue("Reports:UsePurchaseSupplierStoredProcedure", true);
+        var lots = useStoredProcedure
+            ? await dbContext.Database.SqlQueryRaw<PurchaseSupplierLotRow>(
+                "EXEC dbo.usp_ReportPurchaseSupplierLots @Year, @Month, @StartDate, @EndExclusive",
+                new SqlParameter("@Year", SqlDbType.Int) { Value = (object?)year ?? DBNull.Value },
+                new SqlParameter("@Month", SqlDbType.Int) { Value = (object?)month ?? DBNull.Value },
+                new SqlParameter("@StartDate", SqlDbType.DateTime2) { Value = (object?)startDate?.Date ?? DBNull.Value },
+                new SqlParameter("@EndExclusive", SqlDbType.DateTime2) { Value = (object?)endOfDay ?? DBNull.Value })
+                .ToListAsync(HttpContext.RequestAborted)
+            : await (
             from lot in dbContext.StockCostLots.AsNoTracking()
             join header in dbContext.StockHeaders.AsNoTracking() on lot.ReceiveHeaderId equals header.HeaderId
             where header.DocType == "RECEIVE" && header.Status != StockHeaderStatuses.Cancelled
@@ -119,7 +145,12 @@ public sealed class PurchaseReportsController(AppDbContext dbContext) : Controll
                 && (!month.HasValue || header.TransactionDate.Month == month.Value)
                 && (!startDate.HasValue || header.TransactionDate >= startDate.Value.Date)
                 && (!endOfDay.HasValue || header.TransactionDate < endOfDay.Value)
-            select new { lot.SupplierId, lot.SupplierName, lot.ReceiveHeaderId, lot.OriginalQty, lot.UnitCost, lot.VatAmount }
+            select new PurchaseSupplierLotRow
+            {
+                SupplierId = lot.SupplierId, SupplierName = lot.SupplierName,
+                ReceiveHeaderId = lot.ReceiveHeaderId, OriginalQty = lot.OriginalQty,
+                UnitCost = lot.UnitCost, VatAmount = lot.VatAmount,
+            }
         ).ToListAsync();
         
         return Ok(lots.GroupBy(lot => new { lot.SupplierId, lot.SupplierName }).Select(group => new PurchaseBySupplierDto

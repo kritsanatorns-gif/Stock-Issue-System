@@ -14,13 +14,12 @@ import {
   Typography,
   useMediaQuery,
 } from '@mui/material'
-import { Bell, ChevronDown, CircleHelp, ClipboardList, History, Menu as MenuIcon, Moon, PackageCheck, Sun } from 'lucide-react'
-import { useCallback, useContext, useEffect, useState } from 'react'
+import { Bell, ChevronDown, CircleHelp, ClipboardList, History, Menu as MenuIcon, PackageCheck } from 'lucide-react'
+import { useCallback, useEffect, useState } from 'react'
 import { NavLink, Navigate, Outlet, useNavigate } from 'react-router-dom'
 import { getNotificationSummary } from '../../api/api'
 import { connectNotificationHub } from '../../api/notificationHub'
 import { useRequestAuthStore } from '../../store/requestAuthStore'
-import { ColorModeContext } from '../../theme/ColorModeContext'
 import '../../components/AppShell.css'
 import '../../layouts/MainLayout.css'
 
@@ -59,7 +58,6 @@ function isRequestActionable(statusId) {
 function RequestLayout() {
   const navigate = useNavigate()
   const employee = useRequestAuthStore((state) => state.employee)
-  const { mode, toggleColorMode } = useContext(ColorModeContext)
   const logout = useRequestAuthStore((state) => state.logout)
   const isAuthenticated = useRequestAuthStore((state) => state.isAuthenticated)
   const expiresAt = useRequestAuthStore((state) => state.expiresAt)
@@ -420,16 +418,6 @@ function RequestLayout() {
               <Bell size={20} />
             </Badge>
           </IconButton>
-
-          <Tooltip title={mode === 'dark' ? 'โหมดสว่าง' : 'โหมดมืด'}>
-            <IconButton
-              aria-label={mode === 'dark' ? 'โหมดสว่าง' : 'โหมดมืด'}
-              onClick={toggleColorMode}
-              sx={{ border: '1px solid #d7e3f4', borderRadius: 2 }}
-            >
-              {mode === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
-            </IconButton>
-          </Tooltip>
 
           <MuiMenu
             anchorEl={notificationAnchor}

@@ -11,7 +11,7 @@ namespace StockIssueSystem.Api.Controllers;
 
 [ApiController]
 [Route("api/stock-receives")]
-public sealed class StockReceiveController(AppDbContext dbContext) : ControllerBase
+public sealed class StockReceiveController(AppDbContext dbContext, ProductImageStorage imageStorage, ILogger<StockReceiveController> logger) : ControllerBase
 {
     private const string MainLocationId = "MAIN";
     private const string ReceiveDocType = "RECEIVE";
@@ -54,6 +54,34 @@ public sealed class StockReceiveController(AppDbContext dbContext) : ControllerB
 
     [HttpPost]
     public async Task<IActionResult> CreateStockReceive(CreateStockIssueDto request)
+        => await SaveReceive(request, []);
+
+    [HttpPost("with-images")]
+    [RequestSizeLimit(50 * 1024 * 1024)]
+    [RequestFormLimits(MultipartBodyLengthLimit = 50 * 1024 * 1024)]
+    public async Task<IActionResult> CreateWithImages([FromForm] string payload, [FromForm] List<IFormFile> images)
+    {
+        CreateStockIssueDto? request;
+        try { request = System.Text.Json.JsonSerializer.Deserialize<CreateStockIssueDto>(payload,
+            new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true }); }
+        catch (System.Text.Json.JsonException) { return BadRequest("ข้อมูลรับเข้าไม่ถูกต้อง"); }
+        if (request is null || request.Items is null) return BadRequest("ไม่พบรายการรับเข้า");
+        var mapped = new List<(int Index, IFormFile File)>();
+        foreach (var file in images)
+        {
+            // ชื่อไฟล์ multipart เป็นลำดับรายการ ไม่ใช้ชื่อไฟล์จากผู้ใช้เป็นพาธ
+            var extension = Path.GetExtension(file.FileName).ToLowerInvariant();
+            if (!int.TryParse(Path.GetFileNameWithoutExtension(file.FileName), out var index)
+                || index < 0 || index >= request.Items.Count || mapped.Any(x => x.Index == index)
+                || file.Length == 0 || file.Length > 5 * 1024 * 1024
+                || extension is not (".jpg" or ".jpeg" or ".png" or ".webp"))
+                return BadRequest("รูปสินค้าไม่ถูกต้อง หรือขนาดเกิน 5 MB");
+            mapped.Add((index, file));
+        }
+        return await SaveReceive(request, mapped);
+    }
+
+    private async Task<IActionResult> SaveReceive(CreateStockIssueDto request, List<(int Index, IFormFile File)> images)
     {
         var validationError = ValidateRequest(request);
 
@@ -63,6 +91,10 @@ public sealed class StockReceiveController(AppDbContext dbContext) : ControllerB
         }
 
         await using var transaction = await dbContext.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+        var savedImages = new List<string>();
+        var committed = false;
+        try
+        {
 
         var masterError = await ValidateMasterData(request);
 
@@ -123,9 +155,21 @@ public sealed class StockReceiveController(AppDbContext dbContext) : ControllerB
         stockHeader.ReceiveNo = FormatReceiveNo(stockHeader, await GetDailyReceiveSequence(stockHeader));
         AddCostLots(stockHeader, request, suppliersById, vatRate);
         await dbContext.SaveChangesAsync();
-        await transaction.CommitAsync();
-
         var statusNames = await StockHeaderStatuses.GetNames(dbContext);
+        // ตรวจและบันทึกข้อมูลใน transaction ให้ผ่านก่อน จึงเขียนรูปและ commit พร้อมกัน
+        foreach (var (index, file) in images)
+        {
+            var item = request.Items[index];
+            await using var stream = file.OpenReadStream();
+            var name = await imageStorage.SaveAsync(stream, item.Code, Path.GetExtension(file.FileName));
+            savedImages.Add(name);
+            item.ImageName = $"/uploads/products/{name}";
+            var product = await dbContext.Products.SingleAsync(p => p.ProductId == item.Code.Trim());
+            product.Img = item.ImageName;
+        }
+        await dbContext.SaveChangesAsync();
+        await transaction.CommitAsync();
+        committed = true;
 
         return Ok(new
         {
@@ -140,6 +184,19 @@ public sealed class StockReceiveController(AppDbContext dbContext) : ControllerB
             TotalItems = request.Items.Count,
             TotalQty = request.Items.Sum(item => item.Quantity),
         });
+        }
+        finally
+        {
+            if (!committed)
+            {
+                // ลบเฉพาะไฟล์ที่สร้างในคำขอนี้ ไม่แตะรูปเดิมของสินค้า
+                foreach (var name in savedImages)
+                {
+                    try { System.IO.File.Delete(Path.Combine(imageStorage.Root, name)); }
+                    catch (Exception error) { logger.LogError(error, "Cannot clean up failed receive image {FileName}", name); }
+                }
+            }
+        }
     }
 
     [HttpPost("{headerId:int}/cancel")]

@@ -4,12 +4,13 @@ using StockIssueSystem.Api.Data;
 using System.IO.Compression;
 using System.Text.Json;
 using System.Xml.Linq;
+using StockIssueSystem.Api.Services;
 
 namespace StockIssueSystem.Api.Controllers;
 
 [ApiController]
 [Route("api/uploads")]
-public sealed class UploadController(IWebHostEnvironment environment, AppDbContext dbContext) : ControllerBase
+public sealed class UploadController(ProductImageStorage imageStorage, AppDbContext dbContext) : ControllerBase
 {
     private static readonly HashSet<string> AllowedExtensions = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -21,7 +22,7 @@ public sealed class UploadController(IWebHostEnvironment environment, AppDbConte
 
     [HttpPost("products")]
     [RequestSizeLimit(5 * 1024 * 1024)]
-    public async Task<IActionResult> UploadProductImage(IFormFile? file)
+    public async Task<IActionResult> UploadProductImage(IFormFile? file, [FromForm] string? productId)
     {
         if (file is null || file.Length == 0)
         {
@@ -35,17 +36,11 @@ public sealed class UploadController(IWebHostEnvironment environment, AppDbConte
             return BadRequest("Only JPG, PNG, and WEBP files are allowed.");
         }
 
-        var uploadsRoot = Path.Combine(environment.WebRootPath ?? Path.Combine(environment.ContentRootPath, "wwwroot"), "uploads", "products");
-
-        Directory.CreateDirectory(uploadsRoot);
-
-        var fileName = $"{DateTime.Now:yyyyMMddHHmmssfff}-{Guid.NewGuid():N}{extension.ToLowerInvariant()}";
-        var filePath = Path.Combine(uploadsRoot, fileName);
-
-        await using (var stream = System.IO.File.Create(filePath))
-        {
-            await file.CopyToAsync(stream);
-        }
+        if (string.IsNullOrWhiteSpace(productId)) return BadRequest("กรุณาระบุรหัสสินค้าก่อนบันทึกรูป");
+        await using var stream = file.OpenReadStream();
+        string fileName;
+        try { fileName = await imageStorage.SaveAsync(stream, productId, extension); }
+        catch (ArgumentException error) { return BadRequest(error.Message); }
 
         var relativeUrl = $"/uploads/products/{fileName}";
 
@@ -56,6 +51,19 @@ public sealed class UploadController(IWebHostEnvironment environment, AppDbConte
         });
     }
 
+    [HttpGet("/uploads/products/{fileName}")]
+    public IActionResult GetProductImage(string fileName)
+    {
+        if (Path.GetFileName(fileName) != fileName || fileName.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0
+            || !AllowedExtensions.Contains(Path.GetExtension(fileName))) return BadRequest();
+        var path = Path.Combine(imageStorage.Root, fileName);
+        // ใช้รูปจากแหล่งที่ตั้งค่าเท่านั้น ห้ามย้อนกลับไปอ่านรูปที่คัดลอกไว้ใน wwwroot
+        if (!System.IO.File.Exists(path)) return NotFound();
+        var mime = Path.GetExtension(fileName).ToLowerInvariant() switch
+        { ".png" => "image/png", ".webp" => "image/webp", _ => "image/jpeg" };
+        return PhysicalFile(path, mime);
+    }
+
     [HttpPost("products-from-excel")]
     [RequestSizeLimit(30 * 1024 * 1024)]
     public async Task<IActionResult> ImportProductImages(IFormFile? file, [FromForm] string? items)
@@ -63,8 +71,6 @@ public sealed class UploadController(IWebHostEnvironment environment, AppDbConte
         if (file is null || file.Length == 0 || string.IsNullOrWhiteSpace(items)) return BadRequest("Excel file and item mapping are required.");
         var mappings = JsonSerializer.Deserialize<List<ExcelImageItem>>(items, new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? [];
         var lookup = mappings.Where(x => !string.IsNullOrWhiteSpace(x.ProductId)).ToDictionary(x => $"{x.SheetName}|{x.RowNo}", x => x.ProductId, StringComparer.OrdinalIgnoreCase);
-        var root = Path.Combine(environment.WebRootPath ?? Path.Combine(environment.ContentRootPath, "wwwroot"), "uploads", "products");
-        Directory.CreateDirectory(root);
         var saved = 0;
         await using var input = file.OpenReadStream();
         using var archive = new ZipArchive(input, ZipArchiveMode.Read);
@@ -144,11 +150,11 @@ public sealed class UploadController(IWebHostEnvironment environment, AppDbConte
                 if (productIds.Count == 0 || string.IsNullOrEmpty(embed) || !drawingRels.TryGetValue(embed, out var imageRel)) continue;
                 var image = archive.GetEntry(Resolve(drawingPath, imageRel.Target));
                 if (image is null || !AllowedExtensions.Contains(Path.GetExtension(image.FullName))) continue;
-                var name = $"{DateTime.Now:yyyyMMddHHmmssfff}-{Guid.NewGuid():N}{Path.GetExtension(image.FullName).ToLowerInvariant()}";
-                await using (var output = System.IO.File.Create(Path.Combine(root, name))) await using (var source = image.Open()) await source.CopyToAsync(output);
                 var products = await dbContext.Products.Where(x => productIds.Contains(x.ProductId)).ToListAsync();
                 foreach (var product in products)
                 {
+                    await using var source = image.Open();
+                    var name = await imageStorage.SaveAsync(source, product.ProductId, Path.GetExtension(image.FullName));
                     product.Img = name;
                     saved++;
                 }

@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
-import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Download } from 'lucide-react'
 import { Link, useLocation, useSearchParams } from 'react-router-dom'
 import { Alert, Box, Button, Chip, Divider, List, ListItemButton, ListItemText, Paper, Stack, TextField, Typography } from '@mui/material'
+import { additionalArticles, manualDetails } from './manualDetails'
 
 const articles = [
   { id: 'start', group: 'คู่มือผู้ขอเบิก', title: 'เริ่มต้นใช้งาน', intro: 'ส่งคำขอเบิกสินค้าสำนักงานและติดตามผลผ่านระบบ โดยใช้ข้อมูลพนักงานจาก HR', steps: ['เข้าหน้าล็อกอินผู้ขอเบิก เลือกฝ่าย–แผนกและหน่วยงานของตนเอง', 'กรอกรหัสพนักงาน ตรวจสอบชื่อและข้อมูลสังกัดที่ระบบแสดงจาก HR', 'เข้าสู่ระบบ หากข้อมูลไม่ตรง ให้ตรวจรหัสและสังกัดก่อนส่งคำขอ'], note: 'บัญชี HR สำหรับเจ้าหน้าที่คลังใช้ชื่อผู้ใช้และรหัสผ่านของระบบ ส่วนผู้ขอเบิกใช้ข้อมูลพนักงานจาก HR' },
@@ -19,11 +20,19 @@ const articles = [
   { id: 'trouble', group: 'ช่วยเหลือ', title: 'แก้ปัญหาเบื้องต้น', intro: 'ตรวจสอบก่อนแจ้งผู้ดูแลระบบ', steps: ['ล็อกอินไม่ได้: ตรวจข้อมูลที่กรอกและการเชื่อมต่อเครือข่าย หากยังไม่ได้ให้เก็บข้อความผิดพลาด', 'โหลดสินค้าไม่ได้: รีเฟรชหน้าและตรวจการเชื่อมต่อ หากยังเกิดซ้ำให้แจ้งผู้ดูแล', 'ไม่พบประวัติ: ตรวจช่วงวันที่ ตัวกรอง และบัญชีหรือหน่วยงานที่เข้าสู่ระบบ', 'กดไม่ให้เบิกไม่ได้: ตรวจว่าสินค้ารายการนั้นเคยจ่ายแล้วหรือไม่ และยังมียอดค้างหรือไม่', 'แจ้งปัญหาพร้อมชื่อหน้าจอ เลขที่คำขอ เวลาเกิดเหตุ และภาพข้อความผิดพลาด โดยไม่ส่งรหัสผ่าน'] },
 ]
 
+const enrichedArticles = [
+  ...articles.filter((article) => article.id !== 'trouble').map((article) => ({ ...article, ...manualDetails[article.id] })),
+  ...additionalArticles,
+  { ...articles.find((article) => article.id === 'trouble'), ...manualDetails.trouble },
+]
+const completeArticles = ['คู่มือผู้ขอเบิก', 'คู่มือ HR / เจ้าหน้าที่คลัง', 'คู่มือผู้ดูแลระบบ', 'ช่วยเหลือ']
+  .flatMap((group) => enrichedArticles.filter((article) => article.group === group))
+
 export default function ManualPage() {
   const [query, setQuery] = useState('')
   const [params, setParams] = useSearchParams()
   const isRequester = useLocation().pathname.startsWith('/request/')
-  const available = articles.filter((a) => !isRequester || a.group === 'คู่มือผู้ขอเบิก' || a.group === 'ช่วยเหลือ')
+  const available = completeArticles.filter((a) => !isRequester || a.group === 'คู่มือผู้ขอเบิก' || a.group === 'ช่วยเหลือ')
   const selected = available.find((a) => a.id === params.get('topic')) ?? available[0]
   const selectedIndex = available.findIndex((a) => a.id === selected.id)
   const previousArticle = available[selectedIndex - 1]
@@ -36,10 +45,32 @@ export default function ManualPage() {
       lastTopic.current = selected.id
     }
   }, [selected.id])
-  const filtered = available.filter((a) => [a.title, a.intro, ...a.steps, a.note ?? ''].join(' ').toLowerCase().includes(query.trim().toLowerCase()))
+  const filtered = available.filter((a) => [a.title, a.intro, ...a.steps, ...(a.statuses ?? []), ...(a.sections ?? []).flatMap((section) => [section.title, ...section.items]), a.note ?? ''].join(' ').toLowerCase().includes(query.trim().toLowerCase()))
   return (
     <Paper sx={{ p: { xs: 2, md: 3 }, minHeight: '75vh' }}>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>ช่วยเหลือ / คู่มือ / {selected.title}</Typography>
+      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ mb: 3 }}>
+        <Button
+          component="a"
+          href={`${import.meta.env.BASE_URL}manuals/requester-manual.docx`}
+          download="คู่มือผู้ใช้งานขอเบิกสินค้า-User.docx"
+          startIcon={<Download size={18} />}
+          variant="outlined"
+        >
+          ดาวน์โหลดคู่มือผู้ขอเบิก (Word)
+        </Button>
+        {!isRequester && (
+          <Button
+            component="a"
+            href={`${import.meta.env.BASE_URL}manuals/system-manual.docx`}
+            download="คู่มือการใช้งานระบบเบิกสินค้า.docx"
+            startIcon={<Download size={18} />}
+            variant="outlined"
+          >
+            ดาวน์โหลดคู่มือการใช้งานระบบ (Word)
+          </Button>
+        )}
+      </Stack>
       <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '260px minmax(0, 1fr)' }, gap: 4 }}>
         <Box component="nav" aria-label="สารบัญคู่มือ" sx={{ borderRight: { md: '1px solid #e2e8f0' }, pr: { md: 2 } }}>
           <TextField fullWidth size="small" label="ค้นหาคู่มือ" value={query} onChange={(event) => setQuery(event.target.value)} />
@@ -53,10 +84,19 @@ export default function ManualPage() {
           <Typography variant="caption" color="text.secondary">{selected.group}</Typography>
           <Typography component="h1" variant="h5" sx={{ fontWeight: 800, mt: 1 }}>{selected.title}</Typography>
           <Typography color="text.secondary" sx={{ mt: 1, lineHeight: 1.9 }}>{selected.intro}</Typography>
-          <Stack direction="row" spacing={1} sx={{ my: 3 }}><Chip label="ขั้นตอนใช้งาน" variant="outlined" /><Chip label="คอมพิวเตอร์ / มือถือ" variant="outlined" /></Stack>
+          <Typography variant="caption" color="text.secondary">ตรวจทานคู่มือ 3 พฤศจิกายน 2569 · เมนูและปุ่มขึ้นกับสิทธิ์และสถานะรายการ</Typography>
+          <Stack direction="row" spacing={1} sx={{ my: 3 }}><Chip label="ขั้นตอนใช้งาน" variant="outlined" /><Chip label="คอมพิวเตอร์" variant="outlined" /></Stack>
           <Divider />
           <Box component="ol" sx={{ pl: 3, my: 3, '& li': { pl: 1, mb: 2, lineHeight: 1.9 } }}>{selected.steps.map((step) => <li key={step}>{step}</li>)}</Box>
           {selected.statuses && <Box component="ul" sx={{ lineHeight: 2.2 }}>{selected.statuses.map((status) => <li key={status}>{status}</li>)}</Box>}
+          {(selected.sections ?? []).map((section) => (
+            <Box component="section" key={section.title} sx={{ mt: 3 }}>
+              <Typography component="h2" variant="h6" sx={{ fontWeight: 700 }}>{section.title}</Typography>
+              <Box component="ul" sx={{ pl: 3, '& li': { mb: 1.5, lineHeight: 1.9 } }}>
+                {section.items.map((item) => <li key={item}>{item}</li>)}
+              </Box>
+            </Box>
+          ))}
           {selected.note && <Alert severity="info" sx={{ mt: 3, lineHeight: 1.8 }}>{selected.note}</Alert>}
           {selected.id === 'trouble' && (
             <Alert severity="info" sx={{ mt: 3, lineHeight: 1.8 }}>

@@ -1,4 +1,4 @@
-﻿import { installReportPrinting } from '../../utils/reportPagination'
+import { installReportPrinting } from '../../utils/reportPagination'
 ﻿import {
   Alert,
   Box,
@@ -23,7 +23,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Navigate } from 'react-router-dom'
 import Swal from 'sweetalert2'
 import { createRequisition, getProducts, getRequisitions } from '../../api/api'
-import { apiOrigin } from '../../api/apiConfig'
+import { getProductImageUrl as getImageUrl } from '../../api/productImageUrl'
 import { useRequestAuthStore } from '../../store/requestAuthStore'
 import { formatDisplayDateTime } from '../../utils/dateUtils'
 import { normalizeWholeNumberInput } from '../../utils/inputGuards'
@@ -46,33 +46,7 @@ function normalizeProduct(row) {
   }
 }
 
-function getImageUrl(imageName) {
-  if (!imageName) {
-    return ''
-  }
 
-  const normalizedImageName = String(imageName).trim()
-
-  if (!/\.(jpg|jpeg|png|webp)$/i.test(normalizedImageName)) {
-    return ''
-  }
-
-  if (/^https?:\/\//i.test(normalizedImageName)) {
-    return normalizedImageName
-  }
-
-  const baseUrl = apiOrigin
-
-  if (normalizedImageName.startsWith('/')) {
-    return `${baseUrl}${normalizedImageName}`
-  }
-
-  if (normalizedImageName.startsWith('uploads/')) {
-    return `${baseUrl}/${normalizedImageName}`
-  }
-
-  return `${baseUrl}/uploads/products/${normalizedImageName}`
-}
 
 function getStockStatus(product) {
   if (product.stockQty <= 0) {

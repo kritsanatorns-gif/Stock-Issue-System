@@ -6,6 +6,12 @@
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
 
+  <!-- รูปสินค้าอ่านจากแชร์ผ่าน Virtual Directory ไม่รวมสำเนาใน Build/Publish -->
+  <ItemGroup>
+    <Content Update="wwwroot/uploads/products/**/*" CopyToOutputDirectory="Never" CopyToPublishDirectory="Never" />
+    <None Update="wwwroot/uploads/products/**/*" CopyToOutputDirectory="Never" CopyToPublishDirectory="Never" />
+  </ItemGroup>
+
   <ItemGroup>
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="8.0.8">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
